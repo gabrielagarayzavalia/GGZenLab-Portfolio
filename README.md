@@ -1,6 +1,6 @@
 # GGZenLab — QA Portfolio
 
-Monorepo de **GGZenLab** para **Analista de Calidad de Software** e **Ingeniería en Automatización de Pruebas**.
+**Analista de Calidad de Software** e **Ingeniería en Automatización de Pruebas** — monorepo hands-on de GGZenLab, desarrollado y documentado con **asistencia de IA** (diseño, scaffolding y revisión; criterios de aceptación, pruebas y validación bajo enfoque QA).
 
 **GitHub:** [gabrielagarayzavalia/QA-portfolio](https://github.com/gabrielagarayzavalia/QA-portfolio)  
 **Sitio (bilingüe EN/ES):** https://gabrielagarayzavalia.github.io/QA-portfolio/

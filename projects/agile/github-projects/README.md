@@ -18,8 +18,9 @@ Two **separate** concepts — do not mix them:
 
 | Concept | Where it lives | Meaning |
 |---------|----------------|---------|
-| **Product Backlog** | **Iteration = Backlog** (or no sprint) | Everything refined or not yet pulled into the **current sprint**. Not a Status column. |
-| **Sprint board** | **Current Iteration** + **Status** | Only work committed to this sprint; moves column by column until Done. |
+| **Epic** | **Iteration: Backlog** always (never in a sprint) | Container / mini-project. Tracks progress via linked Stories — **not** a sprint card. |
+| **Product Backlog** | **Iteration = Backlog** | Stories and Tasks not yet in the **current sprint**. |
+| **Sprint board** | **Current Iteration** + **Status** | Only **User Stories** and **QA Tasks** committed to the sprint. |
 
 ```mermaid
 flowchart LR
@@ -100,9 +101,9 @@ Configure **only these** values — **no Backlog, no Ready**:
 
 - **Name:** `Sprint Board`
 - **Layout:** Board
-- **Filter:** `Iteration` = `@current` (current sprint)
+- **Filter:** `Iteration` = `@current` **and** `Label` does not include `epic` (or: no filter on label — just never assign Epics to the sprint)
 - **Group by:** **Status** (columns = To Do … Done)
-- Only sprint items appear; backlog stays in View A.
+- Only **Stories** and **Tasks** in the current sprint; Epics stay in Product Backlog view.
 
 Optional **Table** view for QA traceability: columns Title, Status, AC-ID, Tool, Labels.
 
@@ -173,12 +174,29 @@ Open view **Product Backlog** — you should see your 3 issues with Iteration = 
 
 **Only when issues appear in the project:**
 
-1. Open **Sprint Board** (or Table with Iteration column).
-2. Select issues for Sprint 1 (e.g. the task `TC-M-001`).
-3. Set **Iteration** → `Sprint 1`.
-4. Set **Status** → `To Do`.
+### What goes into the sprint
 
-Drag on the board or edit fields on the right panel.
+| Issue type | Sprint? | Iteration | Status on board |
+|------------|---------|-----------|-----------------|
+| **Epic** | **No** | Always **Backlog** | No Status (or leave unset) — track via linked Stories |
+| **User Story** | Yes, if committed | **Sprint 1** | To Do → … → Done |
+| **QA Task** | Yes, if committed | **Sprint 1** | To Do → … → Done |
+
+### Fix if Epics landed in To Do (common mistake)
+
+1. Open each **Epic** issue on the project.
+2. Set **Iteration** → **Backlog** (not Sprint 1).
+3. Clear **Status** (or leave empty) — Epics do not move on the sprint board.
+4. Open **Sprint Board** view → filter **Iteration = @current** → only Stories/Tasks should appear.
+
+### Planning a sprint
+
+1. Pick **Tasks** (and optionally **Stories**) from Product Backlog.
+2. Set **Iteration** → `Sprint 1`.
+3. Set **Status** → `To Do`.
+4. Link in issue body: `Parent story: #N` / `Epic: EPIC-API` for traceability.
+
+Epic is “done” when all its child stories are **Done** — not when the Epic card moves columns.
 
 ---
 

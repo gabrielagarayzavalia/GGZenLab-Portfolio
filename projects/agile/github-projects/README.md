@@ -69,7 +69,8 @@ Configure **only these** values — **no Backlog, no Ready**:
 1. Project → **⋯** → **Settings** → ensure **Iterations** is enabled (Team backlog includes it).
 2. You get a built-in **Backlog** iteration — items here are **not** on the sprint board.
 3. Create **Sprint 1** (e.g. 1 week dates).
-4. **Sprint planning:** drag issues from Backlog iteration → assign to **Sprint 1** and set Status **To Do**.
+
+> **Stop here if the project has no issues yet.** Step 2.4 (sprint planning) is in **Step 8**, after you create and add issues.
 
 ---
 
@@ -135,19 +136,53 @@ Repo → **Issues** → **Labels**:
 
 ---
 
-## Step 7 — Seed issues
+## Step 7 — Create issues (repo) and add to project
 
-Templates: `.github/ISSUE_TEMPLATE/` or copy [SEED_ISSUES.md](SEED_ISSUES.md).
+**Issues live in the repo first**, then you link them to the Project. An empty project cannot do sprint planning.
 
-1. Epic `EPIC-API`, Epic `EPIC-PERF`
-2. Story `US-API-ABM`, Story `US-PERF-JMETER`
-3. Tasks per AC / tool
+### 7.1 Create issues in the repo
 
-Add to project → all start in **Iteration: Backlog**.
+Open: https://github.com/gabrielagarayzavalia/QA-portfolio/issues/new/choose
+
+**Minimum to start (create in this order):**
+
+| # | Template | Title |
+|---|----------|-------|
+| 1 | Epic | `[Epic] EPIC-API — API Testing mini-project` |
+| 2 | User Story | `[Story] US-API-ABM — REST ABM and listing` |
+| 3 | QA Task | `[Task] TC-M-001 — Manual POST create (Postman)` |
+
+Copy bodies from [SEED_ISSUES.md](SEED_ISSUES.md) if templates are empty.
+
+### 7.2 Add issues to the Project
+
+1. Open your **GGZenLab QA Portfolio** project.
+2. Bottom of any view → **Add item** (or `+`).
+3. Search `EPIC-API` / issue number → Add.
+4. Repeat for each issue.
+
+New items should show **Iteration: Backlog** automatically.
+
+### 7.3 Verify Product Backlog view
+
+Open view **Product Backlog** — you should see your 3 issues with Iteration = Backlog.
 
 ---
 
-## Step 8 — Sprint practice (1 week)
+## Step 8 — Sprint planning (this was “step 4.4”)
+
+**Only when issues appear in the project:**
+
+1. Open **Sprint Board** (or Table with Iteration column).
+2. Select issues for Sprint 1 (e.g. the task `TC-M-001`).
+3. Set **Iteration** → `Sprint 1`.
+4. Set **Status** → `To Do`.
+
+Drag on the board or edit fields on the right panel.
+
+---
+
+## Step 9 — Sprint practice (1 week)
 
 | Day | Action |
 |-----|--------|

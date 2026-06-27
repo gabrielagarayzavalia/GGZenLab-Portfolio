@@ -44,7 +44,7 @@
     });
     html += '</div></div>';
 
-    html += '<a href="' + href(root, 'misc/index.html') + '" class="' + (active === 'misc' ? 'active' : '') + '" data-i18n="nav.misc">Misc</a>';
+    html += '<a href="' + href(root, 'misc/index.html') + '" class="' + (active === 'misc' ? 'active' : '') + '" data-i18n="nav.misc">Miscellaneous</a>';
 
     nav.innerHTML = html;
 

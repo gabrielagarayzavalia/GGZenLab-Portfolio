@@ -46,7 +46,13 @@ Para detener la app:
 
 Pasá el mouse sobre un **punto** del mapa para ver el tooltip con detalle del caso (actores, mecanismo, estado judicial, fuente, etc.).
 
-El mapa muestra **todas las provincias** con contorno; las que tienen casos se colorean en rojo.
+El mapa muestra **todas las provincias** con contorno. Colores del coroplético:
+
+- **Gris:** provincia pendiente de investigación (sin casos en el dataset)
+- **Beige:** provincia investigada, pero sin casos visibles con los filtros actuales (el tooltip indica cuántos hay en total)
+- **Rojo:** provincia investigada con al menos un caso visible
+
+Pasá el mouse sobre una **provincia** para ver el estado y los totales históricos.
 
 ## Limitaciones
 

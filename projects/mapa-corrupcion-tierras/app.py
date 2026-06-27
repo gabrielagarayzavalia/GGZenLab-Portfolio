@@ -21,13 +21,12 @@ COROPLETA_EXCLUDE = {"Patagonia"}
 TODAS = "Todas"
 
 CASE_COLORSCALE = [
-    [0.0, "rgb(245, 245, 245)"],
-    [0.001, "rgb(254, 224, 210)"],
-    [0.25, "rgb(252, 187, 161)"],
+    [0.0, "rgb(254, 224, 210)"],
     [0.5, "rgb(252, 117, 94)"],
     [1.0, "rgb(189, 0, 38)"],
 ]
 PENDING_COLORSCALE = [[0, "rgb(192, 192, 192)"], [1, "rgb(192, 192, 192)"]]
+FILTERED_ZERO_COLORSCALE = [[0, "rgb(232, 224, 208)"], [1, "rgb(232, 224, 208)"]]
 PENDING_HOVER = (
     "<b>%{location}</b><br><br>"
     "Provincia aún no investigada en este proyecto.<br>"
@@ -35,10 +34,20 @@ PENDING_HOVER = (
     "Aparece en gris hasta sumar fuentes y hechos verificables."
     "<extra></extra>"
 )
-INVESTIGATED_HOVER = (
-    "<b>%{location}</b><br>"
-    "Casos visibles (filtros actuales): %{z}<br>"
-    "Provincia incluida en el dataset de investigación."
+FILTERED_ZERO_HOVER = (
+    "<b>%{location}</b><br><br>"
+    "Provincia incluida en el dataset de investigación.<br>"
+    "Casos visibles (filtros actuales): <b>0</b><br>"
+    "Casos totales en el dataset: <b>%{customdata[0]}</b><br><br>"
+    "No significa ausencia de corrupción: probá otra década<br>"
+    "o quitá filtros para ver los casos cargados."
+    "<extra></extra>"
+)
+VISIBLE_CASES_HOVER = (
+    "<b>%{location}</b><br><br>"
+    "Provincia incluida en el dataset de investigación.<br>"
+    "Casos visibles (filtros actuales): <b>%{z}</b><br>"
+    "Casos totales en el dataset: <b>%{customdata[0]}</b>"
     "<extra></extra>"
 )
 PROVINCE_BORDER = dict(color="rgba(90, 90, 90, 0.35)", width=0.45)
@@ -59,6 +68,14 @@ INVESTIGATED_PROVINCES = sorted(
     (set(df["provincia"].unique()) - COROPLETA_EXCLUDE) & set(ALL_PROVINCES)
 )
 PENDING_PROVINCES = sorted(set(ALL_PROVINCES) - set(INVESTIGATED_PROVINCES))
+
+TOTAL_CASES_BY_PROVINCE: dict[str, int] = (
+    df[~df["provincia"].isin(COROPLETA_EXCLUDE)]
+    .groupby("provincia")["caso"]
+    .count()
+    .astype(int)
+    .to_dict()
+)
 
 bins = list(range(1800, 2031, 10))
 labels = [f"{y}s" for y in range(1800, 2030, 10)]
@@ -230,24 +247,47 @@ def build_figure(periodo: str, filters: dict[str, str]) -> go.Figure:
         )
 
     if INVESTIGATED_PROVINCES:
-        z_investigated = [int(counts.get(name, 0)) for name in INVESTIGATED_PROVINCES]
-        zmax = max(max(z_investigated), 1)
-        fig.add_trace(
-            go.Choropleth(
-                geojson=geojson,
-                locations=INVESTIGATED_PROVINCES,
-                z=z_investigated,
-                featureidkey="properties.nombre",
-                colorscale=CASE_COLORSCALE,
-                zmin=0,
-                zmax=zmax,
-                marker_line_color=PROVINCE_BORDER["color"],
-                marker_line_width=PROVINCE_BORDER["width"],
-                colorbar_title="Casos",
-                hovertemplate=INVESTIGATED_HOVER,
-                name="Casos por provincia",
+        zero_locs = [p for p in INVESTIGATED_PROVINCES if counts.get(p, 0) == 0]
+        pos_locs = [p for p in INVESTIGATED_PROVINCES if counts.get(p, 0) > 0]
+
+        if zero_locs:
+            zero_totals = [TOTAL_CASES_BY_PROVINCE.get(p, 0) for p in zero_locs]
+            fig.add_trace(
+                go.Choropleth(
+                    geojson=geojson,
+                    locations=zero_locs,
+                    z=[1] * len(zero_locs),
+                    customdata=[[t] for t in zero_totals],
+                    featureidkey="properties.nombre",
+                    colorscale=FILTERED_ZERO_COLORSCALE,
+                    showscale=False,
+                    marker_line_color=PROVINCE_BORDER["color"],
+                    marker_line_width=PROVINCE_BORDER["width"],
+                    hovertemplate=FILTERED_ZERO_HOVER,
+                    name="Investigada · 0 visibles",
+                )
             )
-        )
+
+        if pos_locs:
+            z_pos = [int(counts[p]) for p in pos_locs]
+            pos_totals = [TOTAL_CASES_BY_PROVINCE.get(p, 0) for p in pos_locs]
+            fig.add_trace(
+                go.Choropleth(
+                    geojson=geojson,
+                    locations=pos_locs,
+                    z=z_pos,
+                    customdata=[[t] for t in pos_totals],
+                    featureidkey="properties.nombre",
+                    colorscale=CASE_COLORSCALE,
+                    zmin=1,
+                    zmax=max(z_pos),
+                    marker_line_color=PROVINCE_BORDER["color"],
+                    marker_line_width=PROVINCE_BORDER["width"],
+                    colorbar_title="Casos visibles",
+                    hovertemplate=VISIBLE_CASES_HOVER,
+                    name="Con casos visibles",
+                )
+            )
 
     if len(hover):
         fig.add_trace(
@@ -327,6 +367,44 @@ def build_figure(periodo: str, filters: dict[str, str]) -> go.Figure:
     return fig
 
 
+def _legend_row(color: str, title: str, description: str) -> html.Div:
+    return html.Div(
+        [
+            html.Span(
+                style={
+                    "display": "inline-block",
+                    "width": "14px",
+                    "height": "14px",
+                    "backgroundColor": color,
+                    "border": "1px solid rgba(0,0,0,0.2)",
+                    "marginRight": "8px",
+                    "verticalAlign": "middle",
+                }
+            ),
+            html.Span(
+                [
+                    html.Strong(title, style={"fontSize": "0.85rem"}),
+                    html.Span(f" — {description}", className="text-muted", style={"fontSize": "0.8rem"}),
+                ]
+            ),
+        ],
+        className="mb-2",
+        style={"lineHeight": "1.35"},
+    )
+
+
+MAP_LEGEND = html.Div(
+    [
+        html.H6("Leyenda del mapa", className="text-muted mb-2"),
+        _legend_row("#c0c0c0", "Gris", "pendiente de investigación (sin casos en el dataset)"),
+        _legend_row("#e8e0d0", "Beige", "investigada, pero 0 casos con los filtros actuales"),
+        _legend_row("#d73027", "Rojo", "al menos 1 caso visible con los filtros actuales"),
+    ],
+    className="mb-3 p-2 rounded",
+    style={"backgroundColor": "#fff", "border": "1px solid #dee2e6"},
+)
+
+
 def _filter_dropdown(label: str, dropdown_id: str) -> html.Div:
     return html.Div(
         [
@@ -397,6 +475,8 @@ app.layout = html.Div(
                     "Pasá el mouse sobre un punto del mapa para ver el detalle completo.",
                     className="small text-muted",
                 ),
+                html.Hr(),
+                MAP_LEGEND,
                 html.Hr(),
                 *filter_controls,
                 dbc.Button("Reset", id="reset-filters", color="danger", outline=True, className="w-100"),

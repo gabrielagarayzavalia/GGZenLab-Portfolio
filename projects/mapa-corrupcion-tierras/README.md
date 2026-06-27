@@ -41,8 +41,10 @@ Para detener la app:
 ## Filtros
 
 - **Década:** selector por siglo (XIX / XX / XXI) y década
-- **Provincia:** todas o una provincia concreta (incluye Patagonia como región)
-- **Categoría:** tipo de caso (`corrupcion_historica`, `condena`, etc.)
+- **Provincia, categoría, actores, tipo de tierra, mecanismo, estado judicial, fuente**
+- Todos los desplegables incluyen **Todas** y son buscables
+
+Pasá el mouse sobre un **punto** del mapa para ver el tooltip con detalle del caso (actores, mecanismo, estado judicial, fuente, etc.).
 
 El mapa muestra **todas las provincias** con contorno; las que tienen casos se colorean en rojo.
 

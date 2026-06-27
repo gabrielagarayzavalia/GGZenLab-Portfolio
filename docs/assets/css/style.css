@@ -478,6 +478,31 @@ nav a.active {
   font-size: 1rem;
 }
 
+.hero .subtitle,
+.content-page p[data-i18n],
+.content-page li[data-i18n],
+.report-box p[data-i18n],
+.misc-article p[data-i18n],
+.card p[data-i18n]:not(.tools),
+.backlog td span[data-i18n] {
+  white-space: pre-line;
+}
+
+.labeled-block {
+  margin-top: 0.75rem;
+}
+
+.labeled-block-label {
+  font-weight: 600;
+  color: var(--text);
+  margin: 0.75rem 0 0.35rem;
+}
+
+.labeled-block-body {
+  margin: 0;
+  color: var(--muted);
+}
+
 .table-wrap {
   overflow-x: auto;
 }

@@ -37,6 +37,7 @@ Fuente de verdad: [`openapi/abm-crud.yaml`](openapi/abm-crud.yaml)
 |----------|---------|-------------|
 | API Testing | [`projects/api-testing/`](projects/api-testing/) | Gherkin, casos manuales, Postman, automatización |
 | Performance | [`projects/performance-jmeter/`](projects/performance-jmeter/) | JMeter sobre la API ABM |
+| Mapa corrupción y tierras | [`projects/mapa-corrupcion-tierras/`](projects/mapa-corrupcion-tierras/) | Dash + Plotly: casos históricos de tierras en Argentina |
 
 ## Ejecutar pruebas automatizadas
 

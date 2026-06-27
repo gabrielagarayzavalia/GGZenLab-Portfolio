@@ -18,4 +18,8 @@
   if (typeof GGZenI18n !== 'undefined') {
     GGZenI18n.initLangSwitcher();
   }
+
+  if (typeof GGZenCopy !== 'undefined') {
+    GGZenCopy.init();
+  }
 })();

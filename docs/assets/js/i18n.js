@@ -184,7 +184,9 @@
       'backlog.accounts.none': 'None (local)',
       'backlog.accounts.azure': 'Azure free + Azure DevOps org',
       'backlog.accounts.jenkins': 'Optional — local Docker only',
-      'footer.back': '← Back to home'
+      'footer.back': '← Back to home',
+      'copy.label': 'Copy code',
+      'copy.done': 'Copied!'
     },
     es: {
       'meta.title.home': 'GGZenLab | QA de Software y Automatización',
@@ -366,7 +368,9 @@
       'backlog.accounts.none': 'Ninguna (local)',
       'backlog.accounts.azure': 'Azure gratis + org Azure DevOps',
       'backlog.accounts.jenkins': 'Opcional — solo Docker local',
-      'footer.back': '← Volver al inicio'
+      'footer.back': '← Volver al inicio',
+      'copy.label': 'Copiar código',
+      'copy.done': '¡Copiado!'
     }
   };
 
@@ -384,6 +388,9 @@
     document.querySelectorAll('[data-lang-switch]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.langSwitch === lang);
     });
+    if (typeof global.GGZenCopy !== 'undefined' && typeof global.GGZenCopy.init === 'function') {
+      global.GGZenCopy.init();
+    }
   }
 
   function t(key, lang) {

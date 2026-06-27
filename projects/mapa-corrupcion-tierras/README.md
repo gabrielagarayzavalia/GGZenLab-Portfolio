@@ -44,7 +44,7 @@ Para detener la app:
 - **Provincia, categoría, actores, tipo de tierra, mecanismo, estado judicial, fuente**
 - Todos los desplegables incluyen **Todas** y son buscables
 
-Pasá el mouse sobre un **punto** del mapa para ver el tooltip con detalle del caso (actores, mecanismo, estado judicial, fuente, etc.).
+El mapa usa una **vista amplia** (Chile al oeste, Atlántico al este) con proporción ajustada al panel para que el zoom sobre una provincia no deforme el recorte.
 
 El mapa muestra **todas las provincias** con contorno. Colores del coroplético:
 

@@ -11,7 +11,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
 
-from scripts.geo_utils import normalize_provincia
+from scripts.geo_utils import compute_map_viewport, normalize_provincia
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CSV_FILE = PROJECT_ROOT / "output" / "casos_tierra_argentina_jitter.csv"
@@ -95,8 +95,8 @@ if "Sin fecha" in df["periodo_slider"].unique():
 INITIAL_DECADA = "1900s" if "1900s" in periodos else periodos[0]
 INITIAL_SIDEBAR_OPEN = True
 
-GEO_LON_RANGE = [-73.5, -53.0]
-GEO_LAT_RANGE = [-55.5, -21.5]
+GEO_LON_RANGE, GEO_LAT_RANGE = compute_map_viewport(geojson)
+MAP_UIREVISION = "mapa-corrupcion-tierras-vista"
 
 FILTER_SPECS: list[tuple[str, str, str]] = [
     ("provincia-dropdown", "provincia", "Provincia"),
@@ -338,15 +338,15 @@ def build_figure(periodo: str, filters: dict[str, str]) -> go.Figure:
         )
 
     fig.update_geos(
-        projection_type="mercator",
+        projection_type="natural earth",
         showcountries=False,
         showcoastlines=True,
-        coastlinecolor="rgba(60, 60, 60, 0.5)",
-        coastlinewidth=0.8,
+        coastlinecolor="rgba(60, 60, 60, 0.55)",
+        coastlinewidth=0.9,
         showland=True,
         landcolor="rgb(235, 235, 235)",
         showocean=True,
-        oceancolor="rgb(220, 230, 240)",
+        oceancolor="rgb(215, 228, 242)",
         lonaxis_range=GEO_LON_RANGE,
         lataxis_range=GEO_LAT_RANGE,
         bgcolor="rgba(0,0,0,0)",
@@ -355,6 +355,7 @@ def build_figure(periodo: str, filters: dict[str, str]) -> go.Figure:
         margin=dict(l=0, r=0, t=60, b=0),
         height=900,
         showlegend=False,
+        uirevision=MAP_UIREVISION,
         title=f"Década {periodo} · {len(d)} caso(s) visible(s)",
         hoverlabel=dict(
             bgcolor="rgba(255, 255, 255, 0.97)",
@@ -494,7 +495,15 @@ app.layout = html.Div(
                     "Casos históricos de corrupción y tierras en Argentina",
                     style={"marginBottom": "10px"},
                 ),
-                dcc.Graph(id="mapa", style={"height": "88vh"}, config={"scrollZoom": True}),
+                dcc.Graph(
+                    id="mapa",
+                    style={"height": "88vh", "width": "100%"},
+                    config={
+                        "scrollZoom": True,
+                        "doubleClick": "reset",
+                        "displaylogo": False,
+                    },
+                ),
             ],
             id="content",
             style=content_style(INITIAL_SIDEBAR_OPEN),

@@ -20,6 +20,13 @@ python app.py
 
 Abrí http://127.0.0.1:8050
 
+Para detener la app:
+
+```powershell
+.\stop.ps1          # puerto 8050 (default)
+.\stop.ps1 -Port 8050
+```
+
 ## Estructura
 
 | Ruta | Descripción |

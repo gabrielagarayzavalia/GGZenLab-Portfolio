@@ -46,9 +46,27 @@ if "Sin fecha" in df["periodo_slider"].unique():
 
 categorias = ["Todas"] + sorted(df["categoria_visual"].dropna().unique().tolist())
 
-INITIAL_DECADE_IDX = 0
+# Vista inicial con más provincias visibles (no 1820s, que solo tiene Entre Ríos).
+INITIAL_DECADE_IDX = periodos.index("1900s") if "1900s" in periodos else 0
 INITIAL_CATEGORY = "Todas"
 INITIAL_SIDEBAR_OPEN = True
+
+# Límites fijos de Argentina (evita zoom a una sola provincia filtrada).
+GEO_LON_RANGE = [-73.5, -53.0]
+GEO_LAT_RANGE = [-55.5, -21.5]
+
+
+def _slider_marks(periodos_list: list[str]) -> dict[int, str]:
+    """Etiquetas espaciadas para evitar solapamiento en la sidebar."""
+    n = len(periodos_list)
+    if n <= 5:
+        return {i: periodos_list[i] for i in range(n)}
+    step = max(1, (n - 1) // 4)
+    indices = sorted({0, *range(step, n - 1, step), n - 1})
+    return {i: periodos_list[i] for i in indices}
+
+
+SLIDER_MARKS = _slider_marks(periodos)
 
 app = dash.Dash(
     __name__,
@@ -180,7 +198,8 @@ def build_figure(periodo: str, categoria: str) -> go.Figure:
         showcountries=False,
         showcoastlines=False,
         showland=False,
-        fitbounds="locations",
+        lonaxis_range=GEO_LON_RANGE,
+        lataxis_range=GEO_LAT_RANGE,
     )
     fig.update_layout(
         margin=dict(l=0, r=0, t=60, b=0),
@@ -230,8 +249,9 @@ app.layout = html.Div(
                     max=len(periodos) - 1,
                     step=1,
                     value=INITIAL_DECADE_IDX,
-                    marks={i: periodos[i] for i in range(len(periodos))},
+                    marks=SLIDER_MARKS,
                     included=False,
+                    tooltip={"placement": "bottom", "always_visible": True},
                 ),
                 html.Br(),
                 html.Label("Categoría"),

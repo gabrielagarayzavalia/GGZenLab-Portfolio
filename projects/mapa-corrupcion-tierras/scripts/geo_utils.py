@@ -36,11 +36,11 @@ def compute_map_viewport(
     mainland_lon_min: float = -74.5,
     mainland_lon_max: float = -52.5,
     mainland_lat_min: float = -56.0,
-    chile_padding_deg: float = 3.0,
-    atlantic_padding_deg: float = 6.0,
+    chile_padding_deg: float = 3.75,
+    atlantic_padding_deg: float = 7.5,
     lat_padding_deg: float = 1.5,
-    map_aspect_wh: float = 1.45,
-    lon_cap: tuple[float, float] = (-79.0, -44.0),
+    map_aspect_wh: float = 1.8125,
+    lon_cap: tuple[float, float] = (-83.5, -39.5),
 ) -> tuple[list[float], list[float]]:
     """Lon/lat ranges with Chile + Atlantic margin and aspect ratio for wide map panels."""
     lons: list[float] = []

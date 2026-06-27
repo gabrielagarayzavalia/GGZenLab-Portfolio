@@ -13,6 +13,7 @@ Espacio para **ideas**, **preguntas abiertas** y **notas** que quiero compartir 
 |----|------|--------|--------|------|
 | M-01 | Idea | Bitácora de aprendizajes técnicos | Explorando | — |
 | M-02 | Pregunta | ¿Cómo compartís preguntas abiertas sin convertirlas en backlog? | Compartido | — |
+| M-03 | Pregunta | ¿Quedan posibles combinaciones de notas musicales? | Compartido | [Sider chat](https://sider.ai/es/share/6a31861aeafbffc61d5749276fc9b5fb) |
 
 ## Cómo agregar un ítem
 

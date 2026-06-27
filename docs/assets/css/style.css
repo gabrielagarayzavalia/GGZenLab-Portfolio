@@ -270,6 +270,23 @@ nav a:first-child {
   margin-bottom: 0.75rem;
 }
 
+.card .btn + .btn {
+  margin-left: 0.5rem;
+}
+
+.misc-article {
+  margin-top: 2rem;
+}
+
+.misc-article h2 {
+  margin-top: 0;
+}
+
+.misc-source {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .code-block {
   background: var(--surface);
   padding: 1rem;

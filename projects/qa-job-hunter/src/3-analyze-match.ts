@@ -106,7 +106,8 @@ async function analyzeJobs(): Promise<void> {
   console.log(`\n💾 Archivos guardados:`);
   console.log(`   JSON: ${OUTPUT_PATH}`);
   console.log(`   CSV : ${OUTPUT_PATH.replace(".json", ".csv")}`);
-  console.log(`\n🖥️  Ver dashboard: npx tsx src/run-all.ts --dashboard\n`);
+  console.log(`\n🖥️  Ver dashboard: npm run dashboard\n`);
 }
 
 analyzeJobs();
+

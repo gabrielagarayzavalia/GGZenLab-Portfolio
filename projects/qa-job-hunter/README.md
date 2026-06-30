@@ -131,6 +131,22 @@ npx tsx src/3-analyze-match.ts
 
 ---
 
+### Dashboard web
+
+Visualiza empleos con match en el navegador (lista + detalle):
+
+```powershell
+npm run dashboard
+```
+
+Abre `http://localhost:3847`. Lee `output/jobs-result.json`.
+
+- **Lista (derecha):** titulo, empresa, % match, orden mayor/menor
+- **Detalle (izquierda):** descripcion, skills, gaps, sugerencias CV, link LinkedIn
+
+Puerto: `$env:DASHBOARD_PORT = "4000"`
+
+
 ## 📁 Archivos generados
 
 ```
@@ -185,3 +201,4 @@ Para cada empleo con **70%+ de match**:
 ---
 
 *Construido con Playwright + Ollama / Claude + TypeScript*
+

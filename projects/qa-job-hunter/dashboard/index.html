@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Job Hunter — Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top-bar">
+    <div class="top-bar__brand">
+      <span class="logo">QA Job Hunter</span>
+      <span class="subtitle">Dashboard de empleos</span>
+    </div>
+    <div class="top-bar__stats" id="header-stats"></div>
+  </header>
+  <main class="layout">
+    <section class="panel panel--detail" aria-label="Detalle del empleo">
+      <div id="detail-empty" class="empty-state"><p>Selecciona un empleo de la lista para ver el detalle.</p></div>
+      <article id="detail-content" class="detail hidden" hidden></article>
+    </section>
+    <aside class="panel panel--list" aria-label="Lista de empleos">
+      <div class="list-header">
+        <h2>Empleos con match</h2>
+        <label class="sort-control">
+          <span>Ordenar</span>
+          <select id="sort-select" aria-label="Ordenar por porcentaje de match">
+            <option value="desc">Mayor match primero</option>
+            <option value="asc">Menor match primero</option>
+          </select>
+        </label>
+      </div>
+      <ul id="job-list" class="job-list"></ul>
+      <div id="list-empty" class="empty-state hidden" hidden>
+        <p>No hay empleos con 70%+ de match.</p>
+        <p class="hint">Ejecuta: <code>npx tsx src/3-analyze-match.ts</code></p>
+      </div>
+      <div id="list-error" class="empty-state error hidden" hidden></div>
+    </aside>
+  </main>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "qa-job-hunter",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Agentic job hunter for QA roles - LinkedIn scraper + Claude match analysis",
+  "scripts": {
+    "login": "npx tsx src/1-login.ts",
+    "scrape": "npx tsx src/2-scrape-jobs.ts",
+    "analyze": "npx tsx src/3-analyze-match.ts",
+    "full-run": "npx tsx src/run-all.ts",
+    "dashboard": "npx tsx src/serve-dashboard.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "playwright": "^1.44.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.0"
+  }
+}

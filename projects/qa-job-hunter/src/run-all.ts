@@ -62,7 +62,9 @@ function printDashboard(): void {
   });
 
   console.log(`\n  📄 CSV: ./output/jobs-result.csv`);
-  console.log(`  📦 JSON: ./output/jobs-result.json\n`);
+  console.log(`  📦 JSON: ./output/jobs-result.json`);
+  console.log(`  🖥️  Dashboard web: npm run dashboard`);
+
 }
 
 async function main(): Promise<void> {
@@ -130,3 +132,4 @@ ${"═".repeat(60)}`);
 }
 
 main().catch(console.error);
+

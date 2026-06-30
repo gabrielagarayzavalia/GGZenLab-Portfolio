@@ -1,0 +1,258 @@
+// ============================================================
+//  2-scrape-jobs.ts — Scraping de empleos QA en LinkedIn
+//  Usa sesión guardada (sin re-login)
+//  Comando: npx tsx src\2-scrape-jobs.ts
+// ============================================================
+
+import { chromium } from "playwright";
+import fs from "fs";
+import path from "path";
+import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH } from "./config.js";
+import type { JobListing } from "./types.js";
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function sanitize(text: string | null | undefined): string {
+  return (text ?? "").replace(/\s+/g, " ").trim();
+}
+
+function generateId(title: string, company: string): string {
+  return Buffer.from(`${title}-${company}`).toString("base64").slice(0, 12);
+}
+
+async function scrapeLinkedInJobs(): Promise<void> {
+  if (!fs.existsSync(SESSION_PATH)) {
+    console.error("❌ No hay sesión guardada.");
+    console.log("   Ejecutá primero: npx tsx src\\1-login.ts\n");
+    process.exit(1);
+  }
+
+  console.log("🚀 Iniciando scraping de empleos QA en LinkedIn...");
+  console.log(`📋 Términos: ${SEARCH_TERMS.join(", ")}\n`);
+
+  const browser = await chromium.launch({
+    headless: false, // Visible para detectar problemas
+    slowMo: 300,
+  });
+
+  const context = await browser.newContext({
+    storageState: SESSION_PATH,
+    viewport: { width: 1280, height: 800 },
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    locale: "es-AR",
+  });
+
+  const allJobs: JobListing[] = [];
+  const seenIds = new Set<string>();
+
+  for (const term of SEARCH_TERMS) {
+    console.log(`\n🔍 Buscando: "${term}"...`);
+    const page = await context.newPage();
+
+    try {
+      // URL de búsqueda de LinkedIn Jobs
+      const encodedTerm = encodeURIComponent(term);
+      // f_WT=2 = Remote, f_TPR=r604800 = últimos 7 días, sortBy=DD = más recientes primero
+      const remoteParam = FILTERS.remote ? "&f_WT=2" : "";
+      const dateParam =
+        FILTERS.recentDays <= 1 ? "&f_TPR=r86400" :
+        FILTERS.recentDays <= 7 ? "&f_TPR=r604800" :
+        "&f_TPR=r2592000";
+
+      const url = `https://www.linkedin.com/jobs/search/?keywords=${encodedTerm}${remoteParam}${dateParam}&sortBy=DD`;
+      console.log(`   URL: ${url}`);
+
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await sleep(3000);
+
+      // Verificar sesión activa
+      if (page.url().includes("/login") || page.url().includes("/authwall")) {
+        console.log("⚠️  Sesión expirada. Ejecutá: npx tsx src\\1-login.ts");
+        await browser.close();
+        process.exit(1);
+      }
+
+      // Screenshot para diagnóstico
+      await page.screenshot({ path: `./session/search-${term.replace(/ /g, "_")}.png` });
+
+      // Scroll para cargar más resultados
+      for (let s = 0; s < 4; s++) {
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await sleep(1500);
+      }
+
+      // Intentar múltiples selectores para las cards de jobs
+      let jobCards = await page.$$(".jobs-search__results-list > li");
+      if (jobCards.length === 0) {
+        jobCards = await page.$$(".scaffold-layout__list-container li");
+      }
+      if (jobCards.length === 0) {
+        jobCards = await page.$$('[data-occludable-job-id]');
+      }
+
+      const count = Math.min(jobCards.length, FILTERS.maxJobsPerSearch);
+      console.log(`   📌 Cards encontradas: ${jobCards.length} (procesando ${count})`);
+
+      if (jobCards.length === 0) {
+        console.log(`   ⚠️  Sin resultados. Revisá session\\search-${term.replace(/ /g, "_")}.png`);
+        await page.close();
+        continue;
+      }
+
+      for (let i = 0; i < count; i++) {
+        try {
+          // Click en la card
+          await jobCards[i].click();
+          await sleep(2000);
+
+          // Extraer datos del panel de detalle — múltiples selectores
+          const title = sanitize(await page.evaluate(() => {
+            const selectors = [
+              ".jobs-unified-top-card__job-title",
+              ".job-details-jobs-unified-top-card__job-title",
+              "h1.t-24",
+              "h2.t-24",
+            ];
+            for (const s of selectors) {
+              const el = document.querySelector(s);
+              if (el?.textContent) return el.textContent;
+            }
+            return "";
+          }));
+
+          const company = sanitize(await page.evaluate(() => {
+            const selectors = [
+              ".jobs-unified-top-card__company-name a",
+              ".job-details-jobs-unified-top-card__company-name",
+              ".jobs-unified-top-card__subtitle-primary-grouping a",
+              ".topcard__org-name-link",
+            ];
+            for (const s of selectors) {
+              const el = document.querySelector(s);
+              if (el?.textContent) return el.textContent;
+            }
+            return "";
+          }));
+
+          const location = sanitize(await page.evaluate(() => {
+            const selectors = [
+              ".jobs-unified-top-card__bullet",
+              ".job-details-jobs-unified-top-card__primary-description-without-tagline",
+              ".topcard__flavor--bullet",
+            ];
+            for (const s of selectors) {
+              const el = document.querySelector(s);
+              if (el?.textContent) return el.textContent;
+            }
+            return "No especificado";
+          }));
+
+          const modality = sanitize(await page.evaluate(() => {
+            const selectors = [
+              ".jobs-unified-top-card__workplace-type",
+              ".job-details-jobs-unified-top-card__workplace-type",
+              ".ui-label--accent-3",
+            ];
+            for (const s of selectors) {
+              const el = document.querySelector(s);
+              if (el?.textContent) return el.textContent;
+            }
+            return "No especificado";
+          }));
+
+          const datePosted = sanitize(await page.evaluate(() => {
+            const selectors = [
+              ".jobs-unified-top-card__posted-date",
+              "span.tvm__text--positive",
+              ".job-details-jobs-unified-top-card__primary-description-container time",
+            ];
+            for (const s of selectors) {
+              const el = document.querySelector(s);
+              if (el?.textContent) return el.textContent;
+            }
+            return "Fecha desconocida";
+          }));
+
+          // Expandir descripción
+          const seeMoreBtn = await page.$(".jobs-description__footer-button");
+          if (seeMoreBtn) {
+            await seeMoreBtn.click();
+            await sleep(500);
+          }
+
+          const description = sanitize(await page.evaluate(() => {
+            const selectors = [
+              ".jobs-description__content",
+              ".jobs-box__html-content",
+              "#job-details",
+              ".jobs-description",
+            ];
+            for (const s of selectors) {
+              const el = document.querySelector(s);
+              if (el?.textContent) return el.textContent;
+            }
+            return "Descripción no disponible";
+          }));
+
+          const jobUrl = page.url();
+
+          if (!title || !company) {
+            console.log(`   ⚠️  Card ${i + 1} sin datos, saltando...`);
+            continue;
+          }
+
+          const id = generateId(title, company);
+          if (seenIds.has(id)) {
+            console.log(`   ↩️  Duplicado saltado: ${title}`);
+            continue;
+          }
+          seenIds.add(id);
+
+          const job: JobListing = {
+            id,
+            title,
+            company,
+            location,
+            modality,
+            datePosted,
+            url: jobUrl,
+            description,
+            searchTerm: term,
+          };
+
+          allJobs.push(job);
+          console.log(`   ✓ [${i + 1}/${count}] ${title} @ ${company}`);
+
+        } catch {
+          console.log(`   ⚠️  Error en card ${i + 1}, continuando...`);
+        }
+      }
+
+    } catch (err) {
+      console.error(`   ❌ Error en búsqueda "${term}":`, err);
+    } finally {
+      await page.close();
+    }
+  }
+
+  await browser.close();
+
+  // Guardar resultados
+  const outputDir = path.dirname(OUTPUT_PATH);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const rawPath = OUTPUT_PATH.replace(".json", "-raw.json");
+  fs.writeFileSync(rawPath, JSON.stringify(allJobs, null, 2), "utf-8");
+
+  console.log(`\n✅ Scraping completado!`);
+  console.log(`   Total empleos únicos: ${allJobs.length}`);
+  console.log(`   Guardado en: ${rawPath}`);
+  console.log(`\n▶  Siguiente: npx tsx src\\3-analyze-match.ts\n`);
+}
+
+scrapeLinkedInJobs();

@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 52839c85-3832-4a2b-88e5-2d9c86301eb3
+
+localResources:
+  collections:
+    - ..\ABM-CRUD.postman_collection.json
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ..\postman\collections\ABM Items CRUD: 21f8638f-e0c6-4611-8756-99839c62ef03

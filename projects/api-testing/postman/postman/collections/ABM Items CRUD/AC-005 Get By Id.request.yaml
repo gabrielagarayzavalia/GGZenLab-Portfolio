@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{baseUrl}}/api/items/{{itemId}}"
+method: GET
+order: 5000

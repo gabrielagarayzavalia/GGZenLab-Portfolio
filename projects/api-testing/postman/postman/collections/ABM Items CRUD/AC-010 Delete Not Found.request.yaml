@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{baseUrl}}/api/items/00000000-0000-0000-0000-000000000099"
+method: DELETE
+order: 10000

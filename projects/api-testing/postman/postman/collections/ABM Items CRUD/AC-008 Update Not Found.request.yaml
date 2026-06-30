@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{baseUrl}}/api/items/00000000-0000-0000-0000-000000000099"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{ "name": "X" }'
+order: 8000

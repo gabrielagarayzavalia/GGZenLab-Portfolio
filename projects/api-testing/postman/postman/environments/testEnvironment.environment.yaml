@@ -1,0 +1,5 @@
+name: testEnvironment
+values:
+  - key: baseUrl
+    value: ''
+color: 240

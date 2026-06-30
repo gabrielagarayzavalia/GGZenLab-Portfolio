@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{baseUrl}}/api/items?active=true"
+method: GET
+queryParams:
+  active: "true"
+order: 4000

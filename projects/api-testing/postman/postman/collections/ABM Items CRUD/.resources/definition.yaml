@@ -1,0 +1,4 @@
+$kind: collection
+description: Colección contract-first alineada a AC-001..AC-010
+variables:
+  itemId: ""

@@ -1,0 +1,21 @@
+$kind: http-request
+url: "{{baseUrl}}/api/items"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "name": "Postman-AC-001",
+      "description": "Created via Postman",
+      "active": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('AC-001 status 201', () => pm.response.to.have.status(201));
+      const json = pm.response.json();
+      pm.collectionVariables.set('itemId', json.id);
+    language: text/javascript
+order: 1000

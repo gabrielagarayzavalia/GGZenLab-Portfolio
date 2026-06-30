@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/api/items?page=0&size=10"
+method: GET
+queryParams:
+  page: "0"
+  size: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('AC-003 status 200', () => pm.response.to.have.status(200));
+      pm.test('has pagination', () => {
+        const b = pm.response.json();
+        pm.expect(b).to.have.property('content');
+        pm.expect(b).to.have.property('totalElements');
+      });
+    language: text/javascript
+order: 3000

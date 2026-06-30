@@ -1,6 +1,6 @@
 (function () {
   const GITHUB_USER = 'gabrielagarayzavalia';
-  const REPO_NAME = 'QA-portfolio';
+  const REPO_NAME = 'GGZenLab-Portfolio';
   const REPO_URL = 'https://github.com/' + GITHUB_USER + '/' + REPO_NAME;
   const PAGES_URL = 'https://' + GITHUB_USER + '.github.io/' + REPO_NAME + '/';
 

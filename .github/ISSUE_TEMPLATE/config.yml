@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: GGZenLab Practice Labs
-    url: https://gabrielagarayzavalia.github.io/QA-portfolio/guides/
+    url: https://gabrielagarayzavalia.github.io/GGZenLab-Portfolio/guides/
     about: Step-by-step instructions on the portfolio site
   - name: Gherkin features (source of truth)
-    url: https://github.com/gabrielagarayzavalia/QA-portfolio/tree/main/projects
+    url: https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/tree/main/projects
     about: User stories and AC live next to each mini-project

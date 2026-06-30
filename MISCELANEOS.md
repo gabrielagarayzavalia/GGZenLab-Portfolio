@@ -1,7 +1,7 @@
 # GGZenLab — Misceláneos
 
-Portfolio monorepo: [gabrielagarayzavalia/QA-portfolio](https://github.com/gabrielagarayzavalia/QA-portfolio)  
-Live site: `https://gabrielagarayzavalia.github.io/QA-portfolio/misc/`
+Portfolio monorepo: [gabrielagarayzavalia/GGZenLab-Portfolio](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio)  
+Live site: `https://gabrielagarayzavalia.github.io/GGZenLab-Portfolio/misc/`
 
 Espacio para **ideas**, **preguntas abiertas** y **notas** que quiero compartir sin que necesariamente sean entregables QA ni ítems del [backlog de skills](BACKLOG.md).
 

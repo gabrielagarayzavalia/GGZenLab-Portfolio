@@ -88,7 +88,7 @@
     html += renderNavGroup(root, active, 'po', 'product-owner/index.html', 'nav.po', 'po', PO_ITEMS, isPoActive);
 
     html += '<a href="' + href(root, 'misc/index.html') + '" class="' + (active === 'misc' ? 'active' : '') + '" data-i18n="nav.misc">Miscellaneous</a>';
-    html += '<a href="https://github.com/gabrielagarayzavalia/QA-portfolio" data-repo-link data-i18n="nav.github">GitHub</a>';
+    html += '<a href="https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio" data-repo-link data-i18n="nav.github">GitHub</a>';
 
     nav.innerHTML = html;
     bindNavGroups(nav);

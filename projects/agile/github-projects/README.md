@@ -7,8 +7,8 @@ Tool chosen for **B-05 Agile PM**: [GitHub Projects](https://docs.github.com/en/
 | Resource | URL |
 |----------|-----|
 | New Project | https://github.com/users/gabrielagarayzavalia/projects/new |
-| Repo Issues | https://github.com/gabrielagarayzavalia/QA-portfolio/issues |
-| New Issue (templates) | https://github.com/gabrielagarayzavalia/QA-portfolio/issues/new/choose |
+| Repo Issues | https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues |
+| New Issue (templates) | https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/new/choose |
 
 ---
 
@@ -61,7 +61,7 @@ Configure **only these** values — **no Backlog, no Ready**:
 1. https://github.com/users/gabrielagarayzavalia/projects/new
 2. **Template:** **Team backlog**
 3. **Name:** `GGZenLab QA Portfolio`
-4. **Link repo:** `gabrielagarayzavalia/QA-portfolio`
+4. **Link repo:** `gabrielagarayzavalia/GGZenLab-Portfolio`
 
 ---
 
@@ -143,7 +143,7 @@ Repo → **Issues** → **Labels**:
 
 ### 7.1 Create issues in the repo
 
-Open: https://github.com/gabrielagarayzavalia/QA-portfolio/issues/new/choose
+Open: https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/new/choose
 
 **Minimum to start (create in this order):**
 

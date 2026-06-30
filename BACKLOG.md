@@ -1,7 +1,7 @@
 # GGZenLab Portfolio — Skills Backlog
 
-Portfolio monorepo: [gabrielagarayzavalia/QA-portfolio](https://github.com/gabrielagarayzavalia/QA-portfolio)  
-Live site (EN default, bilingual): `https://gabrielagarayzavalia.github.io/QA-portfolio/`  
+Portfolio monorepo: [gabrielagarayzavalia/GGZenLab-Portfolio](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio)  
+Live site (EN default, bilingual): `https://gabrielagarayzavalia.github.io/GGZenLab-Portfolio/`  
 Hub con dos subsitios: **QA** (`/qa/`) y **Product Owner** (`/product-owner/`).
 
 ## Published (Done)

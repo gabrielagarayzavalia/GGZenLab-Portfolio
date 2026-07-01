@@ -1,5 +1,5 @@
 // ============================================================
-//  application-status.ts — Aplicado / no aplicado por empleo
+//  application-status.ts — Estados de postulación por empleo
 // ============================================================
 
 import fs from "fs";
@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const APPLICATION_STATUS_PATH = path.join(ROOT, "output", "application-status.json");
 
-export type ApplicationStatus = "applied" | "not_applied";
+export type ApplicationStatus = "applied" | "not_applied" | "not_selected";
 
 export interface ApplicationStatusEntry {
   jobId: string;

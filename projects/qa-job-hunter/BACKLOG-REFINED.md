@@ -218,6 +218,29 @@ Opcional fin sprint / Sprint 2:
 | B-10 | B10-1 monetization-research.md | spike = doc only |
 | B-12 | B12-0 research · B12-1 OAuth · B12-2 multi LinkedIn | |
 | B-16 | B16-0 research · B16-1 Atlas · B16-2 deploy · B16-3 cron cloud | |
+| B-17 | B17-1 métricas mercado · B17-2 pipeline personal · B17-3 UI /stats | API agregados antes que gráficos |
 | B-11 | B11-0 research · B11-1 contracts · B11-2 indexer | exploratorio |
 
 Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
+
+### B-17 — Página de estadísticas (borrador)
+
+**Outcome:** Veo en una sola pantalla cómo evoluciona el mercado y mi pipeline de postulaciones.
+
+**Métricas mercado:**
+- Ofertas nuevas vs. históricas por scrape run (tendencia: ¿bajan los puestos QA?)
+- Desglose por fuente (LinkedIn, GetOnBoard, …) cuando B-13 esté activo
+
+**Métricas pipeline:**
+- CVs enviados (Aplicado)
+- Respuestas recibidas
+- Entrevistas realizadas
+- No seleccionada/o
+- Búsqueda cerrada / puesto ya no disponible
+
+**Stories sugeridas:**
+- B17-1 — `GET /api/stats/market` agregados por run/fecha
+- B17-2 — `GET /api/stats/pipeline` desde application status + timeline B-08
+- B17-3 — UI `/stats` con totales y gráficos (Chart.js o similar)
+
+**Depends on:** B-06 (ideal), B-08 (timeline completo); MVP parcial con JSON local + estados actuales del dashboard.

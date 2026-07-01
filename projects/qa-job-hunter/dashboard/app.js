@@ -4,6 +4,7 @@ let sortOrder = "desc";
 let hideRejected = true;
 let hideApplied = true;
 let hideNotApplied = true;
+let hideNotSelected = true;
 let hideUnmarked = false;
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
@@ -11,7 +12,7 @@ const DESCRIPTION_VIEW = "bullets";
 let rejectedIds = new Set();
 /** @type {Map<string, { reason?: string; rejectedAt: string }>} */
 let rejectionMeta = new Map();
-/** @type {Map<string, 'applied' | 'not_applied'>} */
+/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected'>} */
 let applicationStatus = new Map();
 
 const els = {
@@ -21,6 +22,7 @@ const els = {
   hideRejected: document.getElementById("hide-rejected"),
   hideApplied: document.getElementById("hide-applied"),
   hideNotApplied: document.getElementById("hide-not-applied"),
+  hideNotSelected: document.getElementById("hide-not-selected"),
   hideUnmarked: document.getElementById("hide-unmarked"),
   detailEmpty: document.getElementById("detail-empty"),
   detailContent: document.getElementById("detail-content"),
@@ -47,6 +49,7 @@ function isHiddenFromList(jobId) {
   const status = getApplicationStatus(jobId);
   if (hideApplied && status === "applied") return true;
   if (hideNotApplied && status === "not_applied") return true;
+  if (hideNotSelected && status === "not_selected") return true;
   if (hideUnmarked && status === null && !isRejected(jobId)) return true;
   return false;
 }
@@ -87,13 +90,14 @@ function renderHeader(result) {
   const fbCount = rejectedIds.size;
   const appliedCount = [...applicationStatus.values()].filter((s) => s === "applied").length;
   const notAppliedCount = [...applicationStatus.values()].filter((s) => s === "not_applied").length;
+  const notSelectedCount = [...applicationStatus.values()].filter((s) => s === "not_selected").length;
   const fbLine =
     fbCount > 0
       ? `<span class="header-feedback">Aprendizaje: <strong>${fbCount}</strong> incorrecto(s)</span>`
       : "";
   const appLine =
-    appliedCount + notAppliedCount > 0
-      ? `<span class="header-apps">Aplicados: <strong>${appliedCount}</strong> · No aplicado: <strong>${notAppliedCount}</strong></span>`
+    appliedCount + notAppliedCount + notSelectedCount > 0
+      ? `<span class="header-apps">Aplicados: <strong>${appliedCount}</strong> · No aplicado: <strong>${notAppliedCount}</strong> · No seleccionada/o: <strong>${notSelectedCount}</strong></span>`
       : "";
   els.headerStats.innerHTML = `
     <span>Fecha: <strong>${date}</strong></span>
@@ -141,7 +145,9 @@ function renderList() {
         ? `<span class="badge-applied">Aplicado</span>`
         : appStatus === "not_applied"
           ? `<span class="badge-not-applied">No aplicado</span>`
-          : "";
+          : appStatus === "not_selected"
+            ? `<span class="badge-not-selected">No seleccionada/o</span>`
+            : "";
 
     li.innerHTML = `
       <div class="match-badge">
@@ -246,6 +252,10 @@ function renderDetail(job) {
                 <input type="checkbox" id="chk-not-applied" ${appStatus === "not_applied" ? "checked" : ""} />
                 <span>No aplicado</span>
               </label>
+              <label class="application-check application-check--not-selected">
+                <input type="checkbox" id="chk-not-selected" ${appStatus === "not_selected" ? "checked" : ""} />
+                <span>No seleccionada/o</span>
+              </label>
             </div>
           </div>
           <div class="feedback-section feedback-section--compact${rejected ? " feedback-section--rejected" : ""}">
@@ -273,25 +283,27 @@ function renderDetail(job) {
 function wireApplicationChecks(job) {
   const chkApplied = document.getElementById("chk-applied");
   const chkNotApplied = document.getElementById("chk-not-applied");
-  if (!chkApplied || !chkNotApplied) return;
+  const chkNotSelected = document.getElementById("chk-not-selected");
+  if (!chkApplied || !chkNotApplied || !chkNotSelected) return;
 
-  chkApplied.addEventListener("change", () => {
-    if (chkApplied.checked) {
-      chkNotApplied.checked = false;
-      saveApplicationStatus(job, "applied");
-    } else {
-      saveApplicationStatus(job, null);
-    }
-  });
+  const boxes = [
+    { el: chkApplied, status: "applied" },
+    { el: chkNotApplied, status: "not_applied" },
+    { el: chkNotSelected, status: "not_selected" },
+  ];
 
-  chkNotApplied.addEventListener("change", () => {
-    if (chkNotApplied.checked) {
-      chkApplied.checked = false;
-      saveApplicationStatus(job, "not_applied");
-    } else {
-      saveApplicationStatus(job, null);
-    }
-  });
+  for (const { el, status } of boxes) {
+    el.addEventListener("change", () => {
+      if (el.checked) {
+        for (const other of boxes) {
+          if (other.el !== el) other.el.checked = false;
+        }
+        saveApplicationStatus(job, status);
+      } else {
+        saveApplicationStatus(job, null);
+      }
+    });
+  }
 }
 
 async function saveApplicationStatus(job, status) {
@@ -455,12 +467,14 @@ async function init() {
   els.hideRejected.addEventListener("change", onFilterChange);
   els.hideApplied.addEventListener("change", onFilterChange);
   els.hideNotApplied.addEventListener("change", onFilterChange);
+  els.hideNotSelected.addEventListener("change", onFilterChange);
   els.hideUnmarked.addEventListener("change", onFilterChange);
 
   function onFilterChange() {
     hideRejected = els.hideRejected.checked;
     hideApplied = els.hideApplied.checked;
     hideNotApplied = els.hideNotApplied.checked;
+    hideNotSelected = els.hideNotSelected.checked;
     hideUnmarked = els.hideUnmarked.checked;
     const list = visibleJobs();
     if (selectedId && !list.some((j) => j.id === selectedId)) {

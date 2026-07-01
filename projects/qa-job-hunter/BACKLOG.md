@@ -23,6 +23,7 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | 4 | B-07 | High | Scheduled agent 3×/day → Mongo (multi-source) |
 | 5 | B-08 | Medium | Application tracking + pipeline dates + dashboard UI |
 | 5b | B-14 | Medium–High | Web site: home + `/run` + `/dashboard` subpages |
+| 5c | **B-17** | Medium | Página de estadísticas de búsqueda laboral |
 | 6 | B-15 | Medium | CV upload + tailored CV/cover letter (Ollama / Claude / share) |
 | 7 | B-09 | Medium | Generic multi-vertical app (profiles beyond QA) |
 | 8 | B-10 | Medium | Monetization research |
@@ -56,6 +57,15 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 
 - `applicationStatus`, `timeline`, multiple technical interviews
 - Dashboard PATCH `/api/jobs/:id`; filters by status
+- Estados MVP en dashboard: Aplicado, No aplicado, No seleccionada/o
+
+### B-17 — Página de estadísticas
+
+- Ruta `/stats` (o subpágina del dashboard) con métricas agregadas de la búsqueda
+- **Mercado:** evolución de ofertas scrapeadas por fuente/período (¿disminuyen los puestos QA?)
+- **Pipeline personal:** CVs enviados, respuestas recibidas, entrevistas realizadas, no seleccionada/o, búsqueda cerrada por puesto
+- Gráficos simples (línea/barra) + totales; datos desde Mongo + `application-status.json` / timeline B-08
+- Depende de B-06 (persistencia) y B-08 (estados enriquecidos); MVP puede usar JSON local
 
 ### B-14 — Web site structure
 
@@ -99,5 +109,5 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | Template | Use for |
 |----------|---------|
 | Epic (Product Owner) | EPIC-JH |
-| User Story (Product Owner) | B-06 … B-16, P-JH done stories |
+| User Story (Product Owner) | B-06 … B-17, P-JH done stories |
 | PO Task | Sub-tasks per story |

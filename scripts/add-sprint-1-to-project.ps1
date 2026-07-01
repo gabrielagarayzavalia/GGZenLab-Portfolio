@@ -174,12 +174,12 @@ foreach ($num in $sprintIssues) {
   }
   $item = @($items | Where-Object { $_.content.url -eq $url } | Select-Object -First 1)
   if (-not $item) {
-    & $gh project item-add $projNum --owner $owner --url $url | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "gh project item-add failed for #$num" }
+    $addJson = & $gh project item-add $projNum --owner $owner --url $url --format json 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "gh project item-add failed for #$num`n$addJson" }
+    $addedItem = $addJson | ConvertFrom-Json
+    $item = [PSCustomObject]@{ id = $addedItem.id; content = [PSCustomObject]@{ url = $url } }
     Write-Host "Added to project: #$num"
     $added++
-    $items = Get-ProjectItems -ProjNum $projNum
-    $item = @($items | Where-Object { $_.content.url -eq $url } | Select-Object -First 1)
   } else {
     Write-Host "Already in project: #$num"
     $skipped++

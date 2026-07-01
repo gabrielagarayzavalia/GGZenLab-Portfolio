@@ -7,7 +7,7 @@
 import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
-import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH } from "./config.js";
+import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH, TITLE_KEYWORDS } from "./config.js";
 import type { JobListing } from "./types.js";
 
 function sleep(ms: number) {
@@ -20,6 +20,11 @@ function sanitize(text: string | null | undefined): string {
 
 function generateId(title: string, company: string): string {
   return Buffer.from(`${title}-${company}`).toString("base64").slice(0, 12);
+}
+
+function isRelevantTitle(title: string): boolean {
+  const lower = title.toLowerCase();
+  return TITLE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 async function scrapeLinkedInJobs(): Promise<void> {
@@ -48,14 +53,106 @@ async function scrapeLinkedInJobs(): Promise<void> {
   const allJobs: JobListing[] = [];
   const seenIds = new Set<string>();
 
+  // ── PASADA EXTRA: LinkedIn "Remote jobs" collection ──────────
+  console.log(`\n🌎 Explorando colección "Remote jobs" de LinkedIn...`);
+  {
+    const page = await context.newPage();
+    try {
+      const collUrl = `https://www.linkedin.com/jobs/collections/remote/?keywords=QA`;
+      await page.goto(collUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await sleep(3000);
+
+      if (!page.url().includes("/login") && !page.url().includes("/authwall")) {
+        await page.screenshot({ path: "./session/search-remote-collection.png" });
+
+        for (let s = 0; s < 4; s++) {
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await sleep(1500);
+        }
+
+        let cards = await page.$$(".jobs-search__results-list > li");
+        if (cards.length === 0) cards = await page.$$(".scaffold-layout__list-container li");
+        if (cards.length === 0) cards = await page.$$('[data-occludable-job-id]');
+
+        const count = Math.min(cards.length, FILTERS.maxJobsPerSearch);
+        console.log(`   📌 Cards encontradas: ${cards.length} (procesando ${count})`);
+
+        for (let i = 0; i < count; i++) {
+          try {
+            await cards[i].click();
+            await sleep(2000);
+
+            const title = sanitize(await page.evaluate(() => {
+              const sels = [".jobs-unified-top-card__job-title", ".job-details-jobs-unified-top-card__job-title", "h1.t-24", "h2.t-24"];
+              for (const s of sels) { const el = document.querySelector(s); if (el?.textContent) return el.textContent; }
+              return "";
+            }));
+            const company = sanitize(await page.evaluate(() => {
+              const sels = [".jobs-unified-top-card__company-name a", ".job-details-jobs-unified-top-card__company-name", ".topcard__org-name-link"];
+              for (const s of sels) { const el = document.querySelector(s); if (el?.textContent) return el.textContent; }
+              return "";
+            }));
+
+            if (!title || !company || !isRelevantTitle(title)) {
+              if (title) console.log(`   ✗ Descartado: ${title}`);
+              continue;
+            }
+
+            const location = sanitize(await page.evaluate(() => {
+              const sels = [".jobs-unified-top-card__bullet", ".job-details-jobs-unified-top-card__primary-description-without-tagline"];
+              for (const s of sels) { const el = document.querySelector(s); if (el?.textContent) return el.textContent; }
+              return "No especificado";
+            }));
+            const modality = sanitize(await page.evaluate(() => {
+              const sels = [".jobs-unified-top-card__workplace-type", ".job-details-jobs-unified-top-card__workplace-type"];
+              for (const s of sels) { const el = document.querySelector(s); if (el?.textContent) return el.textContent; }
+              return "No especificado";
+            }));
+            const datePosted = sanitize(await page.evaluate(() => {
+              const sels = [".jobs-unified-top-card__posted-date", "span.tvm__text--positive"];
+              for (const s of sels) { const el = document.querySelector(s); if (el?.textContent) return el.textContent; }
+              return "Fecha desconocida";
+            }));
+
+            const seeMoreBtn = await page.$(".jobs-description__footer-button");
+            if (seeMoreBtn) { await seeMoreBtn.click(); await sleep(500); }
+
+            const description = sanitize(await page.evaluate(() => {
+              const sels = [".jobs-description__content", ".jobs-box__html-content", "#job-details", ".jobs-description"];
+              for (const s of sels) { const el = document.querySelector(s); if (el?.textContent) return el.textContent; }
+              return "Descripción no disponible";
+            }));
+
+            const id = generateId(title, company);
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
+
+            allJobs.push({
+              id, title, company, location, modality, datePosted,
+              url: page.url(), description, searchTerm: "Remote Collection",
+            });
+            console.log(`   ✓ [${i + 1}/${count}] ${title} @ ${company}`);
+          } catch {
+            console.log(`   ⚠️  Error en card ${i + 1}, continuando...`);
+          }
+        }
+      } else {
+        console.log("   ⚠️  No se pudo acceder a la colección Remote (sesión).");
+      }
+    } catch (err) {
+      console.error("   ❌ Error explorando colección Remote:", err);
+    } finally {
+      await page.close();
+    }
+  }
+
+  // ── PASADAS POR KEYWORD (búsqueda tradicional) ───────────────
   for (const term of SEARCH_TERMS) {
     console.log(`\n🔍 Buscando: "${term}"...`);
     const page = await context.newPage();
 
     try {
-      // URL de búsqueda de LinkedIn Jobs
       const encodedTerm = encodeURIComponent(term);
-      // f_WT=2 = Remote, f_TPR=r604800 = últimos 7 días, sortBy=DD = más recientes primero
       const remoteParam = FILTERS.remote ? "&f_WT=2" : "";
       const dateParam =
         FILTERS.recentDays <= 1 ? "&f_TPR=r86400" :
@@ -68,23 +165,19 @@ async function scrapeLinkedInJobs(): Promise<void> {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
       await sleep(3000);
 
-      // Verificar sesión activa
       if (page.url().includes("/login") || page.url().includes("/authwall")) {
         console.log("⚠️  Sesión expirada. Ejecutá: npx tsx src\\1-login.ts");
         await browser.close();
         process.exit(1);
       }
 
-      // Screenshot para diagnóstico
       await page.screenshot({ path: `./session/search-${term.replace(/ /g, "_")}.png` });
 
-      // Scroll para cargar más resultados
       for (let s = 0; s < 4; s++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await sleep(1500);
       }
 
-      // Intentar múltiples selectores para las cards de jobs
       let jobCards = await page.$$(".jobs-search__results-list > li");
       if (jobCards.length === 0) {
         jobCards = await page.$$(".scaffold-layout__list-container li");
@@ -104,11 +197,9 @@ async function scrapeLinkedInJobs(): Promise<void> {
 
       for (let i = 0; i < count; i++) {
         try {
-          // Click en la card
           await jobCards[i].click();
           await sleep(2000);
 
-          // Extraer datos del panel de detalle — múltiples selectores
           const title = sanitize(await page.evaluate(() => {
             const selectors = [
               ".jobs-unified-top-card__job-title",
@@ -176,7 +267,6 @@ async function scrapeLinkedInJobs(): Promise<void> {
             return "Fecha desconocida";
           }));
 
-          // Expandir descripción
           const seeMoreBtn = await page.$(".jobs-description__footer-button");
           if (seeMoreBtn) {
             await seeMoreBtn.click();
@@ -201,6 +291,11 @@ async function scrapeLinkedInJobs(): Promise<void> {
 
           if (!title || !company) {
             console.log(`   ⚠️  Card ${i + 1} sin datos, saltando...`);
+            continue;
+          }
+
+          if (!isRelevantTitle(title)) {
+            console.log(`   ✗ Descartado (título no QA): ${title}`);
             continue;
           }
 
@@ -240,7 +335,6 @@ async function scrapeLinkedInJobs(): Promise<void> {
 
   await browser.close();
 
-  // Guardar resultados
   const outputDir = path.dirname(OUTPUT_PATH);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });

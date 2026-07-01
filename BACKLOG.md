@@ -65,7 +65,7 @@ Other options considered: Jira, Trello, Azure Boards, Linear, Taiga.
 - [x] Seed issues doc (Job Hunter PO): `projects/agile/github-projects/SEED_ISSUES_JOB_HUNTER.md`
 - [ ] Project board **GGZenLab Portfolio** created on GitHub
 - [ ] Epics + stories + sample tasks added; sprint simulation documented
-- [ ] Job Hunter PO issues imported from [SEED_ISSUES_JOB_HUNTER.md](projects/agile/github-projects/SEED_ISSUES_JOB_HUNTER.md) — **GitHub #9–#32** (script: `scripts/create-job-hunter-issues.ps1`)
+- [ ] Job Hunter PO issues imported from [SEED_ISSUES_JOB_HUNTER.md](projects/agile/github-projects/SEED_ISSUES_JOB_HUNTER.md) — **GitHub #9–#34** (script: `scripts/create-job-hunter-issues.ps1`)
 
 ## Account checklist
 

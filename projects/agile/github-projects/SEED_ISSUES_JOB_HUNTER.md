@@ -417,6 +417,8 @@ AC:
 | `[Task] JH-T-B13-01 — B-13a ToS research per job board` | `task`, `track:po`, `backlog:B-13` | US-JH-B13 | research |
 | `[Task] JH-T-B13-02 — JobSourceAdapter + LinkedInAdapter` | `task`, `track:po`, `backlog:B-13` | US-JH-B13 | implementation |
 | `[Task] JH-T-B13-03 — GetOnBoardAdapter MVP` | `task`, `track:po`, `backlog:B-13` | US-JH-B13 | implementation |
+| `[Task] JH-T-B13-04 — IndeedAdapter (AR) + scrape-orchestrator` | `task`, `track:po`, `backlog:B-13` | US-JH-B13 | implementation |
+| `[Task] JH-T-B13-05 — Dashboard source badge and filter` | `task`, `track:po`, `backlog:B-13` | US-JH-B13 | ui-ux |
 | `[Task] JH-T-B07-01 — scheduled-run.ts + npm run agent` | `task`, `track:po`, `backlog:B-07` | US-JH-B07 | implementation |
 | `[Task] JH-T-B08-01 — PATCH /api/jobs/:id + timeline UI` | `task`, `track:po`, `backlog:B-08` | US-JH-B08 | ui-ux |
 | `[Task] JH-T-B14-01 — home.html + run.html + shared nav` | `task`, `track:po`, `backlog:B-14` | US-JH-B14 | ui-ux |

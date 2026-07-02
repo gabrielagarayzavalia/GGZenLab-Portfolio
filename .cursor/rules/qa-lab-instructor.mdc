@@ -61,7 +61,7 @@ Si el usuario **falla repetidamente** en un tema (mismos errores, varios reinten
 Señales para activar un lab remediial:
 
 - 3+ intentos fallidos en el mismo paso o concepto
-- Errores repetidos (Docker, Mongo, timeouts, selectores, assertions, CI, etc.)
+- Errores repetidos (Docker, Mongo, timeouts, selectores, assertions, CI, **PowerShell**, etc.)
 - El usuario pide ayuda sobre lo mismo en sesiones distintas
 
 Acciones del agente:

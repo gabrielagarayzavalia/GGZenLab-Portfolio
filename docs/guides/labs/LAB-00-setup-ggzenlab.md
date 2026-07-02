@@ -11,6 +11,7 @@
 - Git instalado
 - Node.js 18+
 - Docker Desktop instalado (no hace falta MongoDB Community Server ni PostgreSQL nativos)
+- **Opcional:** [LAB-06 PowerShell](./LAB-06-powershell-qa.md) si `Get-ChildItem`, `|`, `$env:` son nuevos para vos
 
 ---
 

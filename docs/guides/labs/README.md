@@ -12,6 +12,7 @@ Guías **modo instructor** (paso a paso, checkpoints). El agente debe pausar en 
 | **LAB-03** | [LAB-03-b06-4-mongo-qa.md](./LAB-03-b06-4-mongo-qa.md) | Mongo persistence (Job Hunter) |
 | **LAB-04** | [LAB-04-playwright-pom-typescript.md](./LAB-04-playwright-pom-typescript.md) | Playwright + POM (TS) — próximo |
 | **LAB-05** | [LAB-05-rest-assured-api.md](./LAB-05-rest-assured-api.md) | Rest Assured + API — próximo |
+| **LAB-06** | [LAB-06-powershell-qa.md](./LAB-06-powershell-qa.md) | PowerShell esencial (Windows + QA labs) |
 
 Labs del subsitio publicado: [`docs/guides/index.html`](../index.html) · Job Hunter Mongo: [`docs/projects/qa-job-hunter/`](../projects/qa-job-hunter/)
 

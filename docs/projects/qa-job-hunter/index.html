@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="QA Job Hunter Mongo lab — GGZenLab">
+  <title>QA Job Hunter — Mongo Lab | GGZenLab</title>
+  <link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body data-nav-root="../.." data-nav-active="qajh-mongo" data-i18n-title="meta.title.qajhMongo" data-i18n-desc="meta.desc.qajhMongo">
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../../index.html">GG<span>ZenLab</span></a>
+      <div class="header-right">
+        <nav class="site-nav" aria-label="Main"></nav>
+        <div class="lang-switcher" role="group">
+          <span data-i18n="lang.label">Language</span>
+          <button type="button" data-lang-switch="en" class="active">EN</button>
+          <button type="button" data-lang-switch="es">ES</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container content-page">
+    <p class="breadcrumb"><a href="../../index.html" data-i18n="nav.home">Home</a> · <a href="../../qa/index.html" data-i18n="nav.qa">QA</a> · <span data-i18n="qajhMongo.breadcrumb">QA Job Hunter — Mongo</span></p>
+    <h1 data-i18n="qajhMongo.h1">Mini-project: QA Job Hunter — Mongo persistence lab</h1>
+    <p data-i18n="qajhMongo.intro">Local MongoDB persistence for job match results: Docker compose, seed from JSON, Gherkin acceptance criteria, and API tests for GET /api/jobs.</p>
+
+    <h2 data-i18n="qajhMongo.scope.title">Scope (US-JH-B06-1 + US-JH-B06-4)</h2>
+    <ul>
+      <li data-i18n="qajhMongo.scope.1">Docker <code>mongo:7</code> with healthcheck</li>
+      <li data-i18n="qajhMongo.scope.2">Collections: <code>analysis_runs</code>, <code>jobs</code>, <code>skipped_jobs</code></li>
+      <li data-i18n="qajhMongo.scope.3">Seed: <code>npm run db:seed</code> from <code>output/jobs-result.json</code></li>
+      <li data-i18n="qajhMongo.scope.4">API: <code>GET /api/jobs?sort=matchPercent&amp;order=desc</code></li>
+    </ul>
+
+    <h2 data-i18n="qajhMongo.artifacts.title">QA artifacts in the repo</h2>
+    <ul>
+      <li>Gherkin: <code>projects/qa-job-hunter/gherkin/mongo-persistence.feature</code></li>
+      <li>API tests: <code>projects/qa-job-hunter/tests/api/jobs.test.ts</code></li>
+      <li>Compose: <code>projects/qa-job-hunter/docker-compose.yml</code></li>
+      <li>Product code: <code>projects/qa-job-hunter/src/db/</code></li>
+    </ul>
+
+    <h2 data-i18n="qajhMongo.quick.title">Quick run</h2>
+    <pre class="code-block">cd projects/qa-job-hunter
+docker compose up -d
+npm install
+npm run db:seed
+npm run dashboard
+npm run test:api</pre>
+    <p data-i18n="qajhMongo.quick.note">Requires <code>output/jobs-result.json</code> from a prior analyze run. API tests skip gracefully if the dashboard is not running.</p>
+
+    <p>
+      <a class="btn" href="https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/tree/main/projects/qa-job-hunter" target="_blank" rel="noopener" data-i18n="qajhMongo.repo">Source on GitHub</a>
+      <a class="btn" href="../../product-owner/job-hunter.html" data-i18n="qajhMongo.poLink">Product Owner overview</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p><a href="../../qa/index.html" data-i18n="footer.backQa">← QA overview</a></p>
+    </div>
+  </footer>
+  <script src="../../assets/js/nav.js"></script>
+  <script src="../../assets/js/i18n.js"></script>
+  <script src="../../assets/js/copy.js"></script>
+  <script src="../../assets/js/site.js"></script>
+</body>
+</html>

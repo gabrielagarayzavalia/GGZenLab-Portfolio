@@ -20,6 +20,8 @@ import {
   type ApplicationStatus,
   type ApplicationStatusStore,
 } from "./application-status.js";
+import { connect } from "./db/client.js";
+import { listJobs } from "./db/jobs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -82,6 +84,20 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       "Access-Control-Allow-Headers": "Content-Type",
     });
     res.end();
+    return;
+  }
+
+  if (pathname === "/api/jobs" && method === "GET") {
+    try {
+      await connect();
+      const sort = url.searchParams.get("sort") ?? "matchPercent";
+      const order = url.searchParams.get("order") === "asc" ? "asc" : "desc";
+      const jobs = await listJobs({ sort, order });
+      sendJson(res, 200, { jobs, count: jobs.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "MongoDB unavailable";
+      sendJson(res, 503, { error: message, hint: "Run docker compose up and npm run db:seed" });
+    }
     return;
   }
 

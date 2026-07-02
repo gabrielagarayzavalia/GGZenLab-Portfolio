@@ -9,8 +9,55 @@ analizar el % de match con tu perfil y preparar el CV a medida.
 
 - Node.js 18+ instalado
 - Cuenta de LinkedIn
+- **MongoDB local (B-06):** Docker Desktop o Docker Engine
 - **Análisis local (recomendado):** [Ollama](https://ollama.com) — sin API key
 - **Análisis en nube (opcional):** API Key de Anthropic en [console.anthropic.com](https://console.anthropic.com)
+
+---
+
+## 🍃 MongoDB local (persistencia B-06)
+
+### 1. Levantar MongoDB 7
+
+Desde esta carpeta (`projects/qa-job-hunter`):
+
+```powershell
+docker compose up -d
+docker compose ps
+```
+
+El servicio expone `mongodb://localhost:27017/qa_job_hunter` con healthcheck vía `mongosh ping`.
+
+### 2. Variable de entorno (opcional)
+
+Por defecto la app usa `mongodb://localhost:27017/qa_job_hunter`. Para otro host:
+
+```powershell
+$env:MONGODB_URI = "mongodb://localhost:27017/qa_job_hunter"
+```
+
+### 3. Seed desde JSON existente
+
+Requiere `output/jobs-result.json` (generado por el análisis):
+
+```powershell
+npm run db:seed
+```
+
+Inserta en colecciones `analysis_runs`, `jobs` y `skipped_jobs`. Re-ejecutar no duplica jobs (upsert por `url`).
+
+### 4. API y dashboard
+
+```powershell
+npm run dashboard
+curl http://localhost:3847/api/jobs?sort=matchPercent&order=desc
+```
+
+### 5. Lab QA (Gherkin + tests)
+
+- Feature: `gherkin/mongo-persistence.feature`
+- Tests API: `npm run test:api` (con dashboard corriendo)
+- Docs portfolio: `docs/projects/qa-job-hunter/index.html`
 
 ---
 

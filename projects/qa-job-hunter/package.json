@@ -8,10 +8,13 @@
     "scrape": "npx tsx src/2-scrape-jobs.ts",
     "analyze": "npx tsx src/3-analyze-match.ts",
     "full-run": "npx tsx src/run-all.ts",
-    "dashboard": "npx tsx src/serve-dashboard.ts"
+    "dashboard": "npx tsx src/serve-dashboard.ts",
+    "db:seed": "npx tsx src/db/seed.ts",
+    "test:api": "npx tsx --test tests/api/jobs.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
+    "mongodb": "^6.16.0",
     "playwright": "^1.44.0"
   },
   "devDependencies": {

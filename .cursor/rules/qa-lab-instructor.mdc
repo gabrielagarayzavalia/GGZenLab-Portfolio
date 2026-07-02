@@ -53,3 +53,22 @@ Preferir extender patrones existentes en el repo (ej. `api-testing`) antes de in
 - **Usuario**: ejecuta comandos, corre tests, captura evidencia, completa checkpoints
 
 Si el usuario pide "implementalo vos", aclarar qué partes son lab (él practica) vs infra (agente puede preparar).
+
+## Labs remediales (cuando algo falla mucho)
+
+Si el usuario **falla repetidamente** en un tema (mismos errores, varios reintentos, checkpoints no superados, confusión recurrente), **proponer y agregar un laboratorio focalizado** sobre ese subject antes de seguir avanzando la story original.
+
+Señales para activar un lab remediial:
+
+- 3+ intentos fallidos en el mismo paso o concepto
+- Errores repetidos (Docker, Mongo, timeouts, selectores, assertions, CI, etc.)
+- El usuario pide ayuda sobre lo mismo en sesiones distintas
+
+Acciones del agente:
+
+1. **Nombrar el gap** — qué concepto falta (ej. "conectar Compass a Docker Mongo", "POM base en Playwright")
+2. **Lab corto remediial** — 3–6 pasos, scope mínimo, un solo learning outcome
+3. **Ubicación** — `docs/guides/`, `projects/*/…`, o sub-sección en el lab existente; alinear con backlog si aplica
+4. **Después del lab** — retomar la task/story original
+
+No bloquear indefinidamente: si el lab remediial es largo, ofrecer split (lab hoy + story mañana) o implementación asistida solo de la infra mínima.

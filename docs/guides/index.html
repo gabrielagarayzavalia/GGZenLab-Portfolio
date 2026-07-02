@@ -26,6 +26,15 @@
     <h1 data-i18n="nav.guides">Practice Labs</h1>
     <p data-i18n="guides.intro">Use these labs to practice everything published in the portfolio.</p>
 
+    <div class="report-box">
+      <h3>Instructor labs (step-by-step)</h3>
+      <p>Modo instructor con checkpoints: setup, SQL, CI/CD, Mongo QA, Playwright POM, Rest Assured.</p>
+      <p><a class="btn" href="labs/README.md">Open labs index (LAB-00 … LAB-05)</a></p>
+    </div>
+
+    <h2>LAB-00 — GGZenLab environment setup</h2>
+    <p>Workspace paths (<code>GGZenLab-Portfolio</code> vs alias), Docker Desktop, smoke tests. <a href="labs/LAB-00-setup-ggzenlab.md">Start LAB-00</a></p>
+
     <h2 data-i18n="guides.docker.title">Lab 1 — Docker &amp; SUTs</h2>
     <ol class="lab-steps">
       <li data-i18n="guides.docker.step1">Install Docker Desktop…</li>
@@ -54,6 +63,7 @@ mvn test -Dsut.swaggerUiUrl=http://localhost:3000/api-docs</pre>
   -JbaseHost=localhost -JbasePort=3000 -l results.jtl -e -o jmeter-report</pre>
 
     <h2 data-i18n="guides.cicd.title">Lab 3 — CI/CD (GitHub Actions)</h2>
+    <p>Extended instructor guide: <a href="labs/LAB-02-cicd-github-actions-qa.md">LAB-02 CI/CD for QA Automation</a></p>
     <ol class="lab-steps">
       <li data-i18n="guides.cicd.step1">Push to main…</li>
       <li data-i18n="guides.cicd.step2">Enable Pages…</li>

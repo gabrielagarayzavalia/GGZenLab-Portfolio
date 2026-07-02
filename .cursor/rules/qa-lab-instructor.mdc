@@ -68,7 +68,7 @@ Acciones del agente:
 
 1. **Nombrar el gap** — qué concepto falta (ej. "conectar Compass a Docker Mongo", "POM base en Playwright")
 2. **Lab corto remediial** — 3–6 pasos, scope mínimo, un solo learning outcome
-3. **Ubicación** — `docs/guides/`, `projects/*/…`, o sub-sección en el lab existente; alinear con backlog si aplica
+3. **Ubicación** — `docs/guides/labs/` (índice [`README.md`](../../docs/guides/labs/README.md)), `projects/sql-lab/`, `projects/*/tests/`, o sub-sección en lab existente
 4. **Después del lab** — retomar la task/story original
 
 No bloquear indefinidamente: si el lab remediial es largo, ofrecer split (lab hoy + story mañana) o implementación asistida solo de la infra mínima.

@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: qa-sql-lab-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: qa
+      POSTGRES_PASSWORD: qa123
+      POSTGRES_DB: qa_practice
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./seed:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa -d qa_practice"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:

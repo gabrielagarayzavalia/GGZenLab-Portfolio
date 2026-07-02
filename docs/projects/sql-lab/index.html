@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SQL Lab — PostgreSQL in Docker — GGZenLab">
+  <title>SQL Lab | GGZenLab</title>
+  <link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body data-nav-root="../.." data-nav-active="sql-lab" data-i18n-title="meta.title.sqlLab" data-i18n-desc="meta.desc.sqlLab">
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../../index.html">GG<span>ZenLab</span></a>
+      <div class="header-right">
+        <nav class="site-nav" aria-label="Main"></nav>
+        <div class="lang-switcher" role="group">
+          <span data-i18n="lang.label">Language</span>
+          <button type="button" data-lang-switch="en" class="active">EN</button>
+          <button type="button" data-lang-switch="es">ES</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container content-page">
+    <p class="breadcrumb"><a href="../../index.html" data-i18n="nav.home">Home</a> · <a href="../../qa/index.html" data-i18n="nav.qa">QA</a> · <span data-i18n="sqlLab.breadcrumb">SQL Lab</span></p>
+    <h1 data-i18n="sqlLab.h1">Mini-project: SQL Lab — PostgreSQL in Docker</h1>
+    <p data-i18n="sqlLab.intro">Practice SELECT, JOIN, and GROUP BY on a job-search themed schema. Docker-only — no local PostgreSQL install required.</p>
+
+    <h2 data-i18n="sqlLab.guide.title">Instructor guide (step-by-step)</h2>
+    <p><a href="https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/blob/main/docs/guides/labs/LAB-01-sql-select-join.md" target="_blank" rel="noopener">LAB-01 — SQL SELECT &amp; JOIN</a></p>
+
+    <h2 data-i18n="sqlLab.quick.title">Quick run</h2>
+    <pre class="code-block">cd projects/sql-lab
+docker compose up -d
+docker exec -it qa-sql-lab-postgres psql -U qa -d qa_practice</pre>
+    <p data-i18n="sqlLab.conn">Connection: postgresql://qa:qa123@localhost:5432/qa_practice</p>
+
+    <h2 data-i18n="sqlLab.schema.title">Schema</h2>
+    <ul>
+      <li><code>companies</code> · <code>jobs</code> · <code>applications</code></li>
+      <li>Seed: <code>projects/sql-lab/seed/</code></li>
+    </ul>
+
+    <p>
+      <a class="btn" href="../../guides/labs/README.md" data-i18n="sqlLab.allLabs">All instructor labs</a>
+      <a class="btn" href="https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/tree/main/projects/sql-lab" target="_blank" rel="noopener" data-i18n="sqlLab.repo">Source on GitHub</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p><a href="../../qa/index.html" data-i18n="footer.backQa">← QA overview</a></p>
+    </div>
+  </footer>
+  <script src="../../assets/js/nav.js"></script>
+  <script src="../../assets/js/i18n.js"></script>
+  <script src="../../assets/js/copy.js"></script>
+  <script src="../../assets/js/site.js"></script>
+</body>
+</html>

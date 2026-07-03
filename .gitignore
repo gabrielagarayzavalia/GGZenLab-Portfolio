@@ -42,6 +42,7 @@ project.lock.json
 
 # OS
 Thumbs.db
+Captura*
 
 # Screenshots placeholder keep dir
 !projects/**/report/screenshots/.gitkeep

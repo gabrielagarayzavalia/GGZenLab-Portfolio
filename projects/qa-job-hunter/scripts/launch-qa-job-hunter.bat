@@ -29,6 +29,13 @@ if not exist "node_modules\" (
   echo.
 )
 
+if not exist ".env" (
+  echo.
+  echo   AVISO: No hay .env — LinkedIn requiere LI_EMAIL y LI_PASS.
+  echo   Copia .env.example a .env y completa tus credenciales.
+  echo.
+)
+
 :menu
 cls
 echo.

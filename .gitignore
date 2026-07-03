@@ -42,6 +42,13 @@ project.lock.json
 
 # OS
 Thumbs.db
+Captura*
 
 # Screenshots placeholder keep dir
 !projects/**/report/screenshots/.gitkeep
+
+# Interview answer generator (herramienta local personal — OneDrive / CVs)
+interview_answer_generator.html
+interview_answer_generator_v2.html
+interview-server.mjs
+start-interview-generator.ps1

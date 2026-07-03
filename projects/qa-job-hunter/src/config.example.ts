@@ -2,18 +2,25 @@
 //  config.example.ts — Plantilla. Copiar a src/config.ts
 // ============================================================
 
-if (!process.env.LI_EMAIL || !process.env.LI_PASS) {
-  console.error("❌ Faltan variables de entorno LI_EMAIL y LI_PASS");
-  console.log("\nEjecuta antes de correr el script:");
-  console.log("  PowerShell : $env:LI_EMAIL='tu@email.com' ; $env:LI_PASS='tu_password'");
-  console.log("  CMD        : set LI_EMAIL=tu@email.com && set LI_PASS=tu_password");
-  console.log("  Mac/Linux  : export LI_EMAIL=tu@email.com && export LI_PASS=tu_password\n");
+import { loadDotEnv } from "./load-dotenv.js";
+
+loadDotEnv();
+
+const LOCAL_LI_EMAIL = "";
+const LOCAL_LI_PASS = "";
+
+const liEmail = process.env.LI_EMAIL || LOCAL_LI_EMAIL;
+const liPass = process.env.LI_PASS || LOCAL_LI_PASS;
+
+if (!liEmail || !liPass) {
+  console.error("❌ Faltan credenciales LinkedIn (LI_EMAIL / LI_PASS)");
+  console.log("\nCopiá .env.example → .env y completá LI_EMAIL y LI_PASS\n");
   process.exit(1);
 }
 
 export const LINKEDIN_CREDENTIALS = {
-  email: process.env.LI_EMAIL,
-  password: process.env.LI_PASS,
+  email: liEmail,
+  password: liPass,
 };
 
 export const SESSION_PATH = "./session/linkedin-session.json";

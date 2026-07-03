@@ -11,15 +11,18 @@ if not exist "%LAUNCHER%" (
   exit /b 1
 )
 
-set "SHORTCUT=%USERPROFILE%\Desktop\QA Job Hunter.lnk"
-
 powershell -NoProfile -Command ^
-  "$s = (New-Object -COM WScript.Shell).CreateShortcut('%SHORTCUT%');" ^
-  "$s.TargetPath = '%LAUNCHER%';" ^
-  "$s.WorkingDirectory = '%WORKDIR%';" ^
-  "$s.IconLocation = '%SystemRoot%\System32\shell32.dll,167';" ^
-  "$s.Description = 'QA Job Hunter — launcher';" ^
-  "$s.Save()"
+  "$desktop = [Environment]::GetFolderPath('Desktop');" ^
+  "if (-not $desktop -or -not (Test-Path -LiteralPath $desktop)) { Write-Error ('Escritorio no encontrado: ' + $desktop); exit 1 };" ^
+  "$shortcut = Join-Path $desktop 'QA Job Hunter.lnk';" ^
+  "$s = New-Object -ComObject WScript.Shell;" ^
+  "$lnk = $s.CreateShortcut($shortcut);" ^
+  "$lnk.TargetPath = '%LAUNCHER%';" ^
+  "$lnk.WorkingDirectory = '%WORKDIR%';" ^
+  "$lnk.IconLocation = '%SystemRoot%\System32\shell32.dll,167';" ^
+  "$lnk.Description = 'QA Job Hunter launcher';" ^
+  "$lnk.Save();" ^
+  "Write-Output $shortcut"
 
 if errorlevel 1 (
   echo ERROR: No se pudo crear el acceso directo.
@@ -28,9 +31,9 @@ if errorlevel 1 (
 )
 
 echo.
-echo   Acceso directo creado:
-echo   %SHORTCUT%
+echo   Acceso directo creado en tu Escritorio (OneDrive o local).
+echo   Nombre: QA Job Hunter.lnk
 echo.
-echo   Doble clic en "QA Job Hunter" del Escritorio para abrir el menu.
+echo   Doble clic para abrir el menu.
 echo.
 pause

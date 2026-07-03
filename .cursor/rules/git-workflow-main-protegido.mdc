@@ -1,0 +1,51 @@
+---
+description: Git workflow GGZenLab — ramas, PRs, nunca push directo a main
+alwaysApply: true
+---
+
+# Git workflow — GGZenLab Portfolio
+
+## Regla de oro
+
+- **NUNCA** commitear, pushear ni hacer merge directo a `main`.
+- **Siempre** trabajar en rama: `feature/*`, `fix/*`, `hotfix/*`, `chore/*`, `docs/*`, o `wip/*`.
+- **Integrar a `main` solo vía Pull Request** en GitHub (main tiene branch protection).
+
+## Al iniciar una tarea
+
+1. `git checkout main && git pull origin main`
+2. `git switch -c feature/nombre-corto` (o `fix/`, `chore/`, según el caso)
+3. Confirmar rama: `git branch --show-current` (no debe decir `main`)
+
+## Commits
+
+- Mensajes en **español**, enfocados en el **por qué**.
+- Un tema por rama/PR cuando sea posible.
+- **No** commitear secretos: `.env`, credenciales, `src/config.ts` (gitignored).
+
+## Al terminar
+
+1. `git push -u origin HEAD`
+2. Crear PR hacia `main` (base: `main`, compare: la rama actual)
+3. **No** mergear el PR salvo que el usuario lo pida explícitamente.
+
+## Prohibido
+
+- `git push origin main`
+- `git reset --hard origin/main` sin rama de respaldo previa
+- `git push --force` a `main` / `master`
+
+## Recuperación
+
+Si se pierde una rama: `git reflog` → `git switch -c rescue/nombre <commit>` → `git push -u origin rescue/nombre`
+
+## Convención de ramas
+
+| Prefijo | Uso |
+|---------|-----|
+| `feature/` | Funcionalidad nueva |
+| `fix/` / `bugfix/` | Corrección |
+| `hotfix/` | Urgente post-merge |
+| `chore/` | Tooling, gitignore, scripts |
+| `docs/` | Solo documentación |
+| `wip/` | Experimento de agente; no mergear sin revisar |

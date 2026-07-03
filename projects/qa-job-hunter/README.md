@@ -131,6 +131,15 @@ $env:LLM_PROVIDER = "anthropic"
 
 ---
 
+## 🖥️ Launcher desde el Escritorio (Windows)
+
+1. **Una sola vez:** ejecutá `scripts\create-desktop-shortcut.bat` (doble clic o desde PowerShell).
+2. Aparece el acceso directo **QA Job Hunter** en el Escritorio.
+3. El menú permite pipeline completo, scrape + análisis encadenados, dashboard, MongoDB, etc.
+4. Dashboard: http://localhost:3847 — al salir (opción 0 o **[S]** tras el pipeline) el launcher cierra puertos y procesos que haya iniciado (dashboard, node del proyecto, Chromium de Playwright).
+
+---
+
 ## 🎮 Uso
 
 ### Primera vez — Login + Scraping + Análisis (todo en uno):

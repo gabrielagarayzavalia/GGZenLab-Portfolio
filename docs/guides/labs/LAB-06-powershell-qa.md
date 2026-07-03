@@ -1,7 +1,7 @@
 # LAB-06 — PowerShell esencial para QA
 
 **Tipo:** remediial / tooling  
-**Duración:** ~30–40 min  
+**Duración:** ~40–50 min  
 **Objetivo:** Moverte en terminal Windows con confianza para labs Docker, Node, Maven y CI — sin confundir cmd, bash y PowerShell.
 
 **Cuándo hacerlo:** antes o en paralelo a LAB-01+ si `Get-ChildItem`, `|`, `$env:` te resultan opacos.
@@ -16,7 +16,7 @@
 
 ---
 
-## Paso 1/8 — Dónde estoy
+## Paso 1/9 — Dónde estoy
 
 ```powershell
 Get-Location
@@ -37,7 +37,7 @@ Set-Location C:\Users\gabri\projects\GGZenLab-Portfolio
 
 ---
 
-## Paso 2/8 — Listar sin ruido
+## Paso 2/9 — Listar sin ruido
 
 Listar subproyectos:
 
@@ -64,7 +64,7 @@ Get-ChildItem projects | Select-Object Name -First 5
 
 ---
 
-## Paso 3/8 — ¿Existe este archivo?
+## Paso 3/9 — ¿Existe este archivo?
 
 ```powershell
 Test-Path "projects\qa-job-hunter\package.json"
@@ -79,7 +79,7 @@ Test-Path "projects\qa-job-hunter\no-existe.json"
 
 ---
 
-## Paso 4/8 — Pipe `|` (encadenar)
+## Paso 4/9 — Pipe `|` (encadenar)
 
 El pipe pasa la **salida** de un comando al **siguiente**:
 
@@ -99,7 +99,7 @@ Contar archivos `.ts` en `src`:
 
 ---
 
-## Paso 5/8 — Variables de entorno (sesión)
+## Paso 5/9 — Variables de entorno (sesión)
 
 ```powershell
 $env:DASHBOARD_PORT = "3847"
@@ -118,7 +118,7 @@ $env:MONGODB_URI = "mongodb://localhost:27017/qa_job_hunter"
 
 ---
 
-## Paso 6/8 — Ejecutar herramientas del stack QA
+## Paso 6/9 — Ejecutar herramientas del stack QA
 
 Desde la raíz del monorepo:
 
@@ -145,7 +145,7 @@ cd ..\..   # volver a raíz si hace falta
 
 ---
 
-## Paso 7/8 — Capturar salida y errores
+## Paso 7/9 — Capturar salida y errores
 
 Primeras líneas de `docker info`:
 
@@ -168,7 +168,7 @@ Alias habitual: `curl` en PS 7+ apunta a `Invoke-WebRequest` (distinto a curl de
 
 ---
 
-## Paso 8/8 — Cheat sheet personal
+## Paso 8/9 — Cheat sheet personal
 
 Copiá en tus notas:
 
@@ -183,12 +183,150 @@ Copiá en tus notas:
 | Contar archivos | `(Get-ChildItem ...).Count` |
 | Docker up | `docker compose up -d` |
 | Docker estado | `docker compose ps` |
+| ¿Quién usa el puerto? | ver Paso 9 |
+| Liberar puerto | ver Paso 9 |
 
-**Definition of Done:**
+**Definition of Done (hasta paso 8):**
 
-- [ ] Pasos 1–6 ejecutados
+- [ ] Pasos 1–7 ejecutados
 - [ ] Explicás con tus palabras qué hace `|` y `Select-Object`
 - [ ] Cheat sheet guardado
+
+---
+
+## Paso 9/9 — Puertos: encontrar quién escucha y liberarlos
+
+**Cuándo te sirve:** error `EADDRINUSE`, dashboard duplicado, `npm run dashboard` que no arranca, o querés saber si Mongo (`27017`) / Postgres (`5432`) están activos.
+
+**Puertos del portfolio (referencia):**
+
+| Servicio | Puerto |
+|----------|--------|
+| Job Hunter dashboard | `3847` (default) |
+| Mongo (Job Hunter) | `27017` |
+| Postgres (sql-lab) | `5432` |
+| Node SUT (API testing) | `3000` |
+
+Practicá con **`3847`** (dashboard). Hacé **un sub-paso por vez** como en el chat instructor.
+
+### Paso 9a — ¿Está abierto el puerto?
+
+```powershell
+Get-NetTCPConnection -LocalPort 3847 -State Listen -ErrorAction SilentlyContinue |
+  Select-Object LocalAddress, LocalPort, State, OwningProcess
+```
+
+**Esperado si hay dashboard:**
+
+- `State: Listen`
+- `LocalPort: 3847`
+- `OwningProcess: <número>` (= PID)
+
+**Si no devuelve nada:** nadie escucha en 3847 (puerto libre).
+
+**Alternativa clásica (funciona en cmd también):**
+
+```powershell
+netstat -ano | findstr ":3847"
+```
+
+La última columna de `netstat` es el **PID**.
+
+**Checkpoint ✋ (9a):** ¿hay fila `Listen` / `LISTENING` o está vacío?
+
+---
+
+### Paso 9b — ¿Qué proceso es?
+
+Reemplazá `PID` por el número de `OwningProcess` (paso 9a):
+
+```powershell
+Get-Process -Id PID | Select-Object Id, ProcessName, Path
+```
+
+**Esperado (dashboard Node):** `ProcessName` suele ser `node`.
+
+Todo en una línea (puerto 3847):
+
+```powershell
+$p = (Get-NetTCPConnection -LocalPort 3847 -State Listen).OwningProcess
+Get-Process -Id $p | Select-Object Id, ProcessName
+```
+
+**Checkpoint ✋ (9b):** ¿qué `ProcessName` te salió?
+
+---
+
+### Paso 9c — Cerrar / liberar el puerto
+
+Elegí **una** estrategia según el caso:
+
+#### 1. Proceso en **esta terminal** (foreground)
+
+`npm run dashboard` corriendo ahí → **`Ctrl+C`** en esa ventana.
+
+#### 2. Proceso Node “colgado” (background u otra ventana)
+
+```powershell
+Stop-Process -Id PID -Force
+```
+
+O por puerto (PowerShell):
+
+```powershell
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 3847 -State Listen).OwningProcess -Force
+```
+
+**Cuidado:** `-Force` mata el proceso sin preguntar. Usá solo el PID que verificaste en 9b.
+
+#### 3. Servicio **Docker** (Mongo, Postgres, SUTs)
+
+No uses `Stop-Process` sobre Docker Desktop. Bajá el compose del proyecto:
+
+```powershell
+# Mongo Job Hunter
+Set-Location C:\Users\gabri\projects\GGZenLab-Portfolio\projects\qa-job-hunter
+docker compose down
+
+# Postgres sql-lab
+Set-Location C:\Users\gabri\projects\GGZenLab-Portfolio\projects\sql-lab
+docker compose down
+
+# SUTs API (raíz monorepo)
+Set-Location C:\Users\gabri\projects\GGZenLab-Portfolio
+docker compose down
+```
+
+#### 4. **Evitar** el conflicto — otro puerto
+
+```powershell
+$env:DASHBOARD_PORT = "43847"
+npm run dashboard
+```
+
+**Checkpoint ✋ (9c):** volvé a correr 9a — ¿puerto 3847 ya libre?
+
+---
+
+### Cheat sheet — puertos
+
+| Quiero… | Comando |
+|---------|---------|
+| ¿Quién escucha en 3847? | `Get-NetTCPConnection -LocalPort 3847 -State Listen` |
+| PID → nombre | `Get-Process -Id PID` |
+| netstat + findstr | `netstat -ano \| findstr ":3847"` |
+| Matar por PID | `Stop-Process -Id PID -Force` |
+| Matar lo que usa 3847 | `Stop-Process -Id (Get-NetTCPConnection -LocalPort 3847 -State Listen).OwningProcess -Force` |
+| Bajar Mongo/Postgres | `docker compose down` (en la carpeta del compose) |
+| Otro puerto dashboard | `$env:DASHBOARD_PORT = "43847"` |
+
+**Definition of Done (lab completo):**
+
+- [ ] Pasos 1–8 + 9a–9c
+- [ ] Encontraste PID de un puerto y lo liberaste (o usaste otro puerto)
+- [ ] Sabés cuándo usar `Stop-Process` vs `docker compose down` vs `Ctrl+C`
+
+**Nota:** `Get-NetTCPConnection` requiere PowerShell en Windows; si falla por permisos, usá `netstat -ano`.
 
 ---
 

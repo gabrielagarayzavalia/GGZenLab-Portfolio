@@ -1,11 +1,11 @@
 let jobs = [];
 let selectedId = null;
 let sortOrder = "desc";
-let hideRejected = true;
-let hideApplied = true;
-let hideNotApplied = true;
-let hideNotSelected = true;
-let hideUnmarked = false;
+let showRejected = false;
+let showApplied = false;
+let showNotApplied = false;
+let showNotSelected = false;
+let showUnmarked = true;
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
 /** @type {Set<string>} */
@@ -19,11 +19,11 @@ const els = {
   headerStats: document.getElementById("header-stats"),
   jobList: document.getElementById("job-list"),
   sortSelect: document.getElementById("sort-select"),
-  hideRejected: document.getElementById("hide-rejected"),
-  hideApplied: document.getElementById("hide-applied"),
-  hideNotApplied: document.getElementById("hide-not-applied"),
-  hideNotSelected: document.getElementById("hide-not-selected"),
-  hideUnmarked: document.getElementById("hide-unmarked"),
+  showRejected: document.getElementById("show-rejected"),
+  showApplied: document.getElementById("show-applied"),
+  showNotApplied: document.getElementById("show-not-applied"),
+  showNotSelected: document.getElementById("show-not-selected"),
+  showUnmarked: document.getElementById("show-unmarked"),
   detailEmpty: document.getElementById("detail-empty"),
   detailContent: document.getElementById("detail-content"),
   listEmpty: document.getElementById("list-empty"),
@@ -44,18 +44,17 @@ function getApplicationStatus(jobId) {
   return applicationStatus.get(jobId) ?? null;
 }
 
-function isHiddenFromList(jobId) {
-  if (hideRejected && isRejected(jobId)) return true;
+function isVisibleInList(jobId) {
+  if (isRejected(jobId)) return showRejected;
   const status = getApplicationStatus(jobId);
-  if (hideApplied && status === "applied") return true;
-  if (hideNotApplied && status === "not_applied") return true;
-  if (hideNotSelected && status === "not_selected") return true;
-  if (hideUnmarked && status === null && !isRejected(jobId)) return true;
-  return false;
+  if (status === "applied") return showApplied;
+  if (status === "not_applied") return showNotApplied;
+  if (status === "not_selected") return showNotSelected;
+  return showUnmarked;
 }
 
 function visibleJobs() {
-  let list = jobs.filter((j) => !isHiddenFromList(j.id));
+  let list = jobs.filter((j) => isVisibleInList(j.id));
   return list.sort((a, b) =>
     sortOrder === "desc" ? b.matchPercent - a.matchPercent : a.matchPercent - b.matchPercent
   );
@@ -64,8 +63,8 @@ function visibleJobs() {
 function listEmptyMessage() {
   if (jobs.length === 0) return "No hay empleos con 70%+ de match.";
   const pending = jobs.filter((j) => getApplicationStatus(j.id) === null && !isRejected(j.id)).length;
-  if (pending > 0 && hideUnmarked) return "Activá «Sin marcar» desmarcado para ver empleos pendientes.";
-  return "Ningún empleo coincide con los filtros. Desmarcá alguna categoría en «Ocultar de la lista».";
+  if (pending > 0 && !showUnmarked) return "Marcá «Sin Clasificar» para ver empleos pendientes.";
+  return "Ningún empleo coincide con los filtros. Marcá alguna categoría arriba.";
 }
 
 function focusNextVisibleJob(afterId) {
@@ -87,10 +86,10 @@ function focusNextVisibleJob(afterId) {
 function renderHeader(result) {
   const date = new Date(result.scrapedAt).toLocaleString("es-AR");
   const visible = visibleJobs().length;
-  const fbCount = rejectedIds.size;
-  const appliedCount = [...applicationStatus.values()].filter((s) => s === "applied").length;
-  const notAppliedCount = [...applicationStatus.values()].filter((s) => s === "not_applied").length;
-  const notSelectedCount = [...applicationStatus.values()].filter((s) => s === "not_selected").length;
+  const fbCount = jobs.filter((j) => isRejected(j.id)).length;
+  const appliedCount = countJobsByStatus("applied");
+  const notAppliedCount = countJobsByStatus("not_applied");
+  const notSelectedCount = countJobsByStatus("not_selected");
   const fbLine =
     fbCount > 0
       ? `<span class="header-feedback">Aprendizaje: <strong>${fbCount}</strong> incorrecto(s)</span>`
@@ -102,7 +101,7 @@ function renderHeader(result) {
   els.headerStats.innerHTML = `
     <span>Fecha: <strong>${date}</strong></span>
     <span>Analizados: <strong>${result.totalAnalyzed}</strong></span>
-    <span>Visibles: <strong>${visible}</strong> / ${result.matchedJobs.length}</span>
+    <span>Visibles: <strong>${visible}</strong> / ${jobs.length}</span>
     ${fbLine}
     ${appLine}
   `;
@@ -225,6 +224,9 @@ function renderDetail(job) {
 
   const descriptionBlock = renderDescriptionBlock(job.description);
   const appStatus = getApplicationStatus(job.id);
+  const linkedInLink = job.url
+    ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
+    : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
 
   els.detailContent.innerHTML = `
     <header class="detail__header">
@@ -238,7 +240,7 @@ function renderDetail(job) {
             <span>${escapeHtml(job.datePosted)}</span>
             <span>Búsqueda: ${escapeHtml(job.searchTerm)}</span>
           </div>
-          <a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>
+          ${linkedInLink}
         </div>
         <aside class="detail__header-aside" aria-label="Acciones">
           <div class="application-section application-section--compact">
@@ -320,7 +322,7 @@ async function saveApplicationStatus(job, status) {
     });
     if (!res.ok) throw new Error("No se pudo guardar el estado");
     applyApplicationStatus(await res.json());
-    if (status && isHiddenFromList(job.id)) {
+    if (status && !isVisibleInList(job.id)) {
       focusNextVisibleJob(job.id);
     } else {
       renderList();
@@ -335,6 +337,73 @@ async function saveApplicationStatus(job, status) {
 
 function applyApplicationStatus(store) {
   applicationStatus = new Map(store.entries.map((e) => [e.jobId, e.status]));
+}
+
+function stubJobFromRejection(rejection) {
+  const reason = rejection.reason?.trim();
+  return {
+    id: rejection.jobId,
+    title: rejection.title,
+    company: rejection.company,
+    location: "—",
+    modality: "—",
+    datePosted: "—",
+    url: "",
+    description: reason
+      ? `Empleo de una corrida anterior. Motivo del rechazo: ${reason}`
+      : "Empleo de una corrida anterior marcado como match incorrecto.",
+    searchTerm: rejection.searchTerm ?? "—",
+    matchPercent: rejection.matchPercent ?? 0,
+    matchedSkills: [],
+    gaps: [],
+    cvSuggestions: [],
+    summary: "Ya no está en el último análisis; visible por feedback guardado.",
+  };
+}
+
+function stubJobFromApplicationEntry(entry, rejectionById) {
+  const rejection = rejectionById.get(entry.jobId);
+  return {
+    id: entry.jobId,
+    title: entry.title,
+    company: entry.company,
+    location: "—",
+    modality: "—",
+    datePosted: "—",
+    url: "",
+    description: "Empleo de una corrida anterior con estado de postulación guardado.",
+    searchTerm: rejection?.searchTerm ?? "—",
+    matchPercent: rejection?.matchPercent ?? 0,
+    matchedSkills: [],
+    gaps: [],
+    cvSuggestions: [],
+    summary: "Ya no está en el último análisis; visible por el estado de postulación guardado.",
+  };
+}
+
+/** Incluye empleos históricos con feedback o postulación aunque no estén en el último análisis. */
+function mergeJobsWithStoredState(matchedJobs, feedback, applicationStatusStore) {
+  const byId = new Map(matchedJobs.map((j) => [j.id, j]));
+  const rejections = feedback?.rejections ?? [];
+  const rejectionById = new Map(rejections.map((r) => [r.jobId, r]));
+
+  for (const rejection of rejections) {
+    if (!byId.has(rejection.jobId)) {
+      byId.set(rejection.jobId, stubJobFromRejection(rejection));
+    }
+  }
+
+  for (const entry of applicationStatusStore?.entries ?? []) {
+    if (!byId.has(entry.jobId)) {
+      byId.set(entry.jobId, stubJobFromApplicationEntry(entry, rejectionById));
+    }
+  }
+
+  return [...byId.values()];
+}
+
+function countJobsByStatus(status) {
+  return jobs.filter((j) => getApplicationStatus(j.id) === status).length;
 }
 
 function wireFeedbackDisclosure() {
@@ -464,18 +533,27 @@ async function init() {
     renderList();
   });
 
-  els.hideRejected.addEventListener("change", onFilterChange);
-  els.hideApplied.addEventListener("change", onFilterChange);
-  els.hideNotApplied.addEventListener("change", onFilterChange);
-  els.hideNotSelected.addEventListener("change", onFilterChange);
-  els.hideUnmarked.addEventListener("change", onFilterChange);
+  els.showRejected.addEventListener("change", () => onFilterChange(els.showRejected));
+  els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));
+  els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
+  els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
+  els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
 
-  function onFilterChange() {
-    hideRejected = els.hideRejected.checked;
-    hideApplied = els.hideApplied.checked;
-    hideNotApplied = els.hideNotApplied.checked;
-    hideNotSelected = els.hideNotSelected.checked;
-    hideUnmarked = els.hideUnmarked.checked;
+  function onFilterChange(changed) {
+    if (changed === els.showUnmarked && els.showUnmarked.checked) {
+      els.showApplied.checked = false;
+      els.showNotApplied.checked = false;
+      els.showNotSelected.checked = false;
+      els.showRejected.checked = false;
+    } else if (changed !== els.showUnmarked && changed.checked) {
+      els.showUnmarked.checked = false;
+    }
+
+    showRejected = els.showRejected.checked;
+    showApplied = els.showApplied.checked;
+    showNotApplied = els.showNotApplied.checked;
+    showNotSelected = els.showNotSelected.checked;
+    showUnmarked = els.showUnmarked.checked;
     const list = visibleJobs();
     if (selectedId && !list.some((j) => j.id === selectedId)) {
       focusNextVisibleJob(selectedId);
@@ -493,7 +571,6 @@ async function init() {
     }
 
     const result = await res.json();
-    jobs = result.matchedJobs ?? [];
     window.__scrapedAt = result.scrapedAt;
     window.__totalAnalyzed = result.totalAnalyzed;
 
@@ -503,6 +580,12 @@ async function init() {
     if (result.applicationStatus) {
       applyApplicationStatus(result.applicationStatus);
     }
+
+    jobs = mergeJobsWithStoredState(
+      result.matchedJobs ?? [],
+      result.feedback,
+      result.applicationStatus
+    );
 
     renderHeader(result);
 

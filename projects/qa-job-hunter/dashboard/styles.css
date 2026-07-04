@@ -34,7 +34,7 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   padding: 0.35rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 0.35rem;
 }
 .list-filters::before {
-  content: "Ocultar:"; font-size: 0.72rem; color: var(--text-muted); width: 100%; margin-bottom: 0.1rem;
+  content: "Filtrar:"; font-size: 0.72rem; color: var(--text-muted); width: 100%; margin-bottom: 0.1rem;
 }
 .filter-control { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; }
 .filter-control input { cursor: pointer; }

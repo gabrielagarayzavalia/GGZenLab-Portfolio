@@ -1,0 +1,29 @@
+---
+description: Evitar subagentes duplicados en Multitask y al fallar tareas
+alwaysApply: true
+---
+
+# Delegación de agentes — sin duplicar
+
+## Multitask Mode
+
+- Antes de lanzar un subagente (`Task`), verificá si ya hay uno activo o recién terminado para **el mismo objetivo**.
+- Si existe: **retomalo** (`resume` con su id) en lugar de crear uno nuevo.
+- Solo creá un subagente nuevo si el anterior **abortó/falló** y reportó un bloqueador concreto que requiera otro intento distinto.
+- Nunca lances dos subagentes en paralelo para la **misma** tarea de implementación/investigación.
+
+## Cuando falla o se aborta un subagente
+
+1. Leé el transcript/resultado del subagente existente.
+2. Retomá con `resume` si el trabajo es recuperable.
+3. No relances un duplicado “por las dudas”.
+
+## Foreground vs background
+
+- Si el usuario pide **“una sola pasada”**, **“sin duplicar agentes”** o **“hacelo vos”**: implementá en foreground, sin delegar.
+- Si Multitask está activo y el usuario no pidió lo contrario: delegá **un solo** worker coherente por request.
+
+## Coordinación con el usuario
+
+- Si el panel muestra tareas Stopped/Working fantasmas: informá que son UI de Cursor; no re-delegues.
+- Al retomar una sesión, resumí qué rama/PR/commit quedó hecho antes de abrir trabajo nuevo.

@@ -1,0 +1,39 @@
+---
+description: Preflight — preguntar si falta rama, PR o pasos del flujo git
+alwaysApply: true
+---
+
+# Preflight antes de implementar
+
+Cuando el usuario pide **fix**, **feature**, **refactor**, **commit**, **PR** o **implementar** algo, y **no** mencionó pasos clave del flujo, **preguntá brevemente** antes de codear (1 mensaje, no interrogatorio).
+
+## Disparadores → qué confirmar
+
+| Falta en el pedido | Pregunta sugerida |
+|--------------------|-------------------|
+| Rama (`fix/*`, `feature/*`, `chore/*`) | ¿Creo rama `fix/...` o uso una existente? |
+| Base branch (`main` vs otra) | ¿Parto de `main` o de otra rama? |
+| Commit / push / PR | ¿Solo commit local, push, o también PR? |
+| Repo / carpeta en monorepo | ¿El cambio va en `projects/qa-job-hunter` u otro path? |
+| Multitask / subagentes | ¿Lo hago en una pasada acá o delego en background? |
+
+## Cuándo NO preguntar
+
+- El usuario ya dio rama, repo y alcance (ej. bug report completo).
+- Es solo una **pregunta** o **review** sin implementación.
+- Retomás trabajo en curso y la rama/PR ya están definidos en el hilo.
+- Los defaults son obvios por contexto reciente (misma rama abierta, mismo PR).
+
+## Defaults si el usuario dice “seguí” / “ok” / no responde
+
+1. Rama nueva: `fix/<tema>` o `feature/<tema>` según el pedido.
+2. Nunca commitear ni pushear a `main`.
+3. Commit local en español; push y PR **solo** si lo pidió explícito antes o en reglas del usuario.
+
+## Formato
+
+Un bloque corto, por ejemplo:
+
+> Antes de arrancar: ¿creo rama `fix/...` desde `main`? ¿Commit local nada más o también push + PR?
+
+No repitas la pregunta en cada mensaje si ya quedó acordado en la sesión.

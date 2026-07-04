@@ -42,3 +42,5 @@ Job **`rest-assured`** en `.github/workflows/api-tests.yml` — mismo comando Ma
 - JDK **21**
 - Maven **3.9+**
 - Docker (SUT compartido del monorepo)
+
+Dependencias de test explícitas en `pom.xml`: **Hamcrest** (matchers) y **Jackson Databind** (serializar bodies JSON con Rest Assured 5.x).

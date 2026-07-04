@@ -74,6 +74,8 @@ mvn test -Dsut.baseUrl=http://localhost:3000
 
 Si falla compilación por `org.hamcrest.Matchers`, revisá que `pom.xml` incluya la dependencia `hamcrest` (Rest Assured 5.x no la trae transitiva para asserts estáticos).
 
+Si falla con *no JSON serializer found*, agregá `jackson-databind` en `pom.xml` (Rest Assured 5.x tampoco lo incluye por defecto para serializar bodies).
+
 **Checkpoint ✋:** ¿cuántos tests pasaron?
 
 ---

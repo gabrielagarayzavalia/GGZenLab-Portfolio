@@ -26,6 +26,7 @@ test-results/
 playwright-report/
 allure-results/
 *.log
+git-out.txt
 results.jtl
 jmeter.log
 jmeter-report/

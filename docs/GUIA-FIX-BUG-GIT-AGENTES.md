@@ -2,7 +2,8 @@
 
 **Repo:** `gabrielagarayzavalia/GGZenLab-Portfolio`  
 **Regla activa:** `.cursor/rules/git-workflow-main-protegido.mdc`  
-**Relacionada:** [GUIA-12-PASOS-GIT-GGZenLab.md](./GUIA-12-PASOS-GIT-GGZenLab.md)
+**Estrategia completa:** [ESTRATEGIA-GIT-DEV-LEAD.md](./ESTRATEGIA-GIT-DEV-LEAD.md)  
+**Playbook 12 pasos:** [GUIA-12-PASOS-GIT-GGZenLab.md](./GUIA-12-PASOS-GIT-GGZenLab.md)
 
 ---
 
@@ -16,8 +17,17 @@
 
 Los chats viejos no “recuerdan” ramas ni PRs; por eso conviene **nuevo chat + instrucción explícita**.
 
----
+```mermaid
+flowchart LR
+  chat[Chat nuevo Cursor]
+  block[Bloque Git + bug]
+  fix[rama fix/]
+  pr[PR a main]
 
+  chat --> block --> fix --> pr
+```
+
+---
 ## Bloque para pegar en chat nuevo (agente)
 
 Copiá y completá las líneas entre `< >`:

@@ -3,13 +3,27 @@
 
 **Repo:** `https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio`  
 **Proyecto:** `projects/qa-job-hunter/`  
+**Estrategia completa (diagramas + tablas):** [ESTRATEGIA-GIT-DEV-LEAD.md](./ESTRATEGIA-GIT-DEV-LEAD.md)  
+**Bugs + chat nuevo:** [GUIA-FIX-BUG-GIT-AGENTES.md](./GUIA-FIX-BUG-GIT-AGENTES.md)  
 **Última actualización:** julio 2026
 
 ---
 
 ## Resumen visual
 
+```mermaid
+flowchart TD
+  main[main protegido en GitHub]
+  branch[feature fix chore branch]
+  pr[Pull Request]
+  local[main local git pull]
+
+  branch -->|push| pr
+  pr -->|merge| main
+  main -->|pull| local
 ```
+
+```text
 main (protegido)  ←── solo entra por PR merge
     ↑
  feature/*  fix/*  chore/*  (trabajo diario)
@@ -130,10 +144,14 @@ git pull origin main
 
 ## Paso 9 — Regla Cursor para agentes
 
-Archivo en repo: `.cursor/rules/git-workflow-main-protegido.mdc`  
-**Always apply:** instructs agents to usar ramas + PR, nunca push a `main`.
+Archivo en repo: `.cursor/rules/git-workflow-main-protegido.mdc` (**Always apply**)
 
-Al abrir chat nuevo con agente, indicar: *"Trabajá en rama `feature/xxx`, no toques main."*
+| Tipo de chat | Qué pegar al inicio |
+|--------------|---------------------|
+| **Feature** | Bloque en [ESTRATEGIA §4](./ESTRATEGIA-GIT-DEV-LEAD.md#4-reglas-para-agentes--chats-nuevos) |
+| **Bug** | Bloque en [GUIA-FIX-BUG](./GUIA-FIX-BUG-GIT-AGENTES.md#bloque-para-pegar-en-chat-nuevo-agente) |
+
+Al abrir chat nuevo: *"Trabajá en rama `feature/xxx` o `fix/xxx`, no toques main."*
 
 ---
 
@@ -214,7 +232,9 @@ git push -u origin rescue/nombre
 | #68 | Launcher .bat + dashboard + gitignore Captura |
 | #69 | .env, shortcut OneDrive, regla Cursor |
 | #70 | Guía 12 pasos Git |
+| #71 | Guía fix bugs + agentes |
 
+**Estrategia Dev Lead (completa):** [ESTRATEGIA-GIT-DEV-LEAD.md](./ESTRATEGIA-GIT-DEV-LEAD.md)  
 **Guía bugs / agentes (chat nuevo):** [GUIA-FIX-BUG-GIT-AGENTES.md](./GUIA-FIX-BUG-GIT-AGENTES.md)
 
 ---

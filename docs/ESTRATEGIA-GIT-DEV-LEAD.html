@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Estrategia Git Dev Lead Sr — GGZenLab</title>
+  <style>
+    body { font-family: Segoe UI, sans-serif; max-width: 900px; margin: 2rem auto; line-height: 1.55; color: #1a1a1a; }
+    h1 { border-bottom: 3px solid #2563eb; padding-bottom: 0.4rem; }
+    h2 { color: #2563eb; margin-top: 2rem; page-break-after: avoid; border-bottom: 1px solid #ddd; }
+    h3 { color: #475569; }
+    pre { background: #f8fafc; border: 1px solid #e2e8f0; padding: 1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.35; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { border: 1px solid #cbd5e1; padding: 0.5rem 0.65rem; text-align: left; vertical-align: top; }
+    th { background: #eff6ff; }
+    .nav { background: #f1f5f9; padding: 1rem; margin: 1rem 0; border-radius: 6px; font-size: 0.9rem; }
+    .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 0.75rem 1rem; margin: 1rem 0; }
+    @media print { body { margin: 1.2cm; } h2 { page-break-before: auto; } }
+  </style>
+</head>
+<body>
+
+<h1>Estrategia Git — visión Dev Lead Sr</h1>
+<p><strong>GGZenLab Portfolio</strong> · julio 2026 · Repo: gabrielagarayzavalia/GGZenLab-Portfolio</p>
+
+<div class="nav">
+  <strong>Documentos relacionados:</strong>
+  GUIA-12-PASOS-GIT-GGZenLab · GUIA-FIX-BUG-GIT-AGENTES · .cursor/rules/git-workflow-main-protegido.mdc
+</div>
+
+<h2>1. Regla de oro</h2>
+<table>
+  <tr><th>Concepto</th><th>Regla</th></tr>
+  <tr><td><code>main</code></td><td>Siempre estable; solo entra por PR merge</td></tr>
+  <tr><td>Ramas</td><td><code>feature/</code> <code>fix/</code> <code>chore/</code> <code>wip/</code></td></tr>
+  <tr><td>Prohibido</td><td>Push directo a main; reset --hard sin rama backup</td></tr>
+  <tr><td>Agentes</td><td>Nunca commitear en main</td></tr>
+</table>
+<pre>
+  main (protegido)  ◄────  merge PR  ◄────  feature/fix branch
+       ▲                                        │
+       └──────── git pull (post-merge) ──────────┘
+</pre>
+
+<h2>2. Convención de ramas</h2>
+<table>
+  <tr><th>Prefijo</th><th>Uso</th><th>Ejemplo</th></tr>
+  <tr><td>feature/</td><td>Funcionalidad nueva</td><td>feature/qa-job-hunter-desktop-launcher</td></tr>
+  <tr><td>fix/</td><td>Bug</td><td>fix/qa-job-hunter-env-y-shortcut</td></tr>
+  <tr><td>hotfix/</td><td>Urgente en main</td><td>hotfix/dashboard-crash</td></tr>
+  <tr><td>chore/</td><td>Tooling, docs</td><td>chore/docs-guia-12-pasos</td></tr>
+  <tr><td>wip/</td><td>Experimento agente</td><td>wip/spike-ui</td></tr>
+  <tr><td>rescue/</td><td>Recuperar reflog</td><td>rescue/commits-perdidos</td></tr>
+</table>
+
+<h2>3. Flujo diario</h2>
+<pre>
+  main ──git switch -c──► feature/fix ──commits──► push ──► PR ──merge──► main
+                                                              │
+                                                    git pull ◄┘
+</pre>
+<pre>git checkout main && git pull origin main
+git switch -c feature/mi-tarea</pre>
+
+<h2>4. Agentes / chat nuevo</h2>
+<table>
+  <tr><th>Situación</th><th>Solución</th></tr>
+  <tr><td>Chat viejo sin contexto</td><td>Chat nuevo + bloque Git al inicio</td></tr>
+  <tr><td>Feature</td><td>Rama feature/ + bloque en ESTRATEGIA §4</td></tr>
+  <tr><td>Bug</td><td>Rama fix/ + GUIA-FIX-BUG</td></tr>
+</table>
+
+<h2>5. Branch protection (main)</h2>
+<table>
+  <tr><th>Campo</th><th>Valor</th></tr>
+  <tr><td>Branch name pattern</td><td><strong>main</strong></td></tr>
+  <tr><td>Require PR before merging</td><td>Sí</td></tr>
+  <tr><td>Require approvals</td><td>No (trabajo sola)</td></tr>
+</table>
+<div class="warn"><strong>Awaiting approval:</strong> desmarcar Require approvals en Settings → Branches → Edit rule.</div>
+
+<h2>6. Commits y PRs</h2>
+<table>
+  <tr><th>Bien</th><th>Mal</th></tr>
+  <tr><td>Mensaje español, el por qué</td><td>fix, wip sin contexto</td></tr>
+  <tr><td>$m = "..."; git commit -m $m</td><td>-m sin comillas (error pathspec)</td></tr>
+  <tr><td>Squash and merge</td><td>Push directo a main</td></tr>
+</table>
+
+<h2>7. Recuperación (reflog)</h2>
+<pre>
+  reflog: f5b1333 (launcher)  ──►  git switch -c feature/... f5b1333
+                                    git push -u origin feature/...
+</pre>
+<pre>git reflog --oneline -20
+git switch -c rescue/nombre HASH
+git push -u origin rescue/nombre</pre>
+
+<h2>8. WIP y secretos</h2>
+<table>
+  <tr><th>Qué</th><th>Dónde</th></tr>
+  <tr><td>Capturas Captura*</td><td>.gitignore</td></tr>
+  <tr><td>LI_EMAIL / LI_PASS</td><td>.env local (gitignored)</td></tr>
+  <tr><td>WIP a medias</td><td>git stash</td></tr>
+</table>
+
+<h2>9. Tipo de trabajo</h2>
+<table>
+  <tr><th>Tipo</th><th>Rama</th><th>Merge</th></tr>
+  <tr><td>Feature</td><td>feature/</td><td>PR normal</td></tr>
+  <tr><td>Bug</td><td>fix/</td><td>PR + Test plan</td></tr>
+  <tr><td>Docs</td><td>chore/</td><td>Squash merge</td></tr>
+  <tr><td>Spike</td><td>wip/</td><td>Revisar manual</td></tr>
+</table>
+
+<h2>10. Mapa "¿dónde estoy?"</h2>
+<pre>
+  En main:     * main  →  igual que GitHub tras git pull
+  En feature:  * feature/x  →  main NO tiene tus commits hasta merge PR
+  Tras checkout main:  git pull origin main  (siempre)
+</pre>
+
+<h2>11. Caso QA Job Hunter — PRs</h2>
+<table>
+  <tr><th>PR</th><th>Rama</th><th>Contenido</th></tr>
+  <tr><td>#68</td><td>feature/qa-job-hunter-desktop-launcher</td><td>Launcher .bat</td></tr>
+  <tr><td>#69</td><td>fix/qa-job-hunter-env-y-shortcut</td><td>.env, OneDrive</td></tr>
+  <tr><td>#70</td><td>chore/docs-guia-12-pasos</td><td>Guía 12 pasos</td></tr>
+  <tr><td>#71</td><td>chore/docs-guia-fix-bug-agentes</td><td>Guía bugs</td></tr>
+</table>
+
+<h2>12. Checklist cierre sesión</h2>
+<ul>
+  <li>Rama feature/fix (no main)</li>
+  <li>Push hecho</li>
+  <li>PR creado o mergeado</li>
+  <li>Secretos solo local</li>
+  <li>git pull en main tras merge</li>
+</ul>
+
+<p><em>Ctrl+P → Guardar como PDF · Versión MD: ESTRATEGIA-GIT-DEV-LEAD.md</em></p>
+</body>
+</html>

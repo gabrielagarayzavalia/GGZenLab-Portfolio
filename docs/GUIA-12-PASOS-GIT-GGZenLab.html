@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Guía 12 pasos — Git GGZenLab</title>
+  <style>
+    body { font-family: Segoe UI, sans-serif; max-width: 800px; margin: 2rem auto; line-height: 1.5; color: #222; }
+    h1 { border-bottom: 2px solid #2563eb; padding-bottom: 0.3rem; }
+    h2 { color: #2563eb; margin-top: 2rem; page-break-after: avoid; }
+    pre, code { background: #f4f4f5; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.9rem; }
+    pre { padding: 1rem; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+    th { background: #eff6ff; }
+    .checklist { list-style: none; padding: 0; }
+    .checklist li::before { content: "☐ "; }
+    @media print { body { margin: 1cm; } h2 { page-break-before: auto; } }
+  </style>
+</head>
+<body>
+  <h1>Guía de 12 pasos — Git y QA Job Hunter</h1>
+  <p><strong>GGZenLab Portfolio</strong> · Flujo Dev Lead Sr · julio 2026</p>
+  <p>Repo: github.com/gabrielagarayzavalia/GGZenLab-Portfolio</p>
+
+  <h2>Paso 1 — Regla de oro</h2>
+  <p><code>main</code> protegido. Trabajo en ramas <code>feature/*</code>, <code>fix/*</code>. Integración solo por Pull Request.</p>
+
+  <h2>Paso 2 — Nueva rama</h2>
+  <pre>cd C:\Users\gabri\projects\GGZenLab-Portfolio
+git checkout main
+git pull origin main
+git switch -c feature/mi-tarea</pre>
+
+  <h2>Paso 3 — Commits</h2>
+  <p>Mensajes en español. No commitear <code>.env</code> ni secretos.</p>
+  <pre>$m = "Mensaje del commit"
+git add .
+git commit -m $m</pre>
+
+  <h2>Paso 4 — Verificar antes del PR</h2>
+  <ul class="checklist">
+    <li>Rama correcta (no main)</li>
+    <li>Archivos clave presentes</li>
+    <li>git status limpio</li>
+    <li>Sin secretos en staging</li>
+  </ul>
+
+  <h2>Paso 5 — Push</h2>
+  <pre>git push -u origin HEAD</pre>
+
+  <h2>Paso 6 — Pull Request</h2>
+  <p>compare/main...tu-rama → Create pull request → Summary + Test plan</p>
+
+  <h2>Paso 7 — Merge y pull local</h2>
+  <pre>git checkout main
+git pull origin main</pre>
+  <p>En GitHub: Squash and merge (recomendado para fixes).</p>
+
+  <h2>Paso 8 — Branch protection</h2>
+  <table>
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Pattern</td><td>main</td></tr>
+    <tr><td>Require PR</td><td>Sí</td></tr>
+    <tr><td>Require approvals</td><td>No (trabajo sola)</td></tr>
+  </table>
+
+  <h2>Paso 9 — Regla Cursor</h2>
+  <p><code>.cursor/rules/git-workflow-main-protegido.mdc</code> — agentes usan ramas + PR.</p>
+
+  <h2>Paso 10 — Rama fix/*</h2>
+  <pre>git switch -c fix/descripcion
+git push -u origin fix/descripcion</pre>
+  <p>Ejemplo: PR #69 (.env, shortcut OneDrive, regla git).</p>
+
+  <h2>Paso 11 — .env LinkedIn</h2>
+  <pre>cd projects\qa-job-hunter
+copy .env.example .env
+notepad .env</pre>
+  <p>LI_EMAIL y LI_PASS. Probar con npx tsx import config.</p>
+
+  <h2>Paso 12 — Launcher + cierre</h2>
+  <pre>scripts\create-desktop-shortcut.bat</pre>
+  <p>Doble clic QA Job Hunter.lnk. Recuperación: <code>git reflog</code> → rama rescue.</p>
+
+  <hr />
+  <p><em>Imprimí esta página (Ctrl+P) → Guardar como PDF. O abrí el .md en Word.</em></p>
+</body>
+</html>

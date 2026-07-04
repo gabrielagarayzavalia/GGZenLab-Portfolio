@@ -86,10 +86,10 @@ function focusNextVisibleJob(afterId) {
 function renderHeader(result) {
   const date = new Date(result.scrapedAt).toLocaleString("es-AR");
   const visible = visibleJobs().length;
-  const fbCount = rejectedIds.size;
-  const appliedCount = [...applicationStatus.values()].filter((s) => s === "applied").length;
-  const notAppliedCount = [...applicationStatus.values()].filter((s) => s === "not_applied").length;
-  const notSelectedCount = [...applicationStatus.values()].filter((s) => s === "not_selected").length;
+  const fbCount = jobs.filter((j) => isRejected(j.id)).length;
+  const appliedCount = countJobsByStatus("applied");
+  const notAppliedCount = countJobsByStatus("not_applied");
+  const notSelectedCount = countJobsByStatus("not_selected");
   const fbLine =
     fbCount > 0
       ? `<span class="header-feedback">Aprendizaje: <strong>${fbCount}</strong> incorrecto(s)</span>`
@@ -101,7 +101,7 @@ function renderHeader(result) {
   els.headerStats.innerHTML = `
     <span>Fecha: <strong>${date}</strong></span>
     <span>Analizados: <strong>${result.totalAnalyzed}</strong></span>
-    <span>Visibles: <strong>${visible}</strong> / ${result.matchedJobs.length}</span>
+    <span>Visibles: <strong>${visible}</strong> / ${jobs.length}</span>
     ${fbLine}
     ${appLine}
   `;
@@ -224,6 +224,9 @@ function renderDetail(job) {
 
   const descriptionBlock = renderDescriptionBlock(job.description);
   const appStatus = getApplicationStatus(job.id);
+  const linkedInLink = job.url
+    ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
+    : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
 
   els.detailContent.innerHTML = `
     <header class="detail__header">
@@ -237,7 +240,7 @@ function renderDetail(job) {
             <span>${escapeHtml(job.datePosted)}</span>
             <span>Búsqueda: ${escapeHtml(job.searchTerm)}</span>
           </div>
-          <a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>
+          ${linkedInLink}
         </div>
         <aside class="detail__header-aside" aria-label="Acciones">
           <div class="application-section application-section--compact">
@@ -334,6 +337,73 @@ async function saveApplicationStatus(job, status) {
 
 function applyApplicationStatus(store) {
   applicationStatus = new Map(store.entries.map((e) => [e.jobId, e.status]));
+}
+
+function stubJobFromRejection(rejection) {
+  const reason = rejection.reason?.trim();
+  return {
+    id: rejection.jobId,
+    title: rejection.title,
+    company: rejection.company,
+    location: "—",
+    modality: "—",
+    datePosted: "—",
+    url: "",
+    description: reason
+      ? `Empleo de una corrida anterior. Motivo del rechazo: ${reason}`
+      : "Empleo de una corrida anterior marcado como match incorrecto.",
+    searchTerm: rejection.searchTerm ?? "—",
+    matchPercent: rejection.matchPercent ?? 0,
+    matchedSkills: [],
+    gaps: [],
+    cvSuggestions: [],
+    summary: "Ya no está en el último análisis; visible por feedback guardado.",
+  };
+}
+
+function stubJobFromApplicationEntry(entry, rejectionById) {
+  const rejection = rejectionById.get(entry.jobId);
+  return {
+    id: entry.jobId,
+    title: entry.title,
+    company: entry.company,
+    location: "—",
+    modality: "—",
+    datePosted: "—",
+    url: "",
+    description: "Empleo de una corrida anterior con estado de postulación guardado.",
+    searchTerm: rejection?.searchTerm ?? "—",
+    matchPercent: rejection?.matchPercent ?? 0,
+    matchedSkills: [],
+    gaps: [],
+    cvSuggestions: [],
+    summary: "Ya no está en el último análisis; visible por el estado de postulación guardado.",
+  };
+}
+
+/** Incluye empleos históricos con feedback o postulación aunque no estén en el último análisis. */
+function mergeJobsWithStoredState(matchedJobs, feedback, applicationStatusStore) {
+  const byId = new Map(matchedJobs.map((j) => [j.id, j]));
+  const rejections = feedback?.rejections ?? [];
+  const rejectionById = new Map(rejections.map((r) => [r.jobId, r]));
+
+  for (const rejection of rejections) {
+    if (!byId.has(rejection.jobId)) {
+      byId.set(rejection.jobId, stubJobFromRejection(rejection));
+    }
+  }
+
+  for (const entry of applicationStatusStore?.entries ?? []) {
+    if (!byId.has(entry.jobId)) {
+      byId.set(entry.jobId, stubJobFromApplicationEntry(entry, rejectionById));
+    }
+  }
+
+  return [...byId.values()];
+}
+
+function countJobsByStatus(status) {
+  return jobs.filter((j) => getApplicationStatus(j.id) === status).length;
 }
 
 function wireFeedbackDisclosure() {
@@ -501,7 +571,6 @@ async function init() {
     }
 
     const result = await res.json();
-    jobs = result.matchedJobs ?? [];
     window.__scrapedAt = result.scrapedAt;
     window.__totalAnalyzed = result.totalAnalyzed;
 
@@ -511,6 +580,12 @@ async function init() {
     if (result.applicationStatus) {
       applyApplicationStatus(result.applicationStatus);
     }
+
+    jobs = mergeJobsWithStoredState(
+      result.matchedJobs ?? [],
+      result.feedback,
+      result.applicationStatus
+    );
 
     renderHeader(result);
 

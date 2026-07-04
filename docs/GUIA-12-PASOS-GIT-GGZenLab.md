@@ -213,6 +213,9 @@ git push -u origin rescue/nombre
 |----|-----------|
 | #68 | Launcher .bat + dashboard + gitignore Captura |
 | #69 | .env, shortcut OneDrive, regla Cursor |
+| #70 | Guía 12 pasos Git |
+
+**Guía bugs / agentes (chat nuevo):** [GUIA-FIX-BUG-GIT-AGENTES.md](./GUIA-FIX-BUG-GIT-AGENTES.md)
 
 ---
 

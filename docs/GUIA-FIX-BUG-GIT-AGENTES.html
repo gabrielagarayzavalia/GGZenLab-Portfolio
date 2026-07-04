@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Guía Fix Bug — Git + Agentes</title>
+  <style>
+    body { font-family: Segoe UI, sans-serif; max-width: 800px; margin: 2rem auto; line-height: 1.55; }
+    h1 { border-bottom: 2px solid #dc2626; }
+    h2 { color: #dc2626; margin-top: 1.5rem; }
+    pre { background: #fef2f2; padding: 1rem; border-left: 4px solid #dc2626; overflow-x: auto; font-size: 0.85rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; }
+    th { background: #fef2f2; }
+    .box { background: #eff6ff; border: 1px solid #2563eb; padding: 1rem; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Guía — Bug con Git + agente (chat nuevo)</h1>
+
+  <div class="box">
+    <strong>¿Chat nuevo?</strong> Sí. Pegá el bloque de instrucciones al inicio. Rama <code>fix/</code>, nunca <code>main</code>.
+  </div>
+
+  <h2>Bloque para el agente</h2>
+  <pre>Bug en GGZenLab-Portfolio.
+Reglas: NO main · rama fix/nombre · commit ES · push · PR
+Bug: &lt;qué pasa&gt; | Esperado: &lt;...&gt; | Pasos: &lt;1,2,3&gt;
+Empezá: git pull main && git switch -c fix/nombre</pre>
+
+  <h2>Comandos</h2>
+  <pre>git checkout main && git pull origin main
+git switch -c fix/nombre-del-bug
+git push -u origin fix/nombre-del-bug</pre>
+
+  <h2>PR</h2>
+  <p>compare/main...fix/tu-rama · Título: <code>fix: ...</code> · Squash and merge</p>
+
+  <h2>Después del merge</h2>
+  <pre>git checkout main && git pull origin main</pre>
+
+  <p><em>Ctrl+P → PDF · Ver GUIA-FIX-BUG-GIT-AGENTES.md para versión completa</em></p>
+</body>
+</html>

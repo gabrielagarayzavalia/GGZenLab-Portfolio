@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-05",
+  "instances": [
+    {
+      "id": "LAB-00-docker-desktop",
+      "labId": "LAB-00",
+      "frameworkKey": "docker-desktop",
+      "frameworkLabel": "Docker Desktop · smoke tests",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-01-postgresql-docker",
+      "labId": "LAB-01",
+      "frameworkKey": "postgresql-docker",
+      "frameworkLabel": "PostgreSQL · Docker · psql",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-02-github-actions",
+      "labId": "LAB-02",
+      "frameworkKey": "github-actions",
+      "frameworkLabel": "GitHub Actions · YAML workflows",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-03-mongo-docker-node",
+      "labId": "LAB-03",
+      "frameworkKey": "mongo-docker-node",
+      "frameworkLabel": "MongoDB · Docker · Node API",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-04-ts-playwright",
+      "labId": "LAB-04",
+      "frameworkKey": "ts-playwright",
+      "frameworkLabel": "TypeScript · Playwright · POM",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-05-java-rest-assured",
+      "labId": "LAB-05",
+      "frameworkKey": "java-rest-assured",
+      "frameworkLabel": "Java · Rest Assured · JUnit 5",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-06-powershell",
+      "labId": "LAB-06",
+      "frameworkKey": "powershell",
+      "frameworkLabel": "PowerShell · Windows",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": ""
+    },
+    {
+      "id": "LAB-07-ollama-eval",
+      "labId": "LAB-07",
+      "frameworkKey": "ollama-eval",
+      "frameworkLabel": "Ollama · eval harness · Job Hunter LLM",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": "Skill de aviso: AI/LLM, voice agents, conversational automation"
+    },
+    {
+      "id": "LAB-08-livekit-sip",
+      "labId": "LAB-08",
+      "frameworkKey": "livekit-sip",
+      "frameworkLabel": "LiveKit · SIP trunk · WebRTC",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": "Skill de aviso: SIP, WebRTC, LiveKit, contact center / IVR"
+    },
+    {
+      "id": "LAB-09-jmeter-timing",
+      "labId": "LAB-09",
+      "frameworkKey": "jmeter-timing",
+      "frameworkLabel": "JMeter · timers · percentiles",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": "Skill de aviso: TTFT, call setup time, response timing"
+    },
+    {
+      "id": "LAB-10-wiremock-java",
+      "labId": "LAB-10",
+      "frameworkKey": "wiremock-java",
+      "frameworkLabel": "WireMock · Java · Rest Assured",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": "Skill de aviso: contract testing, WireMock, mock services"
+    },
+    {
+      "id": "LAB-11-terraform-local",
+      "labId": "LAB-11",
+      "frameworkKey": "terraform-local",
+      "frameworkLabel": "Terraform · plan · validate · localstack",
+      "status": "todo",
+      "startedAt": null,
+      "completedAt": null,
+      "attemptCount": 0,
+      "notes": "Skill de aviso: Terraform, cloud infrastructure"
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-05",
+  "labs": [
+    {
+      "id": "LAB-00",
+      "title": "GGZenLab environment setup",
+      "descriptionShort": "Workspace paths, Docker Desktop, smoke tests del monorepo.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-00-setup-ggzenlab.md",
+      "infraPath": null,
+      "defaultFrameworkKey": "docker-desktop",
+      "frameworkOptions": [
+        { "key": "docker-desktop", "label": "Docker Desktop · smoke tests" },
+        { "key": "powershell", "label": "PowerShell · paths y comandos base" }
+      ]
+    },
+    {
+      "id": "LAB-01",
+      "title": "SQL SELECT & JOIN",
+      "descriptionShort": "PostgreSQL en Docker — consultas relacionales sobre schema job-search.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-01-sql-select-join.md",
+      "infraPath": "projects/sql-lab",
+      "defaultFrameworkKey": "postgresql-docker",
+      "frameworkOptions": [
+        { "key": "postgresql-docker", "label": "PostgreSQL · Docker · psql" }
+      ]
+    },
+    {
+      "id": "LAB-02",
+      "title": "CI/CD for QA Automation",
+      "descriptionShort": "GitHub Actions — jobs de tests, artefactos y gates de calidad.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-02-cicd-github-actions-qa.md",
+      "infraPath": ".github/workflows",
+      "defaultFrameworkKey": "github-actions",
+      "frameworkOptions": [
+        { "key": "github-actions", "label": "GitHub Actions · YAML workflows" }
+      ]
+    },
+    {
+      "id": "LAB-03",
+      "title": "Mongo persistence (Job Hunter)",
+      "descriptionShort": "Seed Mongo, API GET /api/jobs, Gherkin y tests automatizados.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-03-b06-4-mongo-qa.md",
+      "infraPath": "projects/qa-job-hunter",
+      "defaultFrameworkKey": "mongo-docker-node",
+      "frameworkOptions": [
+        { "key": "mongo-docker-node", "label": "MongoDB · Docker · Node API" }
+      ]
+    },
+    {
+      "id": "LAB-04",
+      "title": "Playwright + POM",
+      "descriptionShort": "Automatización UI con Page Object Model — multi-stack.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-04-playwright-pom-typescript.md",
+      "infraPath": "projects/api-testing/tests",
+      "defaultFrameworkKey": "ts-playwright",
+      "frameworkOptions": [
+        { "key": "ts-playwright", "label": "TypeScript · Playwright · POM" },
+        { "key": "csharp-playwright", "label": "C# · Playwright" },
+        { "key": "java-selenium", "label": "Java · Selenium" }
+      ]
+    },
+    {
+      "id": "LAB-05",
+      "title": "API with Rest Assured",
+      "descriptionShort": "Tests API contract-first con JUnit 5 y trazabilidad Gherkin/OpenAPI.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-05-rest-assured-api.md",
+      "infraPath": "projects/api-testing/tests/rest-assured-java",
+      "defaultFrameworkKey": "java-rest-assured",
+      "frameworkOptions": [
+        { "key": "java-rest-assured", "label": "Java · Rest Assured · JUnit 5" },
+        { "key": "csharp-playwright-api", "label": "C# · Playwright API" },
+        { "key": "postman", "label": "Postman · Newman" }
+      ]
+    },
+    {
+      "id": "LAB-06",
+      "title": "PowerShell for QA labs",
+      "descriptionShort": "Comandos esenciales en Windows para labs y scripts de QA.",
+      "availability": "published",
+      "track": "foundation",
+      "jobSkills": [],
+      "guidePath": "docs/guides/labs/LAB-06-powershell-qa.md",
+      "infraPath": null,
+      "defaultFrameworkKey": "powershell",
+      "frameworkOptions": [
+        { "key": "powershell", "label": "PowerShell · Windows" }
+      ]
+    },
+    {
+      "id": "LAB-07",
+      "title": "LLM & conversational agents QA",
+      "descriptionShort": "Probar flujos con IA: calidad de respuesta, regresión de prompts, eval harness.",
+      "availability": "planned",
+      "track": "job-skills",
+      "jobSkills": ["ai-llm-testing", "voice-agents", "conversational-automation"],
+      "jobPostingGap": "Experience testing AI/LLM, voice agents, or conversational automation systems",
+      "guidePath": "docs/guides/labs/LAB-07-llm-voice-agents-qa.md",
+      "infraPath": "projects/qa-job-hunter",
+      "defaultFrameworkKey": "ollama-eval",
+      "frameworkOptions": [
+        { "key": "ollama-eval", "label": "Ollama · eval harness · Job Hunter LLM" },
+        { "key": "playwright-chat", "label": "Playwright · UI conversacional" },
+        { "key": "python-deepeval", "label": "Python · DeepEval / métricas custom" }
+      ]
+    },
+    {
+      "id": "LAB-08",
+      "title": "SIP, WebRTC & contact center / IVR",
+      "descriptionShort": "Validar voz en tiempo real: SIP, WebRTC, LiveKit, IVR y contact center flows.",
+      "availability": "planned",
+      "track": "job-skills",
+      "jobSkills": ["sip", "webrtc", "livekit", "ivr", "contact-center"],
+      "jobPostingGap": "Background in SIP, WebRTC, LiveKit, or contact center / IVR testing",
+      "guidePath": "docs/guides/labs/LAB-08-webrtc-sip-livekit-ivr.md",
+      "infraPath": null,
+      "defaultFrameworkKey": "livekit-sip",
+      "frameworkOptions": [
+        { "key": "livekit-sip", "label": "LiveKit · SIP trunk · WebRTC" },
+        { "key": "webrtc-puppeteer", "label": "WebRTC · headless · métricas de audio" },
+        { "key": "ivr-twilio", "label": "Twilio · IVR · contact center sim" }
+      ]
+    },
+    {
+      "id": "LAB-09",
+      "title": "Latency & response-time validation",
+      "descriptionShort": "TTFT, call setup time, p95/p99 y SLAs de timing en APIs y agentes.",
+      "availability": "planned",
+      "track": "job-skills",
+      "jobSkills": ["latency-validation", "ttft", "response-timing", "performance-sla"],
+      "jobPostingGap": "Knowledge of latency and performance validation (e.g., TTFT, call setup time, response timing)",
+      "guidePath": "docs/guides/labs/LAB-09-latency-performance-qa.md",
+      "infraPath": "projects/performance-jmeter",
+      "defaultFrameworkKey": "jmeter-timing",
+      "frameworkOptions": [
+        { "key": "jmeter-timing", "label": "JMeter · timers · percentiles" },
+        { "key": "k6-ttft", "label": "k6 · TTFT · thresholds" },
+        { "key": "playwright-trace", "label": "Playwright · trace · response timing" }
+      ]
+    },
+    {
+      "id": "LAB-10",
+      "title": "Contract testing & WireMock",
+      "descriptionShort": "Consumer-driven contracts, mocks de servicios y validación sin SUT completo.",
+      "availability": "planned",
+      "track": "job-skills",
+      "jobSkills": ["contract-testing", "wiremock", "mock-services"],
+      "jobPostingGap": "Exposure to contract testing, WireMock, or other mock services",
+      "guidePath": "docs/guides/labs/LAB-10-contract-testing-wiremock.md",
+      "infraPath": "projects/api-testing",
+      "defaultFrameworkKey": "wiremock-java",
+      "frameworkOptions": [
+        { "key": "wiremock-java", "label": "WireMock · Java · Rest Assured" },
+        { "key": "pact-js", "label": "Pact · consumer-driven contracts" },
+        { "key": "msw-node", "label": "MSW · Node · API mocks" }
+      ]
+    },
+    {
+      "id": "LAB-11",
+      "title": "Terraform & cloud infrastructure QA",
+      "descriptionShort": "Validar infra como código: plan/apply, drift, smoke post-deploy en cloud.",
+      "availability": "planned",
+      "track": "job-skills",
+      "jobSkills": ["terraform", "cloud-infrastructure", "iac-testing"],
+      "jobPostingGap": "Understanding of Terraform or general cloud infrastructure concepts",
+      "guidePath": "docs/guides/labs/LAB-11-terraform-cloud-qa.md",
+      "infraPath": null,
+      "defaultFrameworkKey": "terraform-local",
+      "frameworkOptions": [
+        { "key": "terraform-local", "label": "Terraform · plan · validate · localstack" },
+        { "key": "terratest-go", "label": "Terratest · Go · infra assertions" },
+        { "key": "checkov-ci", "label": "Checkov · policy-as-code · CI" }
+      ]
+    }
+  ]
+}

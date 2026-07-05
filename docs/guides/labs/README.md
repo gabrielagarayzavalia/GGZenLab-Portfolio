@@ -14,6 +14,20 @@ Guías **modo instructor** (paso a paso, checkpoints). El agente debe pausar en 
 | **LAB-05** | [LAB-05-rest-assured-api.md](./LAB-05-rest-assured-api.md) | Rest Assured + API (Java/Maven) |
 | **LAB-06** | [LAB-06-powershell-qa.md](./LAB-06-powershell-qa.md) | PowerShell esencial (Windows + QA labs) |
 
+## Skills de avisos de empleo (planificados)
+
+Labs para cubrir requisitos frecuentes en job postings que aún no están en mini-proyectos publicados. Ver también la [tabla de progreso](../../qa/labs/index.html).
+
+| Lab | Archivo | Skill típica en avisos |
+|-----|---------|------------------------|
+| **LAB-07** | [LAB-07-llm-voice-agents-qa.md](./LAB-07-llm-voice-agents-qa.md) | AI/LLM, voice agents, conversational automation |
+| **LAB-08** | [LAB-08-webrtc-sip-livekit-ivr.md](./LAB-08-webrtc-sip-livekit-ivr.md) | SIP, WebRTC, LiveKit, contact center / IVR |
+| **LAB-09** | [LAB-09-latency-performance-qa.md](./LAB-09-latency-performance-qa.md) | TTFT, call setup time, response timing |
+| **LAB-10** | [LAB-10-contract-testing-wiremock.md](./LAB-10-contract-testing-wiremock.md) | Contract testing, WireMock, mock services |
+| **LAB-11** | [LAB-11-terraform-cloud-qa.md](./LAB-11-terraform-cloud-qa.md) | Terraform, cloud infrastructure |
+
+Registro de instancias (estado, fechas, contador): [`docs/qa/labs/index.html`](../../qa/labs/index.html) · datos en [`projects/labs/`](../../../projects/labs/).
+
 Labs del subsitio publicado: [`docs/guides/index.html`](../index.html) · Job Hunter Mongo: [`docs/projects/qa-job-hunter/`](../projects/qa-job-hunter/)
 
 ---

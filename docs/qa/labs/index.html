@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GGZenLab — Lab registry and progress tracking">
+  <title>Lab Registry | GGZenLab</title>
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <style>
+    .muted-inline { color: var(--muted); font-size: 0.85rem; }
+    .labs-tracks { margin: 1rem 0 1.5rem; }
+    .labs-tracks li { margin-bottom: 0.35rem; }
+  </style>
+</head>
+<body data-nav-root="../.." data-nav-active="labs" data-i18n-title="meta.title.labs" data-i18n-desc="meta.desc.labs">
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../../index.html">GG<span>ZenLab</span></a>
+      <div class="header-right">
+        <nav class="site-nav" aria-label="Main"></nav>
+        <div class="lang-switcher" role="group">
+          <span data-i18n="lang.label">Language</span>
+          <button type="button" data-lang-switch="en" class="active">EN</button>
+          <button type="button" data-lang-switch="es">ES</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container content-page">
+    <p class="breadcrumb"><a href="../../index.html" data-i18n="nav.home">Home</a> · <a href="../index.html" data-i18n="nav.qa">QA</a> · <span data-i18n="labs.breadcrumb">Lab registry</span></p>
+    <h1 data-i18n="labs.h1">Lab registry</h1>
+    <p data-i18n="labs.intro">Track instructor labs by framework variant — status, dates, and attempt count. Includes job-posting skills not yet covered in published mini-projects (LAB-07…11).</p>
+
+    <div class="report-box">
+      <h3 data-i18n="labs.guides.title">Instructor guides</h3>
+      <p data-i18n="labs.guides.body">Step-by-step labs with checkpoints — start from the markdown index.</p>
+      <p>
+        <a class="btn" href="https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/blob/main/docs/guides/labs/README.md" target="_blank" rel="noopener" data-i18n="labs.guides.btn">Open labs index (LAB-00 … LAB-11)</a>
+        <a class="btn" href="../../guides/index.html" data-i18n="card.guides.btn">Practice labs page</a>
+      </p>
+    </div>
+
+    <h2 class="section-title" data-i18n="labs.jobSkills.title">Job-posting skills track (LAB-07…11)</h2>
+    <ul class="labs-tracks">
+      <li data-i18n="labs.jobSkills.07">LAB-07 — AI/LLM, voice agents, conversational automation</li>
+      <li data-i18n="labs.jobSkills.08">LAB-08 — SIP, WebRTC, LiveKit, contact center / IVR</li>
+      <li data-i18n="labs.jobSkills.09">LAB-09 — Latency validation (TTFT, call setup, response timing)</li>
+      <li data-i18n="labs.jobSkills.10">LAB-10 — Contract testing, WireMock, mock services</li>
+      <li data-i18n="labs.jobSkills.11">LAB-11 — Terraform &amp; cloud infrastructure</li>
+    </ul>
+
+    <h2 class="section-title" data-i18n="labs.table.title">Your lab instances</h2>
+    <noscript>
+      <p data-i18n="labs.noscript">Enable JavaScript to load the registry table, or view <code>projects/labs/instances.json</code> on GitHub.</p>
+    </noscript>
+    <div class="table-wrap">
+      <table id="labs-registry">
+        <thead>
+          <tr>
+            <th data-i18n="labs.col.lab">Lab</th>
+            <th data-i18n="labs.col.description">Description</th>
+            <th data-i18n="labs.col.framework">Framework</th>
+            <th data-i18n="labs.col.started">Started</th>
+            <th data-i18n="labs.col.completed">Completed</th>
+            <th data-i18n="labs.col.status">Status</th>
+            <th data-i18n="labs.col.attempts">Times</th>
+            <th data-i18n="labs.col.guide">Guide</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="8" data-i18n="labs.loading">Loading registry…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p data-i18n="labs.source">Source of truth: <code>projects/labs/instances.json</code> · sync via <code>projects/labs/scripts/sync-registry-to-docs.ps1</code></p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p><a href="../index.html" data-i18n="footer.backQa">← QA overview</a></p>
+    </div>
+  </footer>
+  <script src="../../assets/js/nav.js"></script>
+  <script src="../../assets/js/i18n.js"></script>
+  <script src="../../assets/js/copy.js"></script>
+  <script src="../../assets/js/site.js"></script>
+  <script src="../../assets/js/labs-registry.js"></script>
+</body>
+</html>

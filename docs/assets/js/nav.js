@@ -3,6 +3,7 @@
     { id: 'qa', i18n: 'nav.qaOverview', path: 'qa/index.html' },
     { id: 'api', i18n: 'nav.api', path: 'projects/api-testing/index.html' },
     { id: 'perf', i18n: 'nav.perf', path: 'projects/performance/index.html' },
+    { id: 'labs', i18n: 'nav.labs', path: 'qa/labs/index.html' },
     { id: 'guides', i18n: 'nav.guides', path: 'guides/index.html' },
     { id: 'backlog', i18n: 'nav.backlog', path: 'backlog/index.html' },
     { id: 'tcm', i18n: 'nav.tcm', path: 'projects/test-case-management/index.html' },

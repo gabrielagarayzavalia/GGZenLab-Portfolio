@@ -35,3 +35,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        retry:
+          max-attempts: 3
+          min-interval-seconds: 30
+          max-interval-seconds: 90

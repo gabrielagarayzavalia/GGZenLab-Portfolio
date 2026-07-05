@@ -18,7 +18,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry2.outputs.page_url || steps.deployment_retry3.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,10 +32,33 @@ jobs:
         with:
           path: docs
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (1/3)
         id: deployment
         uses: actions/deploy-pages@v4
-        retry:
-          max-attempts: 3
-          min-interval-seconds: 30
-          max-interval-seconds: 90
+        continue-on-error: true
+
+      - name: Wait before retry
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 45
+
+      - name: Deploy to GitHub Pages (2/3)
+        id: deployment_retry2
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Wait before final retry
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry2.outcome == 'failure'
+        run: sleep 60
+
+      - name: Deploy to GitHub Pages (3/3)
+        id: deployment_retry3
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Fail if all deploy attempts failed
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry2.outcome == 'failure' && steps.deployment_retry3.outcome == 'failure'
+        run: |
+          echo "GitHub Pages deploy failed after 3 attempts."
+          exit 1

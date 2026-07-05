@@ -73,10 +73,10 @@
       "labId": "LAB-06",
       "frameworkKey": "powershell",
       "frameworkLabel": "PowerShell · Windows",
-      "status": "todo",
-      "startedAt": null,
-      "completedAt": null,
-      "attemptCount": 0,
+      "status": "completed",
+      "startedAt": "2026-07-04",
+      "completedAt": "2026-07-05",
+      "attemptCount": 1,
       "notes": ""
     },
     {

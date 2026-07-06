@@ -1,4 +1,4 @@
-# 🎯 QA Job Hunter — LinkedIn + Claude AI
+# 🎯 QA Job Hunter — LinkedIn + Claude AI + Cursor
 
 Sistema automatizado para encontrar empleos **QA Analyst / QA Automation** en LinkedIn,
 analizar el % de match con tu perfil y preparar el CV a medida.

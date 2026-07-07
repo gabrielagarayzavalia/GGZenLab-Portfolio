@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Interview UI Lab — roles & overlap</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .stack {
+        position: relative;
+        width: 12rem;
+        margin: 1.5rem 0;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-weight: 600;
+      }
+      .cookie-banner {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 1rem;
+        background: #1e293b;
+        color: #fff;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 1000;
+      }
+      #status {
+        margin-top: 1rem;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Interview UI Lab</h1>
+    <p>Practica getByRole, strict mode y solapamiento sin depender del SUT.</p>
+
+    <!-- E1: login solo con roles accesibles -->
+    <section aria-label="Sign in">
+      <h2>Sign in</h2>
+      <form aria-label="Sign in form">
+        <label>
+          Email
+          <input type="email" aria-label="Email" autocomplete="username" />
+        </label>
+        <label>
+          Password
+          <input type="password" aria-label="Password" autocomplete="current-password" />
+        </label>
+        <button type="submit">Sign in</button>
+      </form>
+    </section>
+
+    <!-- E2: dos botones con texto visible "Save" -->
+    <section aria-label="Editor toolbar">
+      <h2>Publish</h2>
+      <button aria-label="Save draft">Save</button>
+      <button aria-label="Save and publish">Save</button>
+    </section>
+
+    <!-- E3: overlay intercepta pointer events sobre Checkout -->
+    <section aria-label="Checkout area">
+      <h2>Checkout</h2>
+      <div class="stack">
+        <button id="checkout">Checkout</button>
+        <div id="loading-overlay" class="overlay" aria-hidden="true">Loading…</div>
+      </div>
+      <button type="button" id="dismiss-loading">Dismiss loading</button>
+    </section>
+
+    <!-- E4: banner fijo cubre el botón Buy now -->
+    <div role="dialog" aria-label="Cookie consent" id="cookie-banner" class="cookie-banner">
+      <span>We use cookies for analytics.</span>
+      <button type="button">Accept all</button>
+    </div>
+
+    <section aria-label="Shop">
+      <h2>Shop</h2>
+      <button type="button" id="buy-now">Buy now</button>
+    </section>
+
+    <p id="status" aria-live="polite">Ready</p>
+
+    <script>
+      const status = document.getElementById("status");
+
+      document.querySelector('form[aria-label="Sign in form"]').addEventListener("submit", (e) => {
+        e.preventDefault();
+        status.textContent = "Signed in";
+      });
+
+      document.querySelector('button[aria-label="Save draft"]').addEventListener("click", () => {
+        status.textContent = "Draft saved";
+      });
+
+      document.querySelector('button[aria-label="Save and publish"]').addEventListener("click", () => {
+        status.textContent = "Published";
+      });
+
+      document.getElementById("checkout").addEventListener("click", () => {
+        status.textContent = "Checked out";
+      });
+
+      document.getElementById("dismiss-loading").addEventListener("click", () => {
+        document.getElementById("loading-overlay").remove();
+        status.textContent = "Loading dismissed";
+      });
+
+      document.querySelector('#cookie-banner button').addEventListener("click", () => {
+        document.getElementById("cookie-banner").remove();
+        status.textContent = "Cookies accepted";
+      });
+
+      document.getElementById("buy-now").addEventListener("click", () => {
+        status.textContent = "Purchased";
+      });
+    </script>
+  </body>
+</html>

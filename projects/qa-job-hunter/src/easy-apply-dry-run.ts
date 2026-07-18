@@ -15,7 +15,7 @@ import {
 } from "./apply/canonical-text.js";
 import {
   clickEasyApply,
-  detectAlreadyApplied,
+  detectPageApplySignal,
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
 import {
@@ -101,7 +101,7 @@ async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete"> {
 async function processJob(
   page: Page,
   row: QueueRow
-): Promise<"dry_ok" | "skip_no_ea" | "enviada" | "skip_final" | "incomplete"> {
+): Promise<"dry_ok" | "skip_no_ea" | "enviada" | "cerrada" | "skip_final" | "incomplete"> {
   if (isFinalStatus(row.status)) {
     console.log(`\n↷ Skip ${row.jobId} (estado final: ${row.status})`);
     return "skip_final";
@@ -114,18 +114,33 @@ async function processJob(
   await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
   await sleep(2500);
 
-  if (await detectAlreadyApplied(page)) {
-    const marked = markEnviadaIfAllowed(row.jobId, "Already applied (detectado en página)");
+  const signal = await detectPageApplySignal(page);
+
+  if (signal === "applied") {
+    const marked = markEnviadaIfAllowed(
+      row.jobId,
+      "Application submitted / Applied (detectado en página)"
+    );
     if (marked) {
       setApplicationStatus(
         { id: row.jobId, title: row.title, company: row.company },
         "applied"
       );
-      console.log("   ✓ Applied → Excel: enviada");
+      console.log("   ✓ Application submitted / Applied → Excel: enviada");
     } else {
       console.log(`   ↷ Applied en UI pero Excel queda ${row.status} (final)`);
     }
     return "enviada";
+  }
+
+  if (signal === "closed") {
+    updateQueueRow(row.jobId, {
+      status: "cerrada",
+      easyApply: "no",
+      reason: "Aviso cerrado / ya no acepta postulaciones",
+    });
+    console.log("   ✗ Aviso cerrado / no acepta → Excel: cerrada; siguiente");
+    return "cerrada";
   }
 
   const hasEasy = await findEasyApplyControl(page, 6000);
@@ -196,6 +211,7 @@ async function main() {
 
   let dryOk = 0;
   let enviada = 0;
+  let cerrada = 0;
   let skipNoEa = 0;
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
   const seen = new Set<string>();
@@ -213,13 +229,16 @@ async function main() {
       dryOk++;
       if (process.env.DRY_RUN_ALL !== "1") break;
     } else if (outcome === "enviada") enviada++;
+    else if (outcome === "cerrada") cerrada++;
     else if (outcome === "skip_no_ea") skipNoEa++;
 
     await sleep(1500 + Math.random() * 1000);
   }
 
   await browser.close();
-  console.log(`\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} sin_EA_pendiente=${skipNoEa}`);
+  console.log(
+    `\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
+  );
   console.log(`Excel: ${APPLY_QUEUE_PATH}`);
 }
 

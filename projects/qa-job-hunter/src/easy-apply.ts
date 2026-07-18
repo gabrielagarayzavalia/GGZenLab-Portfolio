@@ -19,6 +19,7 @@ import { resolveCoverLetter } from "./apply/cover-letter.js";
 import {
   clickEasyApply,
   detectAlreadyApplied,
+  detectPageApplySignal,
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
 import {
@@ -82,9 +83,10 @@ async function tryEasyApply(
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
     await sleep(2500);
 
-    if (await detectAlreadyApplied(page)) {
+    const signal = await detectPageApplySignal(page);
+    if (signal === "applied") {
       record.status = "submitted";
-      record.reason = "Already applied (detectado en página)";
+      record.reason = "Application submitted / Applied (detectado en página)";
       const marked = markEnviadaIfAllowed(job.jobId, record.reason);
       if (marked) {
         setApplicationStatus(
@@ -92,6 +94,16 @@ async function tryEasyApply(
           "applied"
         );
       }
+      return record;
+    }
+    if (signal === "closed") {
+      record.status = "blocked";
+      record.reason = "Aviso cerrado / ya no acepta postulaciones";
+      updateQueueRow(job.jobId, {
+        status: "cerrada",
+        easyApply: "no",
+        reason: record.reason,
+      });
       return record;
     }
 

@@ -50,8 +50,9 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 ```
 
 - Cola: `output/apply/apply-queue.csv` (+ sync `jobs-result.csv`).
-- Applied / Application submitted / Ya postulaste → **enviada** (salvo final).
-- Sin Easy Apply → **sigue pendiente** → siguiente.
+- Applied / **Application submitted** / Ya postulaste → **enviada** (salvo `cerrada`/`descartada`).
+- Aviso **ya no acepta** / no disponible / closed → **cerrada** → siguiente.
+- Sin Easy Apply (y no closed/applied) → **sigue pendiente** → siguiente.
 - Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
 - Productivo + Easy Apply → Submit → **Done** → **enviada**.
 - Idioma base LinkedIn: **inglés**.

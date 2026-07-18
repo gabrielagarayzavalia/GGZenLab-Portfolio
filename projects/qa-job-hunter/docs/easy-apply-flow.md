@@ -102,11 +102,10 @@ Priorizar `getByRole` / `aria-label` (EN observados + fallbacks ES).
 |---|---|---|---|
 | Easy Apply | `getByRole('link', { name: 'Easy Apply to this job' })` | Estable | **Es link, no button** (codegen Macro/GLOBAL HR) |
 | Easy Apply (fallback) | otros `link`/`button` con Easy Apply | Heurística | Solo si falla el primario |
-| Continuar | `getByRole('button', { name: /Continue to next step\|Next/i })` | Estable | EN |
-| Continuar (ES) | `button[aria-label*='Continuar']` | Estable | |
-| Revisar | `getByRole('button', { name: /Review your application/i })` | Estable | |
-| Enviar | `getByRole('button', { name: /Submit application/i })` | Estable | En dry-run: detectar, no click |
-| Done | `getByRole('button', { name: /^Done$/i })` | Estable | Post-submit |
+| Continuar / Next | `button` **o** `link` (`modal-controls.ts`) | Estable | Probar ambos roles |
+| Revisar | idem Review | Estable | |
+| Enviar / Submit | idem Submit application | Estable | Dry-run: detectar, no click |
+| Done | idem Done/Listo | Estable | Post-submit |
 | Yes/No | `getByText(/^Sí$\|^Yes$/i)` | Media | Heurística; ampliar con apply-answers |
 | Modal | `getByRole('dialog')` | Estable | |
 | Cover/summary | `dialog textarea` | Media | **Opcional** |

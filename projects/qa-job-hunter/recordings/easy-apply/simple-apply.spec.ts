@@ -21,6 +21,11 @@ import {
   APPLICATION_SUMMARY,
   COVER_LETTER_DEFAULT,
 } from "../../src/apply/canonical-text.js";
+import {
+  clickButtonOrLink,
+  findButtonOrLink,
+  MODAL_LABELS,
+} from "../../src/apply/modal-controls.js";
 
 const JOB_URL = "https://www.linkedin.com/jobs/view/4438016042/";
 const SESSION_PATH = "session/linkedin-session.json";
@@ -74,35 +79,25 @@ async function main() {
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
 
-    const submit = page.getByRole("button", { name: /Submit application|Enviar solicitud/i }).first();
-    if (await submit.isVisible({ timeout: 1000 }).catch(() => false)) {
+    // LinkedIn: Submit/Next/Done pueden ser button o link.
+    const dialog = page.getByRole("dialog").first();
+    const submit = await findButtonOrLink(dialog, MODAL_LABELS.submit, 1000);
+    if (submit) {
       console.log(
         REAL_SUBMIT
           ? "Submit visible — enviando (quema jobId)."
           : "Submit visible — DRY-RUN: no se hace click (job reutilizable)."
       );
       if (REAL_SUBMIT) {
-          await submit.click();
-          // Productivo: Submit → Done
-          const done = page.getByRole("button", { name: /^Done$|^Listo$/i });
-          await done.click({ timeout: 5000 });
-        }
+        await submit.click();
+        await clickButtonOrLink(page, MODAL_LABELS.done, 5000);
+      }
       break;
     }
 
-    const review = page.getByRole("button", { name: /Review your application|Revisar/i }).first();
-    if (await review.isVisible({ timeout: 800 }).catch(() => false)) {
-      await review.click();
-      continue;
-    }
-
-    const next = page
-      .getByRole("button", { name: /Continue to next step|Next|Continuar|Siguiente/i })
-      .first();
-    if (await next.isVisible({ timeout: 800 }).catch(() => false)) {
-      await next.click();
-      continue;
-    }
+    if (await clickButtonOrLink(dialog, MODAL_LABELS.review, 800)) continue;
+    if (await clickButtonOrLink(dialog, MODAL_LABELS.continue, 800)) continue;
+    if (await clickButtonOrLink(dialog, MODAL_LABELS.next, 500)) continue;
 
     break;
   }

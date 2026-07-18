@@ -23,6 +23,12 @@ import {
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
 import {
+  clickButtonOrLink,
+  cssPrimaryActions,
+  findButtonOrLink,
+  MODAL_LABELS,
+} from "./apply/modal-controls.js";
+import {
   canonicalJobUrl,
   ensureQueueFromMatched,
   jobIdFromUrl,
@@ -170,39 +176,34 @@ async function tryEasyApply(
           if (!current) await area.fill(letter);
         }
         await sleep(800);
-        const nextAfterFill = page
-          .locator(
-            "button[aria-label*='Continuar'], button[aria-label*='Next'], button[aria-label*='Review'], button.artdeco-button--primary"
-          )
-          .first();
-        if (await nextAfterFill.isVisible({ timeout: 1500 }).catch(() => false)) {
+        if (
+          (await clickButtonOrLink(modal, MODAL_LABELS.review, 800)) ||
+          (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800)) ||
+          (await clickButtonOrLink(modal, MODAL_LABELS.next, 500))
+        ) {
+          await sleep(1500);
+          continue;
+        }
+        const nextAfterFill = cssPrimaryActions(modal);
+        if (await nextAfterFill.isVisible({ timeout: 800 }).catch(() => false)) {
           await nextAfterFill.click();
           await sleep(1500);
           continue;
         }
       }
 
-      const submitBtn = page
-        .locator(
-          "button[aria-label*='Enviar solicitud'], button[aria-label*='Submit application'], button.artdeco-button--primary:has-text('Enviar'), button.artdeco-button--primary:has-text('Submit')"
-        )
-        .first();
+      const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1500);
 
-      if (await submitBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+      if (submitBtn) {
         await page
           .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
           .catch(() => {});
         await submitBtn.click();
         await sleep(2500);
 
-        // Productivo: tras Submit hay que clickear Done.
-        const doneBtn = page.getByRole("button", { name: /^Done$|^Listo$/i }).first();
-        let clickedDone = false;
-        if (await doneBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-          await doneBtn.click();
-          clickedDone = true;
-          await sleep(1500);
-        }
+        // Productivo: tras Submit hay que clickear Done (button o link).
+        let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000);
+        if (clickedDone) await sleep(1500);
 
         const confirmed =
           clickedDone ||
@@ -234,13 +235,17 @@ async function tryEasyApply(
         return record;
       }
 
-      const nextBtn = page
-        .locator(
-          "button[aria-label*='Continuar'], button[aria-label*='Next'], button[aria-label*='Review'], button.artdeco-button--primary"
-        )
-        .first();
+      if (
+        (await clickButtonOrLink(modal, MODAL_LABELS.review, 800)) ||
+        (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800)) ||
+        (await clickButtonOrLink(modal, MODAL_LABELS.next, 500))
+      ) {
+        await sleep(1500);
+        continue;
+      }
 
-      if (await nextBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+      const nextBtn = cssPrimaryActions(modal);
+      if (await nextBtn.isVisible({ timeout: 800 }).catch(() => false)) {
         await nextBtn.click();
         await sleep(1500);
         continue;

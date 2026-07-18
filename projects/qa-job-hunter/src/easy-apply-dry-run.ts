@@ -20,6 +20,12 @@ import {
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
 import {
+  clickButtonOrLink,
+  cssPrimaryActions,
+  findButtonOrLink,
+  MODAL_LABELS,
+} from "./apply/modal-controls.js";
+import {
   ensureQueueFromMatched,
   isFinalStatus,
   loadQueue,
@@ -90,38 +96,30 @@ async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete" | "no
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
 
-    const submit = dialog
-      .getByRole("button", { name: /Submit application|Enviar solicitud/i })
-      .first();
-    if (await submit.isVisible({ timeout: 1000 }).catch(() => false)) {
+    // button o link (LinkedIn mezcla ambos)
+    if (await findButtonOrLink(dialog, MODAL_LABELS.submit, 1000)) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return "ok";
     }
 
-    const review = dialog
-      .getByRole("button", { name: /Review your application|Revisar/i })
-      .first();
-    if (await review.isVisible({ timeout: 800 }).catch(() => false)) {
-      await review.click({ timeout: 5000 });
+    if (await clickButtonOrLink(dialog, MODAL_LABELS.review, 800)) {
       await sleep(1200);
       continue;
     }
 
-    // Preferir "Continue to next step" — NO aria-label="Next" genérico (carrusel).
-    const continueBtn = dialog
-      .getByRole("button", { name: /Continue to next step|Continuar|Siguiente/i })
-      .first();
-    if (await continueBtn.isVisible({ timeout: 800 }).catch(() => false)) {
-      await continueBtn.click({ timeout: 5000 });
+    // Preferir Continue — Next solo scoped al dialog (no carrusel).
+    if (await clickButtonOrLink(dialog, MODAL_LABELS.continue, 800)) {
+      await sleep(1200);
+      continue;
+    }
+    if (await clickButtonOrLink(dialog, MODAL_LABELS.next, 500)) {
       await sleep(1200);
       continue;
     }
 
-    const nextInModal = dialog.locator(
-      "button[aria-label*='Continue'], button[aria-label*='Continuar'], button:has-text('Next'):not([data-testid*='carousel'])"
-    ).first();
-    if (await nextInModal.isVisible({ timeout: 500 }).catch(() => false)) {
-      await nextInModal.click({ timeout: 5000 }).catch(() => {});
+    const cssNext = cssPrimaryActions(dialog);
+    if (await cssNext.isVisible({ timeout: 500 }).catch(() => false)) {
+      await cssNext.click({ timeout: 5000 }).catch(() => {});
       await sleep(1200);
       continue;
     }
@@ -223,9 +221,15 @@ async function processJob(
         : "Dry-run incompleto (modal sí abrió) — pendiente",
   });
 
-  const dismiss = page.locator("button[aria-label='Dismiss'], button[aria-label='Cerrar']").first();
-  if (await dismiss.isVisible({ timeout: 800 }).catch(() => false)) {
-    await dismiss.click().catch(() => {});
+  if (!(await clickButtonOrLink(page, MODAL_LABELS.dismiss, 500))) {
+    const dismiss = page
+      .locator(
+        "button[aria-label='Dismiss'], button[aria-label='Cerrar'], a[aria-label='Dismiss'], a[aria-label='Cerrar']"
+      )
+      .first();
+    if (await dismiss.isVisible({ timeout: 400 }).catch(() => false)) {
+      await dismiss.click().catch(() => {});
+    }
   }
 
   return result === "ok" ? "dry_ok" : "incomplete";

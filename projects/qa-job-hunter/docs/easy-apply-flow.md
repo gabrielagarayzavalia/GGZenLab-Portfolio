@@ -54,6 +54,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Aviso **ya no acepta** / no disponible / closed → **cerrada** → siguiente.
 - Sin Easy Apply (y no closed/applied) → **sigue pendiente** → siguiente.
 - Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
+- Si hay Easy Apply y **no entra al modal** → **STOP** de toda la corrida (exit 2); no seguir al siguiente.
 - Productivo + Easy Apply → Submit → **Done** → **enviada**.
 - Idioma base LinkedIn: **inglés**.
 

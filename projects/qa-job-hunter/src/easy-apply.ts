@@ -83,31 +83,31 @@ async function tryEasyApply(
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
     await sleep(2500);
 
-    const signal = await detectPageApplySignal(page);
-    if (signal === "applied") {
-      record.status = "submitted";
-      record.reason = "Application submitted / Applied (detectado en página)";
-      const marked = markEnviadaIfAllowed(job.jobId, record.reason);
-      if (marked) {
-        setApplicationStatus(
-          { id: job.jobId, title: job.title, company: job.company },
-          "applied"
-        );
+    // Easy Apply visible manda; applied/closed solo si NO hay botón.
+    if (!(await findEasyApplyControl(page, 10000))) {
+      const signal = await detectPageApplySignal(page);
+      if (signal === "applied") {
+        record.status = "submitted";
+        record.reason = "Application submitted / Applied (sin botón Easy Apply)";
+        const marked = markEnviadaIfAllowed(job.jobId, record.reason);
+        if (marked) {
+          setApplicationStatus(
+            { id: job.jobId, title: job.title, company: job.company },
+            "applied"
+          );
+        }
+        return record;
       }
-      return record;
-    }
-    if (signal === "closed") {
-      record.status = "blocked";
-      record.reason = "Aviso cerrado / ya no acepta postulaciones";
-      updateQueueRow(job.jobId, {
-        status: "cerrada",
-        easyApply: "no",
-        reason: record.reason,
-      });
-      return record;
-    }
-
-    if (!(await findEasyApplyControl(page, 6000))) {
+      if (signal === "closed") {
+        record.status = "blocked";
+        record.reason = "Aviso cerrado / ya no acepta postulaciones";
+        updateQueueRow(job.jobId, {
+          status: "cerrada",
+          easyApply: "no",
+          reason: record.reason,
+        });
+        return record;
+      }
       record.status = "manual_pending";
       record.reason = "Sin Easy Apply en esta visita — Excel sigue pendiente";
       updateQueueRow(job.jobId, {

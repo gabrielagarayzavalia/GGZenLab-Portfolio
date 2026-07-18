@@ -137,28 +137,45 @@ export async function findEasyApplyControl(
   return false;
 }
 
+/** Click robusto: overlay de LinkedIn a veces intercepta el click normal. */
+async function clickEasyApplyElement(page: Page, el: Locator): Promise<boolean> {
+  await el.scrollIntoViewIfNeeded().catch(() => {});
+  const href = (await el.getAttribute("href").catch(() => "")) ?? "";
+
+  const clicked =
+    (await el.click({ timeout: 5000 }).then(() => true).catch(() => false)) ||
+    (await el.click({ force: true, timeout: 5000 }).then(() => true).catch(() => false));
+
+  if (clicked) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if (/search-results/i.test(page.url())) {
+      await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
+      return false;
+    }
+    return true;
+  }
+
+  // Fallback: el link real apunta a /jobs/view/<id>/apply/
+  if (/\/apply\//i.test(href)) {
+    const abs = href.startsWith("http") ? href : new URL(href, page.url()).href;
+    await page.goto(abs, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await new Promise((r) => setTimeout(r, 1500));
+    return !/search-results/i.test(page.url());
+  }
+
+  return false;
+}
+
 export async function clickEasyApply(page: Page): Promise<boolean> {
-  // Misma acción que codegen
   const primary = primaryEasyApplyLink(page).first();
   if (await isSafeEasyApply(primary)) {
-    await primary.scrollIntoViewIfNeeded().catch(() => {});
-    await primary.click({ timeout: 5000 });
-    await new Promise((r) => setTimeout(r, 800));
-    if (!/search-results/i.test(page.url())) return true;
-    await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
+    if (await clickEasyApplyElement(page, primary)) return true;
   }
 
   for (const loc of easyApplyCandidates(page)) {
     const el = loc.first();
     if (!(await isSafeEasyApply(el))) continue;
-    await el.scrollIntoViewIfNeeded().catch(() => {});
-    await el.click({ timeout: 5000 });
-    await new Promise((r) => setTimeout(r, 800));
-    if (/search-results/i.test(page.url())) {
-      await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
-      continue;
-    }
-    return true;
+    if (await clickEasyApplyElement(page, el)) return true;
   }
   return false;
 }

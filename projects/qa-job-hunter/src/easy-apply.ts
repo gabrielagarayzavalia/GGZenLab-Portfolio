@@ -25,6 +25,7 @@ import {
   canonicalJobUrl,
   ensureQueueFromMatched,
   jobIdFromUrl,
+  markEnviadaIfAllowed,
   updateQueueRow,
 } from "./apply/apply-queue.js";
 import { handleFailures } from "./apply/failure-handler.js";
@@ -84,23 +85,21 @@ async function tryEasyApply(
     if (await detectAlreadyApplied(page)) {
       record.status = "submitted";
       record.reason = "Already applied (detectado en página)";
-      updateQueueRow(job.jobId, {
-        status: "applied",
-        reason: record.reason,
-        easyApply: "yes",
-      });
-      setApplicationStatus(
-        { id: job.jobId, title: job.title, company: job.company },
-        "applied"
-      );
+      const marked = markEnviadaIfAllowed(job.jobId, record.reason);
+      if (marked) {
+        setApplicationStatus(
+          { id: job.jobId, title: job.title, company: job.company },
+          "applied"
+        );
+      }
       return record;
     }
 
     if (!(await findEasyApplyControl(page, 6000))) {
-      record.status = "blocked";
-      record.reason = "Sin botón Easy Apply — marcado closed en Excel";
+      record.status = "manual_pending";
+      record.reason = "Sin Easy Apply en esta visita — Excel sigue pendiente";
       updateQueueRow(job.jobId, {
-        status: "closed",
+        status: "pendiente",
         easyApply: "no",
         reason: record.reason,
       });
@@ -182,17 +181,36 @@ async function tryEasyApply(
           .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
           .catch(() => {});
         await submitBtn.click();
-        await sleep(3000);
+        await sleep(2500);
 
-        const done = await page
-          .locator("text=/Solicitud enviada|Application submitted|Done|Listo/i")
-          .first()
-          .isVisible({ timeout: 5000 })
-          .catch(() => false);
+        // Productivo: tras Submit hay que clickear Done.
+        const doneBtn = page.getByRole("button", { name: /^Done$|^Listo$/i }).first();
+        let clickedDone = false;
+        if (await doneBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+          await doneBtn.click();
+          clickedDone = true;
+          await sleep(1500);
+        }
 
-        if (done) {
+        const confirmed =
+          clickedDone ||
+          (await detectAlreadyApplied(page)) ||
+          (await page
+            .getByText(/Application sent|Application submitted|Solicitud enviada/i)
+            .first()
+            .isVisible({ timeout: 3000 })
+            .catch(() => false));
+
+        if (confirmed) {
           record.status = "submitted";
-          record.reason = "Easy Apply enviada con CV de LinkedIn";
+          record.reason = clickedDone
+            ? "Easy Apply enviada (Submit + Done)"
+            : "Easy Apply enviada (Submit; Done no visible)";
+          markEnviadaIfAllowed(job.jobId, record.reason);
+          setApplicationStatus(
+            { id: job.jobId, title: job.title, company: job.company },
+            "applied"
+          );
           await page
             .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
             .catch(() => {});
@@ -200,7 +218,7 @@ async function tryEasyApply(
         }
 
         record.status = "blocked";
-        record.reason = "Submit clickeado pero sin confirmación — verificar en LinkedIn";
+        record.reason = "Submit sin Done/confirmación — verificar en LinkedIn";
         return record;
       }
 
@@ -252,7 +270,7 @@ async function main() {
 
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({ headless: false, slowMo: 250 });
-  const context = await browser.newContext({ storageState: sessionPath, locale: "es-AR" });
+  const context = await browser.newContext({ storageState: sessionPath, locale: "en-US" });
   const page = await context.newPage();
 
   const applications: ApplicationRecord[] = [];

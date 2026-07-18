@@ -82,9 +82,11 @@ async function main() {
           : "Submit visible — DRY-RUN: no se hace click (job reutilizable)."
       );
       if (REAL_SUBMIT) {
-        await submit.click();
-        await page.getByRole("button", { name: /^Done$|^Listo$/i }).click();
-      }
+          await submit.click();
+          // Productivo: Submit → Done
+          const done = page.getByRole("button", { name: /^Done$|^Listo$/i });
+          await done.click({ timeout: 5000 });
+        }
       break;
     }
 

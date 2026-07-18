@@ -31,18 +31,32 @@ npm run playwright:ide -- --url=https://www.linkedin.com/jobs/view/JOB_ID --labe
 ### 2.1 JobId destructivo
 Un **Submit real** en LinkedIn “quema” ese aviso para re-pruebas. Después de un apply real, tomar un **job nuevo** de la hoja/CSV del pipeline (`output/jobs-result.csv`).
 
-### 2.2 Dry-run para pruebas
+### 2.2 Estados en Excel (`ApplyStatus`)
+
+| Estado | Final | Cuándo |
+|---|---|---|
+| `pendiente` | No | Default; sin Easy Apply; dry-run hasta Submit |
+| `enviada` | No* | Applied en UI o Submit+Done en productivo |
+| `cerrada` | Sí | Marcado manual / negocio — no se pisa |
+| `descartada` | Sí | Marcado manual / negocio — no se pisa |
+
+\* `enviada` no pisa `cerrada` ni `descartada`.
+
+### 2.3 Dry-run (pruebas) vs productivo
+
 ```bash
-npm run easy-apply:dry-run
+npm run easy-apply:dry-run   # pruebas: hasta Submit, SIN click; Excel sigue pendiente
+npm run easy-apply           # productivo: Submit + Done → Excel enviada
 ```
 
-- Cola Excel: `output/apply/apply-queue.csv` (+ columnas `EasyApply`/`ApplyStatus` en `output/jobs-result.csv`).
-- Si **no** hay Easy Apply y la página dice Applied / Application submitted / Ya postulaste → marcar **applied**.
-- Si **no** hay Easy Apply y no está Applied → marcar **closed** y continuar con el siguiente **pending**.
-- Si hay Easy Apply → avanzar hasta **ver** Submit y **no clickear** (dry_ok).
+- Cola: `output/apply/apply-queue.csv` (+ sync `jobs-result.csv`).
+- Applied / Application submitted / Ya postulaste → **enviada** (salvo final).
+- Sin Easy Apply → **sigue pendiente** → siguiente.
+- Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
+- Productivo + Easy Apply → Submit → **Done** → **enviada**.
 - Idioma base LinkedIn: **inglés**.
 
-Env: `DRY_RUN_MAX=10` (default), `DRY_RUN_ALL=1` para no parar en el primer dry_ok.
+Env dry-run: `DRY_RUN_MAX=10`, `DRY_RUN_ALL=1`.
 
 ### 2.3 Preguntas Sí/No
 Aparecen de forma variable. Heurística: defaults + patrones en `apply-answers.example.json`; preguntas desconocidas → registrar en `output/apply/apply-answers.json` (gitignore) para reutilizar (motor completo = B17-2 / B17-4).

@@ -1,7 +1,12 @@
-// Dry-run Easy Apply sobre la cola CSV: sin Submit.
-// Si no hay botón Easy Apply → (si Applied → applied; si no → closed) y sigue al siguiente pending.
+// Dry-run Easy Apply (modo pruebas): hasta ver Submit, SIN click; Excel sigue pendiente.
 //
 //   npm run easy-apply:dry-run
+//
+// Flujo:
+// - cerrada/descartada → no tocar
+// - Applied en UI → Excel enviada (salvo final)
+// - Sin Easy Apply → Excel sigue pendiente → siguiente
+// - Con Easy Apply → dry-run hasta Submit → Excel pendiente
 
 import { chromium, type Page } from "playwright";
 import {
@@ -15,9 +20,11 @@ import {
 } from "./apply/detect-apply.js";
 import {
   ensureQueueFromMatched,
+  isFinalStatus,
   loadQueue,
-  rebuildQueueFromMatched,
+  markEnviadaIfAllowed,
   nextPending,
+  rebuildQueueFromMatched,
   toApplyJob,
   updateQueueRow,
   APPLY_QUEUE_PATH,
@@ -55,8 +62,7 @@ async function maybeAnswerYesNo(page: Page): Promise<void> {
   }
 }
 
-/** Avanza el modal hasta ver Submit; no lo clickea. */
-async function dryRunThroughModal(page: Page): Promise<"dry_ok" | "blocked"> {
+async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete"> {
   for (let i = 0; i < 8; i++) {
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
@@ -65,8 +71,8 @@ async function dryRunThroughModal(page: Page): Promise<"dry_ok" | "blocked"> {
       .getByRole("button", { name: /Submit application|Enviar solicitud/i })
       .first();
     if (await submit.isVisible({ timeout: 1000 }).catch(() => false)) {
-      console.log("   Submit visible — DRY-RUN: no se hace click.");
-      return "dry_ok";
+      console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
+      return "ok";
     }
 
     const review = page
@@ -89,13 +95,18 @@ async function dryRunThroughModal(page: Page): Promise<"dry_ok" | "blocked"> {
 
     break;
   }
-  return "blocked";
+  return "incomplete";
 }
 
 async function processJob(
   page: Page,
   row: QueueRow
-): Promise<"dry_ok" | "closed" | "applied" | "blocked"> {
+): Promise<"dry_ok" | "skip_no_ea" | "enviada" | "skip_final" | "incomplete"> {
+  if (isFinalStatus(row.status)) {
+    console.log(`\n↷ Skip ${row.jobId} (estado final: ${row.status})`);
+    return "skip_final";
+  }
+
   const job = toApplyJob(row);
   console.log(`\n→ [${row.matchPercent}%] ${row.company} — ${row.title}`);
   console.log(`   ${job.url}`);
@@ -104,66 +115,62 @@ async function processJob(
   await sleep(2500);
 
   if (await detectAlreadyApplied(page)) {
-    updateQueueRow(row.jobId, {
-      status: "applied",
-      easyApply: row.easyApply || "yes",
-      reason: "Already applied (detectado en página)",
-    });
-    setApplicationStatus(
-      { id: row.jobId, title: row.title, company: row.company },
-      "applied"
-    );
-    console.log("   ✓ Already applied → marcado applied en Excel");
-    return "applied";
+    const marked = markEnviadaIfAllowed(row.jobId, "Already applied (detectado en página)");
+    if (marked) {
+      setApplicationStatus(
+        { id: row.jobId, title: row.title, company: row.company },
+        "applied"
+      );
+      console.log("   ✓ Applied → Excel: enviada");
+    } else {
+      console.log(`   ↷ Applied en UI pero Excel queda ${row.status} (final)`);
+    }
+    return "enviada";
   }
 
   const hasEasy = await findEasyApplyControl(page, 6000);
   if (!hasEasy) {
     updateQueueRow(row.jobId, {
-      status: "closed",
+      status: "pendiente",
       easyApply: "no",
-      reason: "Sin botón Easy Apply (no Applied) → cerrado",
+      reason: "Sin Easy Apply en esta visita — sigue pendiente",
     });
-    console.log("   ✗ Sin Easy Apply → marcado closed; siguiente pendiente");
-    return "closed";
+    console.log("   … Sin Easy Apply → Excel sigue pendiente; siguiente");
+    return "skip_no_ea";
   }
 
-  updateQueueRow(row.jobId, { easyApply: "yes", reason: "Easy Apply visible" });
+  updateQueueRow(row.jobId, {
+    status: "pendiente",
+    easyApply: "yes",
+    reason: "Easy Apply visible (dry-run)",
+  });
 
   const clicked = await clickEasyApply(page);
   if (!clicked) {
     updateQueueRow(row.jobId, {
-      status: "blocked",
-      reason: "Easy Apply visible pero click falló",
+      status: "pendiente",
+      reason: "Easy Apply visible pero click falló — sigue pendiente",
     });
-    return "blocked";
+    return "incomplete";
   }
   await sleep(2000);
 
   const result = await dryRunThroughModal(page);
-  if (result === "dry_ok") {
-    updateQueueRow(row.jobId, {
-      status: "dry_ok",
-      easyApply: "yes",
-      reason: "Dry-run hasta Submit (sin enviar)",
-    });
-    console.log("   ✓ dry_ok");
-  } else {
-    updateQueueRow(row.jobId, {
-      status: "blocked",
-      easyApply: "yes",
-      reason: "Modal incompleto en dry-run",
-    });
-    console.log("   ✗ blocked (modal incompleto)");
-  }
+  updateQueueRow(row.jobId, {
+    status: "pendiente",
+    easyApply: "yes",
+    reason:
+      result === "ok"
+        ? "Dry-run OK hasta Submit (sin enviar) — pendiente"
+        : "Dry-run incompleto — pendiente",
+  });
 
-  // Cerrar modal si quedó abierto
   const dismiss = page.locator("button[aria-label='Dismiss'], button[aria-label='Cerrar']").first();
   if (await dismiss.isVisible({ timeout: 800 }).catch(() => false)) {
     await dismiss.click().catch(() => {});
   }
 
-  return result;
+  return result === "ok" ? "dry_ok" : "incomplete";
 }
 
 async function main() {
@@ -174,7 +181,9 @@ async function main() {
       ? rebuildQueueFromMatched()
       : ensureQueueFromMatched();
   console.log(`📋 Cola: ${APPLY_QUEUE_PATH}`);
-  console.log(`   Total: ${rows.length} · pending: ${rows.filter((r) => r.status === "pending").length}`);
+  console.log(
+    `   Total: ${rows.length} · pendiente: ${rows.filter((r) => r.status === "pendiente").length}`
+  );
 
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({ headless: false, slowMo: 150 });
@@ -186,32 +195,32 @@ async function main() {
   const page = await context.newPage();
 
   let dryOk = 0;
-  let closed = 0;
-  let applied = 0;
+  let enviada = 0;
+  let skipNoEa = 0;
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
+  const seen = new Set<string>();
 
   for (let n = 0; n < maxJobs; n++) {
-    const row = nextPending(true);
+    const row = nextPending(true, seen);
     if (!row) {
-      console.log("\nNo hay más pending con Easy Apply posible.");
+      console.log("\nNo hay más pendiente distinto.");
       break;
     }
+    seen.add(row.jobId);
 
     const outcome = await processJob(page, row);
     if (outcome === "dry_ok") {
       dryOk++;
-      // Un dry_ok exitoso alcanza; salir (o seguir si DRY_RUN_ALL=1)
       if (process.env.DRY_RUN_ALL !== "1") break;
-    } else if (outcome === "closed") closed++;
-    else if (outcome === "applied") applied++;
+    } else if (outcome === "enviada") enviada++;
+    else if (outcome === "skip_no_ea") skipNoEa++;
 
     await sleep(1500 + Math.random() * 1000);
   }
 
   await browser.close();
-  console.log(`\nResumen dry-run: dry_ok=${dryOk} closed=${closed} applied=${applied}`);
-  console.log(`Excel cola: ${APPLY_QUEUE_PATH}`);
-  console.log(`También sincronizado en output/jobs-result.csv (columnas EasyApply/ApplyStatus).`);
+  console.log(`\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} sin_EA_pendiente=${skipNoEa}`);
+  console.log(`Excel: ${APPLY_QUEUE_PATH}`);
 }
 
 main().catch((err) => {

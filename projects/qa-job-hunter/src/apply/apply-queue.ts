@@ -1,5 +1,6 @@
-// Cola de Easy Apply en CSV (Excel): pending → closed | applied | dry_ok | submitted.
-// Archivo: output/apply/apply-queue.csv (también actualiza jobs-result.csv si existe).
+// Cola Easy Apply en CSV (Excel).
+// Estados: pendiente | enviada | cerrada | descartada
+// Archivo: output/apply/apply-queue.csv (+ sync jobs-result.csv).
 
 import fs from "fs";
 import path from "path";
@@ -7,7 +8,8 @@ import { APPLY_DIR, MIN_MATCH, OUTPUT_PATH } from "./paths.js";
 import type { ApplyJob } from "./types.js";
 import type { AnalysisResult, JobMatch } from "../types.js";
 
-export type QueueStatus = "pending" | "closed" | "applied" | "dry_ok" | "submitted" | "blocked";
+/** Estados de postulación en Excel. cerrada/descartada son finales. */
+export type QueueStatus = "pendiente" | "enviada" | "cerrada" | "descartada";
 
 export interface QueueRow {
   jobId: string;
@@ -22,6 +24,8 @@ export interface QueueRow {
 }
 
 export const APPLY_QUEUE_PATH = path.join(APPLY_DIR, "apply-queue.csv");
+
+const FINAL_STATUSES: QueueStatus[] = ["cerrada", "descartada"];
 
 const HEADERS = [
   "JobId",
@@ -63,6 +67,23 @@ function parseCsvLine(line: string): string[] {
   return cells;
 }
 
+/** Normaliza estados legacy (pending/applied/closed/…) al vocabulario actual. */
+export function normalizeStatus(raw: string): QueueStatus {
+  const s = (raw || "").trim().toLowerCase();
+  if (s === "enviada" || s === "applied" || s === "submitted") return "enviada";
+  // dry_ok legacy = prueba sin enviar → pendiente
+  if (s === "dry_ok" || s === "pendiente" || s === "pending" || s === "blocked" || s === "") {
+    return "pendiente";
+  }
+  if (s === "cerrada" || s === "closed") return "cerrada";
+  if (s === "descartada" || s === "discarded" || s === "skipped") return "descartada";
+  return "pendiente";
+}
+
+export function isFinalStatus(status: QueueStatus): boolean {
+  return FINAL_STATUSES.includes(status);
+}
+
 /** Preferir currentJobId numérico de LinkedIn; el campo id del scrape a veces es basura. */
 export function jobIdFromUrl(url: string): string {
   const m = url.match(/currentJobId=(\d+)/) || url.match(/\/jobs\/view\/(\d+)/);
@@ -81,6 +102,10 @@ export function loadQueue(): QueueRow[] {
   if (lines.length < 2) return [];
   return lines.slice(1).map((line) => {
     const c = parseCsvLine(line);
+    const rawStatus = c[6] ?? "pendiente";
+    // dry_ok legacy → pendiente (nunca fue enviada)
+    const status =
+      rawStatus.trim().toLowerCase() === "dry_ok" ? "pendiente" : normalizeStatus(rawStatus);
     return {
       jobId: c[0] ?? "",
       matchPercent: Number(c[1] || 0),
@@ -88,7 +113,7 @@ export function loadQueue(): QueueRow[] {
       company: c[3] ?? "",
       url: c[4] ?? "",
       easyApply: (c[5] as QueueRow["easyApply"]) || "",
-      status: (c[6] as QueueStatus) || "pending",
+      status,
       reason: c[7] ?? "",
       updatedAt: c[8] ?? "",
     };
@@ -135,7 +160,7 @@ export function ensureQueueFromMatched(): QueueRow[] {
     : ((raw as AnalysisResult).matchedJobs ?? []);
 
   for (const m of matches.filter((j) => j.matchPercent >= MIN_MATCH)) {
-    const id = jobIdFromUrl(m.url) || ( /^\d+$/.test(m.id) ? m.id : "");
+    const id = jobIdFromUrl(m.url) || (/^\d+$/.test(m.id) ? m.id : "");
     if (!id) continue;
     if (byId.has(id)) continue;
     byId.set(id, {
@@ -145,7 +170,7 @@ export function ensureQueueFromMatched(): QueueRow[] {
       url: canonicalJobUrl(m.url, id),
       matchPercent: m.matchPercent,
       easyApply: "",
-      status: "pending",
+      status: "pendiente",
       reason: "",
       updatedAt: new Date().toISOString(),
     });
@@ -156,6 +181,10 @@ export function ensureQueueFromMatched(): QueueRow[] {
   return rows;
 }
 
+/**
+ * Actualiza una fila. No pisa estados finales (cerrada / descartada).
+ * Para marcar enviada desde UI Applied, usar markEnviadaIfAllowed.
+ */
 export function updateQueueRow(
   jobId: string,
   patch: Partial<Pick<QueueRow, "easyApply" | "status" | "reason">>
@@ -163,6 +192,19 @@ export function updateQueueRow(
   const rows = loadQueue();
   const idx = rows.findIndex((r) => r.jobId === jobId);
   if (idx < 0) return rows;
+
+  if (isFinalStatus(rows[idx].status)) {
+    // Solo permitir actualizar reason/easyApply, no el status final.
+    const { status: _ignore, ...rest } = patch;
+    rows[idx] = {
+      ...rows[idx],
+      ...rest,
+      updatedAt: new Date().toISOString(),
+    };
+    saveQueue(rows);
+    return rows;
+  }
+
   rows[idx] = {
     ...rows[idx],
     ...patch,
@@ -172,14 +214,36 @@ export function updateQueueRow(
   return rows;
 }
 
-/** Siguiente pendiente. Si preferEasyApply, prioriza easyApply=yes; si no hay, prueba unknown. */
-export function nextPending(preferKnownEasyApply = true): QueueRow | null {
-  const rows = loadQueue().filter((r) => r.status === "pending");
+/** Marca enviada solo si el estado actual no es cerrada/descartada. */
+export function markEnviadaIfAllowed(jobId: string, reason: string): boolean {
+  const rows = loadQueue();
+  const row = rows.find((r) => r.jobId === jobId);
+  if (!row) return false;
+  if (isFinalStatus(row.status)) return false;
+  updateQueueRow(jobId, { status: "enviada", reason, easyApply: row.easyApply || "yes" });
+  return true;
+}
+
+/**
+ * Siguiente pendiente.
+ * Orden: easyApply=yes → unknown → no (reintento).
+ * `excludeJobIds` evita re-tomar el mismo aviso en la misma corrida.
+ */
+export function nextPending(
+  preferKnownEasyApply = true,
+  excludeJobIds: Set<string> = new Set()
+): QueueRow | null {
+  const rows = loadQueue().filter(
+    (r) => r.status === "pendiente" && !excludeJobIds.has(r.jobId)
+  );
+  if (rows.length === 0) return null;
   if (preferKnownEasyApply) {
     const known = rows.find((r) => r.easyApply === "yes");
     if (known) return known;
+    const unknown = rows.find((r) => r.easyApply === "");
+    if (unknown) return unknown;
   }
-  return rows.find((r) => r.easyApply !== "no") ?? null;
+  return rows[0] ?? null;
 }
 
 export function toApplyJob(row: QueueRow): ApplyJob {
@@ -199,7 +263,6 @@ export function rebuildQueueFromMatched(): QueueRow[] {
   return ensureQueueFromMatched();
 }
 
-/** Añade/actualiza columnas ApplyStatus;EasyApply en jobs-result.csv (Excel del pipeline). */
 function syncJobsResultCsv(rows: QueueRow[]): void {
   const csvPath = OUTPUT_PATH.replace(/\.json$/i, ".csv");
   if (!fs.existsSync(csvPath)) return;
@@ -218,9 +281,7 @@ function syncJobsResultCsv(rows: QueueRow[]): void {
   }
 
   const byUrlId = new Map<string, QueueRow>();
-  for (const r of rows) {
-    byUrlId.set(r.jobId, r);
-  }
+  for (const r of rows) byUrlId.set(r.jobId, r);
 
   const out = [headerCells.map(escapeCell).join(";")];
   for (const line of lines.slice(1)) {

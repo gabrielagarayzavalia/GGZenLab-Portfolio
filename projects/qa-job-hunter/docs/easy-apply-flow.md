@@ -100,8 +100,8 @@ Priorizar `getByRole` / `aria-label` (EN observados + fallbacks ES).
 
 | Elemento | Selector | Estabilidad | Nota |
 |---|---|---|---|
-| Easy Apply | `getByRole('link', { name: 'Easy Apply to this job' })` | Estable | Observado EN |
-| Easy Apply (ES/alt) | `button[aria-label*='Easy Apply']`, `…Solicitud sencilla` | Estable | Fallback |
+| Easy Apply | `getByRole('link', { name: 'Easy Apply to this job' })` | Estable | **Es link, no button** (codegen Macro/GLOBAL HR) |
+| Easy Apply (fallback) | otros `link`/`button` con Easy Apply | Heurística | Solo si falla el primario |
 | Continuar | `getByRole('button', { name: /Continue to next step\|Next/i })` | Estable | EN |
 | Continuar (ES) | `button[aria-label*='Continuar']` | Estable | |
 | Revisar | `getByRole('button', { name: /Review your application/i })` | Estable | |

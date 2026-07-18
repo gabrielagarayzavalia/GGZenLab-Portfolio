@@ -156,7 +156,7 @@ async function processJob(
     if (signal === "applied") {
       const marked = markEnviadaIfAllowed(
         row.jobId,
-        "Application submitted / Applied (sin botón Easy Apply)"
+        "Application submitted / Applied (sin link Easy Apply)"
       );
       if (marked) {
         setApplicationStatus(

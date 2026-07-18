@@ -69,39 +69,39 @@ export async function detectPageApplySignal(page: Page): Promise<PageApplySignal
   return "unknown";
 }
 
+/** Confirmado en codegen: NO es button — es link con este accessible name. */
+export const EASY_APPLY_LINK_NAME = "Easy Apply to this job";
+
+/** Selector primario (misma línea que codegen). */
+export function primaryEasyApplyLink(page: Page): Locator {
+  return page.getByRole("link", { name: EASY_APPLY_LINK_NAME });
+}
+
 /**
- * Solo el Easy Apply del aviso actual.
- * En LinkedIn a veces es <button>, a veces <a> "Easy Apply to this job"
- * (como en recordings/easy-apply/simple-apply.spec.ts).
- * Evita links de "similar jobs" → search-results (filtrado en isSafeEasyApply).
+ * Easy Apply del aviso actual.
+ * Primario: link "Easy Apply to this job" (grabación real).
+ * Fallbacks: otros links/botones; filtra search-results.
  */
 export function easyApplyCandidates(page: Page): Locator[] {
   const card = topCard(page);
   const main = page.locator("main").first();
   return [
-    // Lo que ya funcionó en grabación real (link accesible)
+    primaryEasyApplyLink(page),
     page.getByRole("link", { name: /Easy Apply to this job/i }),
     page.getByRole("link", { name: /^Easy Apply$/i }),
     main.getByRole("link", { name: /Easy Apply/i }),
-    // Botón top card / apply button
+    card.getByRole("link", { name: /Easy Apply/i }),
+    // Fallbacks legacy (algunas UIs aún usan button)
     card.locator("button.jobs-apply-button"),
     card.getByRole("button", { name: /Easy Apply/i }),
-    card.locator("button:has-text('Easy Apply')"),
-    card.locator('[class*="jobs-apply-button"]'),
-    card.getByRole("link", { name: /Easy Apply/i }),
     page.locator("button.jobs-apply-button--top-card"),
-    page.locator("button.jobs-apply-button").first(),
-    page.locator(".jobs-unified-top-card button.jobs-apply-button"),
-    main.getByRole("button", { name: /Easy Apply/i }),
-    main.locator("button:has-text('Easy Apply')").first(),
     page.getByRole("button", { name: /Easy Apply/i }),
-    // aria-label genérico LinkedIn
     page.locator("[aria-label*='Easy Apply']").first(),
   ];
 }
 
 async function isSafeEasyApply(el: Locator): Promise<boolean> {
-  if (!(await el.isVisible({ timeout: 300 }).catch(() => false))) return false;
+  if (!(await el.isVisible({ timeout: 500 }).catch(() => false))) return false;
   const tag = await el.evaluate((n) => n.tagName.toLowerCase()).catch(() => "");
   if (tag === "a") {
     const href = (await el.getAttribute("href").catch(() => "")) ?? "";
@@ -113,10 +113,20 @@ async function isSafeEasyApply(el: Locator): Promise<boolean> {
 
 export async function findEasyApplyControl(
   page: Page,
-  timeoutMs = 10000
+  timeoutMs = 15000
 ): Promise<boolean> {
-  await new Promise((r) => setTimeout(r, 1000));
-  const deadline = Date.now() + timeoutMs;
+  // Primario: waitFor explícito (más fiable que poll corto)
+  const primary = primaryEasyApplyLink(page).first();
+  if (
+    await primary
+      .waitFor({ state: "visible", timeout: Math.min(timeoutMs, 12000) })
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    return true;
+  }
+
+  const deadline = Date.now() + Math.max(2000, timeoutMs - 12000);
   while (Date.now() < deadline) {
     if (page.isClosed()) return false;
     for (const loc of easyApplyCandidates(page)) {
@@ -128,12 +138,21 @@ export async function findEasyApplyControl(
 }
 
 export async function clickEasyApply(page: Page): Promise<boolean> {
+  // Misma acción que codegen
+  const primary = primaryEasyApplyLink(page).first();
+  if (await isSafeEasyApply(primary)) {
+    await primary.scrollIntoViewIfNeeded().catch(() => {});
+    await primary.click({ timeout: 5000 });
+    await new Promise((r) => setTimeout(r, 800));
+    if (!/search-results/i.test(page.url())) return true;
+    await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
+  }
+
   for (const loc of easyApplyCandidates(page)) {
     const el = loc.first();
     if (!(await isSafeEasyApply(el))) continue;
     await el.scrollIntoViewIfNeeded().catch(() => {});
     await el.click({ timeout: 5000 });
-    // Si navegó a search, no era el botón correcto
     await new Promise((r) => setTimeout(r, 800));
     if (/search-results/i.test(page.url())) {
       await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});

@@ -83,12 +83,12 @@ async function tryEasyApply(
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
     await sleep(2500);
 
-    // Easy Apply visible manda; applied/closed solo si NO hay botón.
+    // Easy Apply visible manda; applied/closed solo si NO hay link Easy Apply.
     if (!(await findEasyApplyControl(page, 10000))) {
       const signal = await detectPageApplySignal(page);
       if (signal === "applied") {
         record.status = "submitted";
-        record.reason = "Application submitted / Applied (sin botón Easy Apply)";
+        record.reason = "Application submitted / Applied (sin link Easy Apply)";
         const marked = markEnviadaIfAllowed(job.jobId, record.reason);
         if (marked) {
           setApplicationStatus(

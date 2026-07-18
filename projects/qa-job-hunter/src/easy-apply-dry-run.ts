@@ -24,6 +24,7 @@ import {
   cssPrimaryActions,
   findButtonOrLink,
   MODAL_LABELS,
+  resolveApplyScope,
 } from "./apply/modal-controls.js";
 import {
   ensureQueueFromMatched,
@@ -59,9 +60,11 @@ export class EasyApplyModalNotOpenedError extends Error {
 }
 
 async function maybeFillOptionalTexts(page: Page): Promise<void> {
-  const dialog = page.getByRole("dialog").first();
-  if (!(await dialog.isVisible({ timeout: 1500 }).catch(() => false))) return;
-  const areas = dialog.locator("textarea");
+  const root = page
+    .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
+    .first();
+  if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return;
+  const areas = root.locator("textarea");
   const n = await areas.count();
   for (let i = 0; i < n; i++) {
     const area = areas.nth(i);
@@ -84,40 +87,45 @@ async function maybeAnswerYesNo(page: Page): Promise<void> {
 }
 
 async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete" | "no_modal"> {
-  // Solo dentro del modal Easy Apply (evitar "Next" del carrusel LinkedIn).
-  const dialog = page.getByRole("dialog").first();
-  if (!(await dialog.isVisible({ timeout: 8000 }).catch(() => false))) {
-    console.error("   ✗ Modal Easy Apply NO visible tras el click");
+  // Modal clásico (dialog) o flujo SDUI en /apply/
+  const scope = await resolveApplyScope(page, 12000);
+  if (!scope) {
+    console.error("   ✗ Modal/flujo Easy Apply NO visible tras el click");
+    console.error(`   URL actual: ${page.url()}`);
     return "no_modal";
   }
-  console.log("   Modal Easy Apply abierto");
+  console.log(
+    scope === page
+      ? "   Flujo Easy Apply abierto (página /apply/ o SDUI)"
+      : "   Modal Easy Apply abierto"
+  );
 
   for (let i = 0; i < 8; i++) {
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
 
     // button o link (LinkedIn mezcla ambos)
-    if (await findButtonOrLink(dialog, MODAL_LABELS.submit, 1000)) {
+    if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return "ok";
     }
 
-    if (await clickButtonOrLink(dialog, MODAL_LABELS.review, 800)) {
+    if (await clickButtonOrLink(scope, MODAL_LABELS.review, 800)) {
       await sleep(1200);
       continue;
     }
 
-    // Preferir Continue — Next solo scoped al dialog (no carrusel).
-    if (await clickButtonOrLink(dialog, MODAL_LABELS.continue, 800)) {
+    // Preferir Continue — Next solo dentro del scope (no carrusel del feed).
+    if (await clickButtonOrLink(scope, MODAL_LABELS.continue, 800)) {
       await sleep(1200);
       continue;
     }
-    if (await clickButtonOrLink(dialog, MODAL_LABELS.next, 500)) {
+    if (await clickButtonOrLink(scope, MODAL_LABELS.next, 500)) {
       await sleep(1200);
       continue;
     }
 
-    const cssNext = cssPrimaryActions(dialog);
+    const cssNext = cssPrimaryActions(scope);
     if (await cssNext.isVisible({ timeout: 500 }).catch(() => false)) {
       await cssNext.click({ timeout: 5000 }).catch(() => {});
       await sleep(1200);

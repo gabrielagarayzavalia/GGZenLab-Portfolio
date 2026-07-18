@@ -27,6 +27,7 @@ import {
   cssPrimaryActions,
   findButtonOrLink,
   MODAL_LABELS,
+  resolveApplyScope,
 } from "./apply/modal-controls.js";
 import {
   canonicalJobUrl,
@@ -133,10 +134,8 @@ async function tryEasyApply(
     }
     await sleep(2000);
 
-    const modal = page
-      .locator(".jobs-easy-apply-modal, [data-test-modal], div[role='dialog']")
-      .first();
-    if (!(await modal.isVisible({ timeout: 8000 }).catch(() => false))) {
+    const modal = await resolveApplyScope(page, 12000);
+    if (!modal) {
       record.status = "blocked";
       record.reason = "Modal Easy Apply no abrió";
       return record;
@@ -149,13 +148,16 @@ async function tryEasyApply(
       steps++;
 
       const openTextareas = await page
-        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea")
+        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea, textarea")
         .count();
       const requiredEmpty = await page
         .locator(".jobs-easy-apply-modal input[required]:not([value]), [role='dialog'] input[required]")
         .count();
 
-      const bodyText = await modal.innerText().catch(() => "");
+      const bodyText =
+        modal === page
+          ? await page.locator("main").innerText().catch(() => "")
+          : await modal.innerText().catch(() => "");
 
       if (/assessment|evaluaci[oó]n|quiz|test/i.test(bodyText)) {
         record.status = "blocked";

@@ -70,26 +70,33 @@ export async function detectPageApplySignal(page: Page): Promise<PageApplySignal
 }
 
 /**
- * Solo el Easy Apply del aviso actual (botón top-card).
- * Evita links de "similar jobs" que navegan a search-results.
+ * Solo el Easy Apply del aviso actual.
+ * En LinkedIn a veces es <button>, a veces <a> "Easy Apply to this job"
+ * (como en recordings/easy-apply/simple-apply.spec.ts).
+ * Evita links de "similar jobs" → search-results (filtrado en isSafeEasyApply).
  */
 export function easyApplyCandidates(page: Page): Locator[] {
   const card = topCard(page);
   const main = page.locator("main").first();
   return [
-    // Botón real del top card (como en tu captura)
+    // Lo que ya funcionó en grabación real (link accesible)
+    page.getByRole("link", { name: /Easy Apply to this job/i }),
+    page.getByRole("link", { name: /^Easy Apply$/i }),
+    main.getByRole("link", { name: /Easy Apply/i }),
+    // Botón top card / apply button
     card.locator("button.jobs-apply-button"),
     card.getByRole("button", { name: /Easy Apply/i }),
     card.locator("button:has-text('Easy Apply')"),
     card.locator('[class*="jobs-apply-button"]'),
-    // Link legacy con nombre explícito del aviso actual (no similares)
-    card.getByRole("link", { name: /Easy Apply to this job/i }),
-    // Fallbacks: botón en main (UI nueva puede no usar .jobs-unified-top-card)
+    card.getByRole("link", { name: /Easy Apply/i }),
     page.locator("button.jobs-apply-button--top-card"),
+    page.locator("button.jobs-apply-button").first(),
     page.locator(".jobs-unified-top-card button.jobs-apply-button"),
-    main.getByRole("button", { name: /^Easy Apply$/i }),
+    main.getByRole("button", { name: /Easy Apply/i }),
     main.locator("button:has-text('Easy Apply')").first(),
-    page.getByRole("button", { name: /^Easy Apply$/i }),
+    page.getByRole("button", { name: /Easy Apply/i }),
+    // aria-label genérico LinkedIn
+    page.locator("[aria-label*='Easy Apply']").first(),
   ];
 }
 

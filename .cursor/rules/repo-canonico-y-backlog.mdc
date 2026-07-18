@@ -1,0 +1,37 @@
+---
+description: Repo canónico (GGZenLab-Portfolio) y revisión obligatoria del backlog antes de trabajar
+alwaysApply: true
+---
+
+# Repo canónico y backlog — GGZenLab Portfolio
+
+## Repo canónico (leer primero)
+
+- **El único repo de este monorepo es:** `https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio`
+  (remote `origin`, rama principal `main`).
+- **NO** busques, referencies, clones ni asumas el repo viejo **`qa-portfolio`**. Está **deprecado** y no se usa más.
+- Si ves `qa-portfolio` en el código, es solo **nombre interno/legacy** (redirect `/qa-portfolio/` → `/qa/`, `container_name`, `_postman_id`), **no** un repo aparte. No lo confundas con el remoto ni cambies el origin por él.
+- Antes de operaciones de git/GitHub (PR, issues, links), verificá el remoto real:
+  `git remote -v` debe mostrar `gabrielagarayzavalia/GGZenLab-Portfolio`.
+- Al enlazar issues/PRs o el sitio, usá siempre:
+  - Repo: `gabrielagarayzavalia/GGZenLab-Portfolio`
+  - Sitio live: `https://gabrielagarayzavalia.github.io/GGZenLab-Portfolio/`
+
+## Revisar el backlog antes de arrancar (reutilizar conocimiento)
+
+Antes de investigar, diseñar labs o implementar features/issues, **revisá el backlog** para reutilizar lo ya estudiado/investigado y no repetir trabajo. Fuentes, en orden:
+
+1. **Backlog raíz del monorepo:** [`BACKLOG.md`](../../BACKLOG.md) — estado global (Published / In progress / Planned), IDs `P-*` y `B-*`.
+2. **Backlog del subproyecto** correspondiente, p. ej.:
+   - [`projects/qa-job-hunter/BACKLOG.md`](../../projects/qa-job-hunter/BACKLOG.md)
+   - [`projects/qa-job-hunter/BACKLOG-REFINED.md`](../../projects/qa-job-hunter/BACKLOG-REFINED.md) (stories refinadas + IDs de GitHub)
+3. **Issues/Projects en GitHub** del repo canónico (labels, épicas, user stories) cuando la tarea mapea a issues (`#NN`).
+4. Vista publicada del backlog: `docs/backlog/index.html`.
+
+### Cómo usarlo
+
+- Buscá el **ID** (`B-06`, `P-JH-…`, `#NN`) o el tema en esos archivos **antes** de empezar; si ya hay decisión, diseño o investigación previa, **continuá desde ahí** en vez de reabrir el análisis.
+- Si trabajás en un subproyecto, priorizá su backlog local; el raíz es el índice general.
+- Al cerrar una tarea, **actualizá el estado** en el backlog correspondiente (mové el ítem a Done / linkeá el PR o issue).
+
+> El agente **"Backlog features and issues"** debe apoyarse en estas fuentes como memoria del proyecto: primero leer el backlog, después proponer/implementar.

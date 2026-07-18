@@ -1,39 +1,55 @@
 ---
-description: Estimaciones de tiempo, progreso durante la tarea y comunicación más verbose
+description: Comunicación TDAH-friendly con tiempos, heartbeat de progreso y sin re-pedir permisos
 alwaysApply: true
 ---
 
-# Comunicación: tiempos, progreso y verbosidad
+# Comunicación: tiempos, progreso y verbosidad (TDAH-friendly)
 
-## Al iniciar una tarea
+Formato pensado para procesar rápido SIN perder estado. Español siempre.
 
-- Antes de codear o delegar, decí **qué vas a hacer** en 2–4 oraciones concretas.
-- Incluí una **estimación de tiempo** honesta (ej. "≈ 5 min", "≈ 15–20 min", "puede llevar 1 h si hay que debuggear CI").
-- Si hay pasos claros, listá un mini-plan numerado (3–5 ítems máximo).
+## Formato base de cada respuesta
 
-## Durante la ejecución
+- **TL;DR arriba** (1–2 líneas) con lo esencial y el próximo paso.
+- Bloques cortos, bullets, **negrita** en lo accionable. Nada de muros de texto.
+- Una cosa a la vez: una decisión principal y un único "siguiente paso" por mensaje.
+- No más de ~3 opciones o preguntas juntas; si hay más, priorizá y dejá el resto.
+- Cerrá con UNA línea de "qué sigue" o "qué necesito de vos".
 
-- Si una operación tarda **más de ~30 s** (build, tests, push, CI, subagente), avisá qué está corriendo y **cuánto lleva** (ej. "Llevamos ~2 min esperando CI rest-assured").
-- Tras cada paso relevante, un **micro-update** de 1–2 líneas: qué hiciste, qué encontraste, qué sigue.
-- No desaparezcas en silencio: si vas a lanzar subagente, shell largo o varios archivos, decilo antes.
+## Estimación de tiempo (OBLIGATORIA)
+
+- Antes de cualquier tarea con tool calls, arrancá con una línea:
+  `⏱ Estimado: ~X min — <qué voy a hacer en 1 frase>`.
+- Única excepción: respuestas de una sola frase o "ok/sí" → sin estimación.
+
+## Heartbeat de progreso (NO desaparezcas en silencio)
+
+- Si una operación tarda **>30 s** (build, tests, push, CI, subagente, shell largo),
+  avisá ANTES qué vas a correr y el estimado.
+- Mientras corre, dá señales de vida: "Llevamos ~2 min en CI, sigo esperando".
+- Tras cada paso relevante: micro-update de 1–2 líneas (qué hice / qué encontré / qué sigue).
+- Si algo se cuelga o pasa mucho del estimado: decilo explícito y proponé un plan B.
+
+## Cuando te trabás (destrabar rápido)
+
+- Si estás bloqueado, NO te quedes en silencio ni des vueltas:
+  decí el bloqueo concreto en 1–2 líneas y hacé UNA pregunta accionable para destrabar.
+- Mostrá el error real (no lo escondas en un párrafo) + el siguiente paso propuesto.
+- Resaltá deadlines, bloqueos y riesgos; nunca los entierres dentro de un párrafo.
+
+## Permisos (no re-preguntar lo ya autorizado)
+
+- Si el usuario ya autorizó algo en la sesión (rama, push, PR, correr X, delegar),
+  NO vuelvas a pedir permiso: procedé y avisá qué hacés.
+- Solo re-preguntá ante algo NUEVO, destructivo o fuera del alcance ya acordado.
+- Defaults ya acordados en el hilo se asumen; no re-confirmar cada mensaje.
 
 ## Al terminar (o bloquearte)
 
-- Resumí **qué quedó hecho**, **cuánto tardó aprox.** y **qué falta** (si aplica).
-- Si falló algo, decí qué intentaste, el error concreto y el siguiente paso propuesto.
+- Resumí: **qué quedó hecho**, **cuánto tardó aprox.**, **qué falta**.
+- Si falló: qué intentaste + error concreto + siguiente paso.
 
-## Tono
+## Subagentes / Multitask
 
-- Un poco **más verbose** que lo mínimo: preferí contexto útil sobre telegráfico.
-- Sin relleno ni repetir lo obvio; cada párrafo debe aportar estado, tiempo o decisión.
-- Respondé en **español** salvo que pida otro idioma.
-
-## Multitask / subagentes
-
-- Al delegar: decí **por qué**, **cuánto estimás** y **cuándo reportás** (ej. "Subagente en background; te aviso al terminar (~10 min)").
-- No dupliques subagentes para la misma tarea; retomá el existente si falló.
-
-## Excepciones (menos verbose)
-
-- Preguntas puntuales de una línea → respuesta directa, sin plan ni estimación.
-- "Sí" / "ok" / confirmaciones → breve, sin re-explicar todo el contexto.
+- Al delegar: por qué, estimación y cuándo reportás
+  (ej. "Subagente en background; te aviso al terminar (~10 min)").
+- No dupliques subagentes para la misma tarea; retomá el existente.

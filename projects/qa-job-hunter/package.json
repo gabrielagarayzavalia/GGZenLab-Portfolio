@@ -12,7 +12,8 @@
     "db:seed": "npx tsx src/db/seed.ts",
     "test:api": "npx tsx --test tests/api/jobs.test.ts",
     "playwright:ide": "npx tsx src/open-playwright-ide.ts",
-    "easy-apply": "npx tsx src/easy-apply.ts"
+    "easy-apply": "npx tsx src/easy-apply.ts",
+    "easy-apply:dry-run": "npx tsx src/easy-apply-dry-run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

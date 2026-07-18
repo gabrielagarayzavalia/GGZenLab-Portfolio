@@ -32,9 +32,17 @@ npm run playwright:ide -- --url=https://www.linkedin.com/jobs/view/JOB_ID --labe
 Un **Submit real** en LinkedIn “quema” ese aviso para re-pruebas. Después de un apply real, tomar un **job nuevo** de la hoja/CSV del pipeline (`output/jobs-result.csv`).
 
 ### 2.2 Dry-run para pruebas
-Avanzar con Next/Continue y preguntas hasta **ver** Submit; **no clickear** Submit. Así el mismo aviso se puede reutilizar.
+```bash
+npm run easy-apply:dry-run
+```
 
-Pool recomendado para pruebas: jobs **descartados** (`skippedJobs` / bajo umbral) que aún muestren botón Easy Apply.
+- Cola Excel: `output/apply/apply-queue.csv` (+ columnas `EasyApply`/`ApplyStatus` en `output/jobs-result.csv`).
+- Si **no** hay Easy Apply y la página dice Applied / Application submitted / Ya postulaste → marcar **applied**.
+- Si **no** hay Easy Apply y no está Applied → marcar **closed** y continuar con el siguiente **pending**.
+- Si hay Easy Apply → avanzar hasta **ver** Submit y **no clickear** (dry_ok).
+- Idioma base LinkedIn: **inglés**.
+
+Env: `DRY_RUN_MAX=10` (default), `DRY_RUN_ALL=1` para no parar en el primer dry_ok.
 
 ### 2.3 Preguntas Sí/No
 Aparecen de forma variable. Heurística: defaults + patrones en `apply-answers.example.json`; preguntas desconocidas → registrar en `output/apply/apply-answers.json` (gitignore) para reutilizar (motor completo = B17-2 / B17-4).

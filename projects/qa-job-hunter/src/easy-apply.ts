@@ -16,9 +16,21 @@ import {
   resolveSessionPath,
 } from "./apply/paths.js";
 import { resolveCoverLetter } from "./apply/cover-letter.js";
+import {
+  clickEasyApply,
+  detectAlreadyApplied,
+  findEasyApplyControl,
+} from "./apply/detect-apply.js";
+import {
+  canonicalJobUrl,
+  ensureQueueFromMatched,
+  jobIdFromUrl,
+  updateQueueRow,
+} from "./apply/apply-queue.js";
 import { handleFailures } from "./apply/failure-handler.js";
 import type { ApplicationRecord, ApplyJob } from "./apply/types.js";
 import type { AnalysisResult, JobMatch } from "./types.js";
+import { setApplicationStatus } from "./application-status.js";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -38,14 +50,18 @@ function loadMatchedJobs(): ApplyJob[] {
 
   return matches
     .filter((m) => m.matchPercent >= MIN_MATCH)
-    .map((m) => ({
-      jobId: m.id,
-      company: m.company,
-      title: m.title,
-      url: m.url,
-      matchPercent: m.matchPercent,
-      summary: m.summary ?? "",
-    }));
+    .map((m) => {
+      const jobId = jobIdFromUrl(m.url) || (/^\d+$/.test(m.id) ? m.id : "");
+      return {
+        jobId,
+        company: m.company,
+        title: m.title,
+        url: canonicalJobUrl(m.url, jobId),
+        matchPercent: m.matchPercent,
+        summary: m.summary ?? "",
+      };
+    })
+    .filter((m) => /^\d+$/.test(m.jobId));
 }
 
 async function tryEasyApply(
@@ -65,19 +81,39 @@ async function tryEasyApply(
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
     await sleep(2500);
 
-    const easyBtn = page
-      .locator(
-        "button.jobs-apply-button, button[aria-label*='Solicitud sencilla'], button[aria-label*='Easy Apply']"
-      )
-      .first();
-
-    if (!(await easyBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      record.status = "manual_pending";
-      record.reason = "Sin botón Easy Apply visible — aplicar manual";
+    if (await detectAlreadyApplied(page)) {
+      record.status = "submitted";
+      record.reason = "Already applied (detectado en página)";
+      updateQueueRow(job.jobId, {
+        status: "applied",
+        reason: record.reason,
+        easyApply: "yes",
+      });
+      setApplicationStatus(
+        { id: job.jobId, title: job.title, company: job.company },
+        "applied"
+      );
       return record;
     }
 
-    await easyBtn.click();
+    if (!(await findEasyApplyControl(page, 6000))) {
+      record.status = "blocked";
+      record.reason = "Sin botón Easy Apply — marcado closed en Excel";
+      updateQueueRow(job.jobId, {
+        status: "closed",
+        easyApply: "no",
+        reason: record.reason,
+      });
+      return record;
+    }
+
+    updateQueueRow(job.jobId, { easyApply: "yes" });
+    const clicked = await clickEasyApply(page);
+    if (!clicked) {
+      record.status = "blocked";
+      record.reason = "Easy Apply visible pero click falló";
+      return record;
+    }
     await sleep(2000);
 
     const modal = page
@@ -204,6 +240,7 @@ async function tryEasyApply(
 
 async function main() {
   ensureDirs();
+  ensureQueueFromMatched();
 
   const toApply = loadMatchedJobs();
   console.log(`🚀 Easy Apply en ${toApply.length} avisos calificados (>= ${MIN_MATCH}%)\n`);

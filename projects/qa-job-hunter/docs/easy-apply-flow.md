@@ -1,164 +1,157 @@
 # Easy Apply — Flujo, selectores y plantilla de pasos (B17-01)
 
 Spike **JH-T-B17-01** de la story **US-JH-B17** (_Easy Apply automatizado desde grabación_).
-Objetivo: grabar con Playwright codegen el flujo Easy Apply real sobre 2-3 avisos y
-documentar las variantes y selectores, para alimentar el motor de replay parametrizado (**B17-3**).
 
-> Estado: estructura + selectores candidatos + plantilla lista.
-> Las secciones marcadas `[COMPLETAR TRAS GRABAR]` requieren correr codegen con tu sesión
-> real de LinkedIn (login + posible 2FA), algo que es manual por diseño.
+> **Estado:** primera grabación registrada en `recordings/easy-apply/simple-apply.spec.ts`
+> (multistep + radio; UI EN). Textos canónicos en `src/apply/canonical-text.ts`.
+> Seed de respuestas: `src/apply/apply-answers.example.json`.
 
 ---
 
 ## 1. Cómo grabar
 
-Requisito: tener sesión guardada (`npm run login` genera `session/linkedin-session.json`).
+Requisito: `npm run login` → `session/linkedin-session.json`.
+
+**No uses `<>` alrededor de la URL** (en Windows son redirección).
 
 ```bash
-# Caso simple (1 paso: CV de LinkedIn + Enviar)
-npm run playwright:ide -- --url=<URL_DEL_AVISO> --label=simple
-
-# Caso multi-paso (Continuar / Review / Enviar)
-npm run playwright:ide -- --url=<URL_DEL_AVISO> --label=multistep
-
-# Caso con preguntas (radios, dropdowns, campos numéricos)
-npm run playwright:ide -- --url=<URL_DEL_AVISO> --label=preguntas
+# Desde projects/qa-job-hunter
+npm run playwright:ide -- --url=https://www.linkedin.com/jobs/view/JOB_ID --label=simple-apply
+npm run playwright:ide -- --url=https://www.linkedin.com/jobs/view/JOB_ID --label=multistep
+npm run playwright:ide -- --url=https://www.linkedin.com/jobs/view/JOB_ID --label=preguntas
 ```
 
-- Codegen abre Chromium con tu sesión cargada (`--load-storage`).
-- Interactuás con el flujo real; al cerrar la ventana, el script grabado queda en
-  `recordings/easy-apply/<label>.spec.ts`.
-- Esas grabaciones son la **evidencia del spike** y el insumo para extraer selectores.
+- Codegen carga la sesión (`--load-storage`) y escribe en `recordings/easy-apply/<label>.spec.ts`.
+- Tras cerrar Codegen, revisá el archivo (sesión relativa, dry-run, textos genéricos).
 
 ---
 
-## 2. Variantes del flujo
+## 2. Riesgos operativos (acordados)
 
-### 2.1 Caso simple — CV de LinkedIn + Enviar
-Un solo paso: el modal muestra el CV ya cargado y el botón **Enviar solicitud**.
+### 2.1 JobId destructivo
+Un **Submit real** en LinkedIn “quema” ese aviso para re-pruebas. Después de un apply real, tomar un **job nuevo** de la hoja/CSV del pipeline (`output/jobs-result.csv`).
 
-- Pasos observados: abrir modal → (opcional) confirmar CV → Enviar → confirmación.
-- `[COMPLETAR TRAS GRABAR]`: pegar los pasos exactos y locators desde `recordings/easy-apply/simple.spec.ts`.
+### 2.2 Dry-run para pruebas
+Avanzar con Next/Continue y preguntas hasta **ver** Submit; **no clickear** Submit. Así el mismo aviso se puede reutilizar.
 
-### 2.2 Caso multi-paso — Continuar / Review / Enviar
-Varios pasos encadenados con **Continuar** / **Siguiente** / **Revisar** antes de **Enviar**.
+Pool recomendado para pruebas: jobs **descartados** (`skippedJobs` / bajo umbral) que aún muestren botón Easy Apply.
 
-- Pasos observados: abrir modal → datos contacto → (repetir Continuar) → Revisar → Enviar.
-- Punto frágil: cantidad de pasos variable; hay que iterar hasta encontrar Enviar/Review.
-- `[COMPLETAR TRAS GRABAR]`: secuencia real de botones y cuántos pasos tuvo.
+### 2.3 Preguntas Sí/No
+Aparecen de forma variable. Heurística: defaults + patrones en `apply-answers.example.json`; preguntas desconocidas → registrar en `output/apply/apply-answers.json` (gitignore) para reutilizar (motor completo = B17-2 / B17-4).
 
-### 2.3 Caso con preguntas — radios, dropdowns, numéricos
-El modal incluye preguntas del empleador (screening questions).
-
-- Tipos frecuentes: radios (sí/no), dropdowns (años de experiencia), inputs numéricos, texto libre.
-- Punto frágil: los labels y `name`/`id` de estos campos cambian por aviso; no son estables.
-- `[COMPLETAR TRAS GRABAR]`: listar preguntas encontradas + tipo de control + valor que corresponde.
+### 2.4 CV / resumen / cover letter — opcionales
+Pueden **no aparecer**. Si el control está visible → rellenar con textos genéricos de `canonical-text.ts` (**sin** nombre de la empresa solicitante). Si no → skip.
 
 ---
 
-## 3. Selectores: estables vs frágiles
+## 3. Variante observada (grabación real)
 
-Derivados del baseline heurístico (`src/easy-apply.ts`). Regla general:
-**priorizar `getByRole` y `aria-label`** sobre clases `artdeco-*` (que LinkedIn cambia seguido).
+Archivo: `recordings/easy-apply/simple-apply.spec.ts`  
+Job: `4438016042` · UI: inglés · Variante: **multistep + pregunta radio** (no “simple” 1-clic).
 
-| Elemento | Selector candidato | Estabilidad | Nota |
+Secuencia observada:
+
+1. `getByRole('link', { name: 'Easy Apply to this job' })`
+2. `Continue to next step` × 3
+3. Radio / texto `Sí` (pregunta del empleador)
+4. `Review your application`
+5. `Submit application` → `Done` _(solo apply real; en dry-run se detiene antes)_
+
+En ese aviso **no** pidieron CV picker / summary / cover (opcionales ausentes).
+
+Patrón de prueba generalizado:
+
+```
+abrir Easy Apply
+→ (opcional) elegir CV / fill resumen / fill cover
+→ mientras haya Next/Continue: contestar yes/no conocidos → Next
+→ al ver Submit: STOP (dry-run) | Submit solo en apply real
+```
+
+---
+
+## 4. Selectores: estables vs frágiles
+
+Priorizar `getByRole` / `aria-label` (EN observados + fallbacks ES).
+
+| Elemento | Selector | Estabilidad | Nota |
 |---|---|---|---|
-| Botón Easy Apply | `button[aria-label*='Easy Apply']`, `button[aria-label*='Solicitud sencilla']` | Estable | Preferir aria-label localizado (ES/EN) |
-| Botón Easy Apply (fallback) | `button.jobs-apply-button` | Media | Clase puede cambiar |
-| Modal | `div[role='dialog']` | Estable | Preferir role sobre `.jobs-easy-apply-modal` |
-| Modal (fallback) | `.jobs-easy-apply-modal`, `[data-test-modal]` | Media | `data-test-*` es mejor que clase |
-| Botón Continuar/Siguiente | `button[aria-label*='Continuar']`, `button[aria-label*='Next']` | Estable | Localizado ES/EN |
-| Botón Revisar | `button[aria-label*='Review']`, `button[aria-label*='Revisar']` | Estable | |
-| Botón Enviar | `button[aria-label*='Enviar solicitud']`, `button[aria-label*='Submit application']` | Estable | Clave para cerrar el flujo |
-| Botón primario (fallback) | `button.artdeco-button--primary` | Frágil | Solo como último recurso |
-| Cover letter | `div[role='dialog'] textarea` | Media | Puede haber >1 textarea |
-| Confirmación enviada | `text=/Solicitud enviada|Application submitted/i` | Media | Depende del idioma |
-| Cerrar modal | `button[aria-label='Dismiss']`, `button[aria-label='Cerrar']` | Estable | |
-
-`[COMPLETAR TRAS GRABAR]`: reemplazar/confirmar cada fila con los locators reales que
-genere codegen, y anotar en `output/apply/selectors.json` los que difieran.
+| Easy Apply | `getByRole('link', { name: 'Easy Apply to this job' })` | Estable | Observado EN |
+| Easy Apply (ES/alt) | `button[aria-label*='Easy Apply']`, `…Solicitud sencilla` | Estable | Fallback |
+| Continuar | `getByRole('button', { name: /Continue to next step\|Next/i })` | Estable | EN |
+| Continuar (ES) | `button[aria-label*='Continuar']` | Estable | |
+| Revisar | `getByRole('button', { name: /Review your application/i })` | Estable | |
+| Enviar | `getByRole('button', { name: /Submit application/i })` | Estable | En dry-run: detectar, no click |
+| Done | `getByRole('button', { name: /^Done$/i })` | Estable | Post-submit |
+| Yes/No | `getByText(/^Sí$\|^Yes$/i)` | Media | Heurística; ampliar con apply-answers |
+| Modal | `getByRole('dialog')` | Estable | |
+| Cover/summary | `dialog textarea` | Media | **Opcional** |
+| CV picker | (variable por UI LinkedIn) | Frágil | **Opcional** |
+| Primario genérico | `button.artdeco-button--primary` | Frágil | Último recurso |
 
 ---
 
-## 4. Plantilla de pasos (input para B17-3)
+## 5. Textos canónicos
 
-Formato propuesto para describir un flujo grabado como datos reproducibles.
-Los valores personales **no se hardcodean**: se referencian por clave (`valueRef`) y el
-resolver los toma de `apply-answers.json` (B17-2).
+Fuente: `src/apply/canonical-text.ts`
 
-### 4.1 Esquema de un paso
+- `APPLICATION_SUMMARY` — resumen genérico
+- `COVER_LETTER_DEFAULT` — cover genérica
+- `RESUME_LABEL_HINT` — criterio de elección de CV
+
+`cover-letter.ts` usa `COVER_LETTER_DEFAULT` como fallback final.
+
+---
+
+## 6. Plantilla de pasos (input B17-3)
 
 ```ts
 type StepAction = "goto" | "click" | "fill" | "select" | "check" | "expect" | "screenshot";
 
 interface FlowStep {
   action: StepAction;
-  selector?: string;      // locator estable (ver sección 3)
-  value?: string;         // valor literal (solo para datos NO sensibles)
-  valueRef?: string;      // clave a resolver desde apply-answers.json (ej. "phone")
-  optional?: boolean;     // si no aparece, se saltea sin fallar
-  note?: string;          // por qué / cuándo aplica
-}
-
-interface EasyApplyFlow {
-  variant: "simple" | "multistep" | "preguntas";
-  steps: FlowStep[];
+  selector?: string;
+  value?: string;
+  valueRef?: string;
+  optional?: boolean;
+  note?: string;
 }
 ```
 
-### 4.2 Ejemplo (caso simple)
+Ejemplo alineado a la grabación (dry-run):
 
 ```json
 {
-  "variant": "simple",
+  "variant": "multistep",
+  "jobId": "4438016042",
+  "dryRun": true,
   "steps": [
-    { "action": "click", "selector": "button[aria-label*='Easy Apply']", "note": "abrir modal" },
-    { "action": "expect", "selector": "div[role='dialog']", "note": "modal visible" },
-    { "action": "fill", "selector": "div[role='dialog'] textarea", "valueRef": "coverLetter", "optional": true },
-    { "action": "screenshot", "note": "pre-submit" },
-    { "action": "click", "selector": "button[aria-label*='Enviar solicitud']", "note": "enviar" },
-    { "action": "expect", "selector": "text=/Solicitud enviada|Application submitted/i", "note": "confirmación" }
+    { "action": "click", "selector": "getByRole('link', { name: 'Easy Apply to this job' })" },
+    { "action": "fill", "selector": "dialog textarea[summary]", "valueRef": "summary", "optional": true },
+    { "action": "fill", "selector": "dialog textarea[cover]", "valueRef": "coverLetter", "optional": true },
+    { "action": "click", "selector": "Continue to next step", "optional": true, "note": "repetir mientras exista" },
+    { "action": "check", "selector": "Sí|Yes", "valueRef": "yesNo", "optional": true },
+    { "action": "click", "selector": "Review your application", "optional": true },
+    { "action": "expect", "selector": "Submit application", "note": "dry-run: NO click" }
   ]
 }
 ```
 
-### 4.3 Ejemplo (con preguntas) — esqueleto
+---
 
-```json
-{
-  "variant": "preguntas",
-  "steps": [
-    { "action": "click", "selector": "button[aria-label*='Easy Apply']" },
-    { "action": "expect", "selector": "div[role='dialog']" },
-    { "action": "select", "selector": "[COMPLETAR: dropdown años exp]", "valueRef": "yearsExperience" },
-    { "action": "check", "selector": "[COMPLETAR: radio autorización trabajo]", "valueRef": "workAuthorization" },
-    { "action": "fill", "selector": "[COMPLETAR: input numérico salario]", "valueRef": "salaryExpectation", "optional": true },
-    { "action": "click", "selector": "button[aria-label*='Revisar']" },
-    { "action": "click", "selector": "button[aria-label*='Enviar solicitud']" }
-  ]
-}
-```
+## 7. Riesgos ToS (resumen B17-7)
 
-`[COMPLETAR TRAS GRABAR]`: completar los selectores de las preguntas reales y las claves
-`valueRef` necesarias, que definirán el schema de `apply-answers.json` en B17-2.
+- Automatizar postulaciones puede violar ToS de LinkedIn: límites, delays (B17-5), dry-run por defecto.
+- `session/` y `.env` nunca se commitean.
+- Las grabaciones no deben llevar path absoluto de sesión ni datos personales sensibles.
 
 ---
 
-## 5. Riesgos y ToS (resumen para B17-7)
+## 8. Checklist del spike
 
-- Automatizar postulaciones puede violar los Términos de Servicio de LinkedIn: usar con
-  criterio, con límites diarios y delays (guardrails de B17-5), en modo dry-run por defecto.
-- La sesión (`session/`) y las credenciales (`.env`) **nunca** se commitean (ver `.gitignore`).
-- Las grabaciones `.spec.ts` no deben contener datos personales sensibles: la sesión se
-  inyecta aparte vía `--load-storage`, no queda en el script.
-
----
-
-## 6. Checklist del spike
-
-- [ ] Grabar caso simple → `recordings/easy-apply/simple.spec.ts`
-- [ ] Grabar caso multi-paso → `recordings/easy-apply/multistep.spec.ts`
-- [ ] Grabar caso con preguntas → `recordings/easy-apply/preguntas.spec.ts`
-- [ ] Confirmar tabla de selectores (sección 3) con los locators reales
-- [ ] Completar plantilla de pasos (sección 4) por variante
-- [ ] Definir claves `valueRef` → insumo de B17-2 (`apply-answers.json`)
+- [x] Primera grabación real → `recordings/easy-apply/simple-apply.spec.ts` (multistep + radio)
+- [x] Selectores EN documentados + dry-run pre-Submit
+- [x] Textos canónicos genéricos + seed `apply-answers.example.json`
+- [ ] Caso “simple” puro (1 paso, sin preguntas) — grabar cuando aparezca
+- [ ] Caso `preguntas` dedicado (varios tipos de control) — grabar aparte
+- [ ] Motor de aprendizaje yes/no completo (B17-2 / B17-4)

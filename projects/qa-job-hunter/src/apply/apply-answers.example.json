@@ -1,0 +1,33 @@
+{
+  "$comment": "Plantilla B17-2. Copiar a output/apply/apply-answers.json (gitignore) y completar. Yes/No desconocidos se registran para reutilizar.",
+  "valueRefs": {
+    "summary": "APPLICATION_SUMMARY from canonical-text.ts",
+    "coverLetter": "COVER_LETTER_DEFAULT from canonical-text.ts",
+    "resumeChoice": "generic QA / most recent LinkedIn resume"
+  },
+  "yesNoDefaults": {
+    "workAuthorization": true,
+    "willingToRelocate": false,
+    "requireSponsorship": false,
+    "availableImmediately": true
+  },
+  "questionPatterns": [
+    {
+      "match": "/autorizaci[oó]n|work authorization|legally authorized/i",
+      "answerRef": "workAuthorization"
+    },
+    {
+      "match": "/sponsor|visa/i",
+      "answerRef": "requireSponsorship"
+    },
+    {
+      "match": "/relocat|mudar/i",
+      "answerRef": "willingToRelocate"
+    },
+    {
+      "match": "/disponible|available immediately|start date/i",
+      "answerRef": "availableImmediately"
+    }
+  ],
+  "learned": []
+}

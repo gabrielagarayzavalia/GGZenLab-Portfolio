@@ -2,6 +2,7 @@
 
 import fs from "fs";
 import path from "path";
+import { COVER_LETTER_DEFAULT } from "./canonical-text.js";
 import { COVER_DIR, COVER_BY_JOB_DIR } from "./paths.js";
 
 export function resolveCoverLetter(jobId: string, company?: string): string {
@@ -25,8 +26,5 @@ export function resolveCoverLetter(jobId: string, company?: string): string {
     return fs.readFileSync(generic, "utf-8").trim();
   }
 
-  return (
-    "Senior QA Analyst with 25+ years in quality assurance, test automation, API testing, and Agile delivery. " +
-    "Based in Buenos Aires, available immediately."
-  );
+  return COVER_LETTER_DEFAULT;
 }

@@ -1,6 +1,6 @@
 // Manejo de fallos del pipeline + apertura de Playwright Codegen (con grabación a archivo).
 
-import { spawn, spawnSync } from "child_process";
+import { spawn, spawnSync, type SpawnSyncReturns } from "child_process";
 import fs from "fs";
 import {
   APPLY_DIR,
@@ -21,6 +21,8 @@ export interface AutomationFailure {
   reason: string;
   at: string;
 }
+
+const NPX_BIN = process.platform === "win32" ? "npx.cmd" : "npx";
 
 export function recordFailure(f: Omit<AutomationFailure, "at">): AutomationFailure {
   fs.mkdirSync(APPLY_DIR, { recursive: true });
@@ -84,6 +86,7 @@ export function appendTaskRow(failure: AutomationFailure): void {
   fs.writeFileSync(SELECTOR_TASKS_PATH, updated, "utf-8");
 }
 
+/** Abre Playwright Codegen. Retorna status del proceso (0 = ok) cuando wait=true. */
 export function openPlaywrightIde(options: {
   url: string;
   flow: FailureFlow;
@@ -92,7 +95,7 @@ export function openPlaywrightIde(options: {
   /** Si se define, codegen guarda el script grabado en este archivo (--output). */
   outFile?: string;
   wait?: boolean;
-}): void {
+}): number {
   ensureSelectorWorkspace();
   const session = resolveSessionPath();
 
@@ -114,25 +117,26 @@ export function openPlaywrightIde(options: {
   console.log("   → Seleccioná elementos; el script grabado queda en el archivo de salida.\n");
 
   if (options.wait) {
-    // Bloquear hasta que el usuario cierre Codegen (persiste --output).
-    const result = spawnSync("npx", args, {
+    const result: SpawnSyncReturns<Buffer> = spawnSync(NPX_BIN, args, {
       cwd: process.cwd(),
       stdio: "inherit",
-      shell: true,
+      shell: false,
     });
     if (result.error) {
       console.error("No se pudo lanzar Playwright codegen:", result.error.message);
+      return 1;
     }
-    return;
+    return result.status ?? 1;
   }
 
-  const child = spawn("npx", args, {
+  const child = spawn(NPX_BIN, args, {
     cwd: process.cwd(),
     detached: true,
     stdio: "ignore",
-    shell: true,
+    shell: false,
   });
   child.unref();
+  return 0;
 }
 
 export function handleFailures(

@@ -1,7 +1,7 @@
 // Abre Playwright Codegen para grabar un flujo y guardar el script generado.
-// Uso:
+// Uso (sin <> en la URL — en Windows son redirección):
 //   npm run playwright:ide -- --url=https://www.linkedin.com/jobs/view/123 --label=simple
-//   npm run playwright:ide -- --url=<job> --label=multistep --flow=easy_apply
+//   npm run playwright:ide -- --url=https://... --label=multistep --flow=easy_apply
 // La grabación se guarda en recordings/easy-apply/<label|timestamp>.spec.ts
 
 import path from "path";
@@ -23,7 +23,12 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-const url = getArg("--url") ?? "https://www.linkedin.com/jobs/";
+/** Quita placeholders de docs (`<>`) y caracteres que rompen cmd.exe. */
+function sanitizeUrl(raw: string): string {
+  return raw.trim().replace(/[<>]/g, "");
+}
+
+const url = sanitizeUrl(getArg("--url") ?? "https://www.linkedin.com/jobs/");
 const flow = (getArg("--flow") ?? "easy_apply") as FailureFlow;
 const jobId = getArg("--jobId");
 const reason = getArg("--reason") ?? "Grabación manual del flujo Easy Apply (B17-01)";
@@ -34,7 +39,12 @@ const label = rawLabel ? slugify(rawLabel) : `rec-${new Date().toISOString().rep
 ensureDirs();
 const outFile = path.join(RECORDINGS_DIR, `${label}.spec.ts`);
 
-openPlaywrightIde({ url, flow, jobId, reason, outFile, wait: true });
+const status = openPlaywrightIde({ url, flow, jobId, reason, outFile, wait: true });
 
-console.log("Playwright IDE lanzado. Interactuá con el flujo y cerrá la ventana al terminar.");
-console.log(`El script grabado quedará en: ${outFile}`);
+if (status === 0) {
+  console.log("Playwright IDE cerrado OK.");
+  console.log(`El script grabado debería estar en: ${outFile}`);
+} else {
+  console.error(`Playwright codegen terminó con código ${status}. Revisá la URL (sin <>) y la sesión.`);
+  process.exit(status);
+}

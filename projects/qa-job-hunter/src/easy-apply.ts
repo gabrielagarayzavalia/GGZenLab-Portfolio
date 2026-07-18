@@ -1,0 +1,273 @@
+// Easy Apply baseline (heurístico) para avisos calificados (>= MIN_MATCH).
+// Lee output/jobs-result.json (AnalysisResult.matchedJobs) del pipeline.
+// NOTA (B17): esto es el baseline heurístico; el motor de replay parametrizado
+// desde grabación es B17-3. Ver docs/easy-apply-flow.md.
+
+import { chromium } from "playwright";
+import fs from "fs";
+import path from "path";
+import {
+  APPLICATIONS_PATH,
+  MIN_MATCH,
+  OUTPUT_PATH,
+  SCREENSHOTS_DIR,
+  appendLog,
+  ensureDirs,
+  resolveSessionPath,
+} from "./apply/paths.js";
+import { resolveCoverLetter } from "./apply/cover-letter.js";
+import { handleFailures } from "./apply/failure-handler.js";
+import type { ApplicationRecord, ApplyJob } from "./apply/types.js";
+import type { AnalysisResult, JobMatch } from "./types.js";
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function loadMatchedJobs(): ApplyJob[] {
+  if (!fs.existsSync(OUTPUT_PATH)) {
+    console.error(`❌ Falta ${OUTPUT_PATH}. Ejecutá primero: npm run analyze`);
+    process.exit(1);
+  }
+
+  const raw = JSON.parse(fs.readFileSync(OUTPUT_PATH, "utf-8"));
+  // Acepta AnalysisResult { matchedJobs } o un array plano de JobMatch.
+  const matches: JobMatch[] = Array.isArray(raw)
+    ? raw
+    : ((raw as AnalysisResult).matchedJobs ?? []);
+
+  return matches
+    .filter((m) => m.matchPercent >= MIN_MATCH)
+    .map((m) => ({
+      jobId: m.id,
+      company: m.company,
+      title: m.title,
+      url: m.url,
+      matchPercent: m.matchPercent,
+      summary: m.summary ?? "",
+    }));
+}
+
+async function tryEasyApply(
+  page: import("playwright").Page,
+  job: ApplyJob
+): Promise<ApplicationRecord> {
+  const record: ApplicationRecord = {
+    jobId: job.jobId,
+    company: job.company,
+    title: job.title,
+    status: "not_attempted",
+    reason: "",
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await sleep(2500);
+
+    const easyBtn = page
+      .locator(
+        "button.jobs-apply-button, button[aria-label*='Solicitud sencilla'], button[aria-label*='Easy Apply']"
+      )
+      .first();
+
+    if (!(await easyBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
+      record.status = "manual_pending";
+      record.reason = "Sin botón Easy Apply visible — aplicar manual";
+      return record;
+    }
+
+    await easyBtn.click();
+    await sleep(2000);
+
+    const modal = page
+      .locator(".jobs-easy-apply-modal, [data-test-modal], div[role='dialog']")
+      .first();
+    if (!(await modal.isVisible({ timeout: 8000 }).catch(() => false))) {
+      record.status = "blocked";
+      record.reason = "Modal Easy Apply no abrió";
+      return record;
+    }
+
+    let steps = 0;
+    const maxSteps = 8;
+
+    while (steps < maxSteps) {
+      steps++;
+
+      const openTextareas = await page
+        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea")
+        .count();
+      const requiredEmpty = await page
+        .locator(".jobs-easy-apply-modal input[required]:not([value]), [role='dialog'] input[required]")
+        .count();
+
+      const bodyText = await modal.innerText().catch(() => "");
+
+      if (/assessment|evaluaci[oó]n|quiz|test/i.test(bodyText)) {
+        record.status = "blocked";
+        record.reason = "Requiere assessment — completar manualmente";
+        await page
+          .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-blocked.png`) })
+          .catch(() => {});
+        return record;
+      }
+
+      if (openTextareas > 0) {
+        const letter = resolveCoverLetter(job.jobId, job.company);
+        const areas = page.locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea");
+        const count = await areas.count();
+        for (let t = 0; t < count; t++) {
+          const area = areas.nth(t);
+          const current = (await area.inputValue().catch(() => "")).trim();
+          if (!current) await area.fill(letter);
+        }
+        await sleep(800);
+        const nextAfterFill = page
+          .locator(
+            "button[aria-label*='Continuar'], button[aria-label*='Next'], button[aria-label*='Review'], button.artdeco-button--primary"
+          )
+          .first();
+        if (await nextAfterFill.isVisible({ timeout: 1500 }).catch(() => false)) {
+          await nextAfterFill.click();
+          await sleep(1500);
+          continue;
+        }
+      }
+
+      const submitBtn = page
+        .locator(
+          "button[aria-label*='Enviar solicitud'], button[aria-label*='Submit application'], button.artdeco-button--primary:has-text('Enviar'), button.artdeco-button--primary:has-text('Submit')"
+        )
+        .first();
+
+      if (await submitBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+        await page
+          .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
+          .catch(() => {});
+        await submitBtn.click();
+        await sleep(3000);
+
+        const done = await page
+          .locator("text=/Solicitud enviada|Application submitted|Done|Listo/i")
+          .first()
+          .isVisible({ timeout: 5000 })
+          .catch(() => false);
+
+        if (done) {
+          record.status = "submitted";
+          record.reason = "Easy Apply enviada con CV de LinkedIn";
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
+            .catch(() => {});
+          return record;
+        }
+
+        record.status = "blocked";
+        record.reason = "Submit clickeado pero sin confirmación — verificar en LinkedIn";
+        return record;
+      }
+
+      const nextBtn = page
+        .locator(
+          "button[aria-label*='Continuar'], button[aria-label*='Next'], button[aria-label*='Review'], button.artdeco-button--primary"
+        )
+        .first();
+
+      if (await nextBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+        await nextBtn.click();
+        await sleep(1500);
+        continue;
+      }
+
+      if (requiredEmpty > 0) {
+        record.status = "blocked";
+        record.reason = "Campos obligatorios sin completar — completar manual";
+        return record;
+      }
+
+      break;
+    }
+
+    record.status = "draft_saved";
+    record.reason = `Flujo incompleto tras ${steps} pasos — revisar borrador`;
+    await page
+      .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-incomplete.png`) })
+      .catch(() => {});
+  } catch (err) {
+    record.status = "blocked";
+    record.reason = err instanceof Error ? err.message : String(err);
+  }
+
+  return record;
+}
+
+async function main() {
+  ensureDirs();
+
+  const toApply = loadMatchedJobs();
+  console.log(`🚀 Easy Apply en ${toApply.length} avisos calificados (>= ${MIN_MATCH}%)\n`);
+
+  if (toApply.length === 0) {
+    console.log("No hay avisos calificados para aplicar. Nada que hacer.");
+    return;
+  }
+
+  const sessionPath = resolveSessionPath();
+  const browser = await chromium.launch({ headless: false, slowMo: 250 });
+  const context = await browser.newContext({ storageState: sessionPath, locale: "es-AR" });
+  const page = await context.newPage();
+
+  const applications: ApplicationRecord[] = [];
+
+  for (let i = 0; i < toApply.length; i++) {
+    const job = toApply[i];
+    process.stdout.write(`[${i + 1}/${toApply.length}] ${job.company} ... `);
+    const result = await tryEasyApply(page, job);
+    applications.push(result);
+    appendLog(`${result.status} | ${job.jobId} | ${job.company} | ${job.title} | ${result.reason}`);
+    console.log(result.status);
+
+    try {
+      const dismiss = page
+        .locator("button[aria-label='Dismiss'], button[aria-label='Cerrar']")
+        .first();
+      if (await dismiss.isVisible({ timeout: 1000 }).catch(() => false)) await dismiss.click();
+    } catch {
+      /* ignore */
+    }
+
+    await sleep(2000 + Math.random() * 1500);
+  }
+
+  fs.writeFileSync(APPLICATIONS_PATH, JSON.stringify(applications, null, 2), "utf-8");
+  await browser.close();
+
+  const submitted = applications.filter((a) => a.status === "submitted").length;
+  console.log(`\n✅ Enviadas: ${submitted}/${toApply.length}`);
+
+  const blocked = applications.filter(
+    (a) => a.status === "blocked" || a.status === "draft_saved" || a.status === "manual_pending"
+  );
+  if (blocked.length > 0) {
+    handleFailures(
+      blocked.map((a) => {
+        const job = toApply.find((j) => j.jobId === a.jobId);
+        return {
+          flow: "easy_apply" as const,
+          jobId: a.jobId,
+          company: a.company,
+          title: a.title,
+          url: job?.url ?? "",
+          reason: a.reason,
+        };
+      }),
+      { openIde: true }
+    );
+  }
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

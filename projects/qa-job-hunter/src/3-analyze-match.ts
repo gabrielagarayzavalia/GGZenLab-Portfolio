@@ -13,6 +13,7 @@ import {
 } from "./feedback.js";
 import { chat, getLLMProvider, getProviderLabel, isOllamaAvailable } from "./llm-client.js";
 import { buildMatchPrompt, exportCSV, MIN_MATCH, parseMatchResponse } from "./match-utils.js";
+import { analyzeJobRegex } from "./regex-matcher.js";
 import type { JobListing, JobMatch, AnalysisResult } from "./types.js";
 
 async function analyzeJobs(): Promise<void> {
@@ -27,11 +28,13 @@ async function analyzeJobs(): Promise<void> {
       console.log("   3. Verificá: ollama list\n");
       process.exit(1);
     }
-  } else if (!process.env.ANTHROPIC_API_KEY) {
+  } else if (provider === "anthropic" && !process.env.ANTHROPIC_API_KEY) {
     console.error("\n❌ Falta ANTHROPIC_API_KEY para el modo Claude API.");
-    console.log("   Usá análisis local: $env:LLM_PROVIDER='ollama' ; npx tsx src\\3-analyze-match.ts\n");
+    console.log("   Usá análisis local: $env:LLM_PROVIDER='ollama' ; npx tsx src\\3-analyze-match.ts");
+    console.log("   O sin LLM (reglas):  $env:LLM_PROVIDER='regex'  ; npx tsx src\\3-analyze-match.ts\n");
     process.exit(1);
   }
+  // provider === "regex" no requiere ni API key ni Ollama: corre local.
 
   const rawPath = OUTPUT_PATH.replace(".json", "-raw.json");
 
@@ -52,7 +55,7 @@ async function analyzeJobs(): Promise<void> {
 
   const matchedJobs: JobMatch[] = [];
   const skippedJobs: AnalysisResult["skippedJobs"] = [];
-  const delayMs = provider === "ollama" ? 200 : 500;
+  const delayMs = provider === "regex" ? 0 : provider === "ollama" ? 200 : 500;
 
   for (let i = 0; i < jobs.length; i++) {
     const job = jobs[i];
@@ -72,8 +75,10 @@ async function analyzeJobs(): Promise<void> {
     }
 
     try {
-      const text = await chat(buildMatchPrompt(job));
-      const analysis = parseMatchResponse(text);
+      const analysis =
+        provider === "regex"
+          ? analyzeJobRegex(job)
+          : parseMatchResponse(await chat(buildMatchPrompt(job)));
 
       if (analysis.matchPercent >= MIN_MATCH) {
         matchedJobs.push({ ...job, ...analysis });

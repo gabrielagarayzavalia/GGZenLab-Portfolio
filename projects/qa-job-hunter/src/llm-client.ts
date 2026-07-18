@@ -5,9 +5,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { OLLAMA_MODEL, OLLAMA_URL } from "./config.js";
 
-export type LLMProvider = "anthropic" | "ollama";
+export type LLMProvider = "anthropic" | "ollama" | "regex";
 
 export function getLLMProvider(): LLMProvider {
+  if (process.env.LLM_PROVIDER === "regex") return "regex";
   if (process.env.LLM_PROVIDER === "ollama") return "ollama";
   if (process.env.LLM_PROVIDER === "anthropic") return "anthropic";
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
@@ -16,6 +17,7 @@ export function getLLMProvider(): LLMProvider {
 
 export function getProviderLabel(): string {
   const p = getLLMProvider();
+  if (p === "regex") return "Regex local (sin LLM)";
   return p === "ollama" ? `Ollama (${OLLAMA_MODEL})` : "Claude API (claude-sonnet-4-6)";
 }
 

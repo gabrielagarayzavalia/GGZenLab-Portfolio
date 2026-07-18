@@ -2,6 +2,8 @@
 
 import { spawn, spawnSync, type SpawnSyncReturns } from "child_process";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import {
   APPLY_DIR,
   FAILURES_PATH,
@@ -22,7 +24,52 @@ export interface AutomationFailure {
   at: string;
 }
 
-const NPX_BIN = process.platform === "win32" ? "npx.cmd" : "npx";
+const PROJECT_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  ".."
+);
+
+/** Evita spawnSync(npx.cmd) → EINVAL en Windows; usa node + cli.js local. */
+function resolvePlaywrightCli(): string {
+  const local = path.join(PROJECT_ROOT, "node_modules", "playwright", "cli.js");
+  if (fs.existsSync(local)) return local;
+  throw new Error(
+    `No se encontró playwright/cli.js en ${local}. Corré npm install en projects/qa-job-hunter.`
+  );
+}
+
+function spawnPlaywrightCodegen(
+  codegenArgs: string[],
+  options: { wait: boolean; cwd: string }
+): number {
+  const cli = resolvePlaywrightCli();
+  const nodeArgs = [cli, ...codegenArgs];
+
+  if (options.wait) {
+    const result: SpawnSyncReturns<Buffer> = spawnSync(process.execPath, nodeArgs, {
+      cwd: options.cwd,
+      stdio: "inherit",
+      shell: false,
+      windowsHide: false,
+    });
+    if (result.error) {
+      console.error("No se pudo lanzar Playwright codegen:", result.error.message);
+      return 1;
+    }
+    return result.status ?? 1;
+  }
+
+  const child = spawn(process.execPath, nodeArgs, {
+    cwd: options.cwd,
+    detached: true,
+    stdio: "ignore",
+    shell: false,
+    windowsHide: false,
+  });
+  child.unref();
+  return 0;
+}
 
 export function recordFailure(f: Omit<AutomationFailure, "at">): AutomationFailure {
   fs.mkdirSync(APPLY_DIR, { recursive: true });
@@ -100,7 +147,6 @@ export function openPlaywrightIde(options: {
   const session = resolveSessionPath();
 
   const args = [
-    "playwright",
     "codegen",
     `--load-storage=${session}`,
     "--target=typescript",
@@ -116,27 +162,10 @@ export function openPlaywrightIde(options: {
   if (options.outFile) console.log(`   Grabación → ${options.outFile}`);
   console.log("   → Seleccioná elementos; el script grabado queda en el archivo de salida.\n");
 
-  if (options.wait) {
-    const result: SpawnSyncReturns<Buffer> = spawnSync(NPX_BIN, args, {
-      cwd: process.cwd(),
-      stdio: "inherit",
-      shell: false,
-    });
-    if (result.error) {
-      console.error("No se pudo lanzar Playwright codegen:", result.error.message);
-      return 1;
-    }
-    return result.status ?? 1;
-  }
-
-  const child = spawn(NPX_BIN, args, {
-    cwd: process.cwd(),
-    detached: true,
-    stdio: "ignore",
-    shell: false,
+  return spawnPlaywrightCodegen(args, {
+    wait: Boolean(options.wait),
+    cwd: PROJECT_ROOT,
   });
-  child.unref();
-  return 0;
 }
 
 export function handleFailures(

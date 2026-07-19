@@ -62,7 +62,7 @@ export const PSEUDO_ANSWERS = {
     usdValue: "2750",
     arsValue: "3500000",
     /** Sin moneda explícita → ARS (contexto AR). */
-    defaultCurrency: "ARS" as const,
+    defaultCurrency: "ARS",
   },
 } as const;
 
@@ -652,19 +652,17 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
 }
 
 function resolveCompensationValue(blob: string): { value: string; currency: "USD" | "ARS" } {
-  const { usdMatch, arsMatch, usdValue, arsValue, defaultCurrency } =
-    PSEUDO_ANSWERS.expectedCompensation;
+  const { usdMatch, arsMatch, usdValue, arsValue } = PSEUDO_ANSWERS.expectedCompensation;
   const hasUsd = usdMatch.test(blob);
   const hasArs = arsMatch.test(blob);
   if (hasUsd && !hasArs) return { value: usdValue, currency: "USD" };
   if (hasArs && !hasUsd) return { value: arsValue, currency: "ARS" };
   if (hasUsd && hasArs) {
-    // Preferir la moneda que aparece más cerca de "salary/remuneración" — default USD si ambas
+    // Ambas señales → USD (suelen preguntar en dólares con mención de pesos)
     return { value: usdValue, currency: "USD" };
   }
-  return defaultCurrency === "USD"
-    ? { value: usdValue, currency: "USD" }
-    : { value: arsValue, currency: "ARS" };
+  // Sin moneda explícita → ARS (contexto AR)
+  return { value: arsValue, currency: "ARS" };
 }
 
 /** Remuneración pretendida: 2750 USD o 3.500.000 ARS según el campo. */

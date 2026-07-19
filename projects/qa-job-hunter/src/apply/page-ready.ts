@@ -20,22 +20,23 @@ export const MAXIMIZED_LAUNCH_ARGS = [
 
 /** Cierra bubble/banner de traductor si igual aparece (Chrome o extensión). */
 export async function dismissTranslatorUi(page: Page): Promise<void> {
+  // Solo controles de Translate — NUNCA Close genérico (cierra Easy Apply o links del feed).
   const closers = [
-    page.getByRole("button", { name: /close|cerrar|no thanks|no, gracias|never translate|nunca traducir/i }),
+    page.getByRole("button", { name: /never translate|nunca traducir|no thanks|no, gracias/i }),
     page.locator(
       [
         '[aria-label*="Close" i][aria-label*="Translate" i]',
         '[aria-label*="Cerrar" i][aria-label*="Traduc" i]',
         "#translate-button + button",
         ".translate-infobar button[aria-label*='Close' i]",
-        "div[role='dialog'] button[aria-label*='Close' i]",
+        "[class*='translate'] button[aria-label*='Close' i]",
       ].join(", ")
     ),
   ];
   for (const loc of closers) {
     const btn = loc.first();
     if (await btn.isVisible({ timeout: 400 }).catch(() => false)) {
-      await btn.click({ force: true, timeout: 1500 }).catch(() => {});
+      await btn.click({ timeout: 1500 }).catch(() => {});
       await sleep(200);
       return;
     }

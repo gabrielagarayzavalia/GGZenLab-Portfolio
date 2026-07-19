@@ -4,7 +4,6 @@
 import fs from "fs";
 import path from "path";
 import type { Locator, Page } from "playwright";
-import fs from "fs";
 import { APPLY_DIR, ensureDirs } from "./paths.js";
 import { dismissModalOverlays, easyApplyModalRoot } from "./modal-controls.js";
 import { resolveSkillYesNo } from "./my-skills.js";

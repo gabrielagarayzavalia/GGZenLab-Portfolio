@@ -1347,15 +1347,22 @@ async function clickShowMoreResumes(root: Locator): Promise<boolean> {
   return true;
 }
 
-/** Texto asociado a un radio (card LinkedIn / label). */
+/** Texto asociado a un radio (card LinkedIn / label). Preferir aria / .pdf corto. */
 async function radioCardText(radio: Locator): Promise<string> {
   const aria = ((await radio.getAttribute("aria-label")) ?? "").trim();
+  if (/\.pdf/i.test(aria)) return aria;
   const near = await radio
     .evaluate((n) => {
-      const wrap = n.closest(
-        "label, [class*='document'], [class*='resume'], [class*='JobsDocument'], li, fieldset, div"
-      );
-      return (wrap?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+      const wrap =
+        n.closest("label") ||
+        n.closest("[class*='document']") ||
+        n.closest("[class*='JobsDocument']") ||
+        n.closest("[class*='resume']") ||
+        n.parentElement?.parentElement ||
+        n.parentElement;
+      const raw = (wrap?.textContent ?? "").replace(/\s+/g, " ").trim();
+      const pdf = raw.match(/[\w.\-]+\.pdf/i);
+      return pdf ? pdf[0] : raw.slice(0, 200);
     })
     .catch(() => "");
   return `${aria} ${near}`.replace(/\s+/g, " ").trim();
@@ -1366,6 +1373,7 @@ async function clickBestResumeRadio(
   root: Locator,
   kind: ApplyRoleKind
 ): Promise<boolean> {
+  // Incluir radios no “visible” (LinkedIn a veces los tapa con el card)
   const radios = root.locator("input[type='radio']");
   const rn = await radios.count().catch(() => 0);
   let bestIdx = -1;
@@ -1374,9 +1382,10 @@ async function clickBestResumeRadio(
 
   for (let i = 0; i < rn; i++) {
     const radio = radios.nth(i);
-    if (!(await radio.isVisible().catch(() => false))) continue;
     const blob = await radioCardText(radio);
-    if (!/\.pdf/i.test(blob) && !/resume|curr[ií]culum|cv\b/i.test(blob)) continue;
+    if (!blob) continue;
+    // Exigir .pdf o "resume" en aria — evita matchear radios de Yes/No del form
+    if (!/\.pdf/i.test(blob) && !/select\s+resume|curr[ií]culum/i.test(blob)) continue;
     if (COVER_AS_RESUME_RE.test(blob)) continue;
     const score = scoreResumeForRole(blob, kind);
     if (score > bestScore) {
@@ -1386,7 +1395,7 @@ async function clickBestResumeRadio(
     }
   }
 
-  if (bestIdx < 0 || bestScore < 30) return false;
+  if (bestIdx < 0 || bestScore < 70) return false;
 
   const radio = radios.nth(bestIdx);
   await radio.scrollIntoViewIfNeeded().catch(() => {});
@@ -1405,26 +1414,32 @@ async function clickResumeRadioMatching(
   wantRe: RegExp,
   kind: ApplyRoleKind
 ): Promise<boolean> {
-  // Preferir scoring (mejor concordancia entre varios CVs)
+  // Preferir scoring sobre radios (cards LinkedIn)
   if (await clickBestResumeRadio(root, kind)) return true;
 
-  const nameHit = root.getByText(wantRe).first();
-  if (await nameHit.isVisible({ timeout: 1000 }).catch(() => false)) {
-    const text = ((await nameHit.innerText().catch(() => "")) ?? "").trim();
-    if (!COVER_AS_RESUME_RE.test(text) && scoreResumeForRole(text, kind) >= 30) {
-      await nameHit.click({ force: true, timeout: 4000 }).catch(() => {});
-      const parentRadio = nameHit
-        .locator("xpath=ancestor::*[.//input[@type='radio']][1]//input[@type='radio']")
-        .first();
-      if (await parentRadio.count().catch(() => 0)) {
-        await parentRadio.check({ force: true }).catch(() =>
-          parentRadio.click({ force: true })
-        );
-      }
-      console.log(`   ↳ Resume: click texto ${kind} → ${text.slice(0, 80)}`);
-      await sleep(500);
-      return true;
+  // Solo nombres de archivo .pdf — NUNCA el título del puesto (ej. "QA Automation Ssr")
+  const pdfHits = root.getByText(/\.pdf/i);
+  const pn = await pdfHits.count().catch(() => 0);
+  for (let i = 0; i < pn; i++) {
+    const nameHit = pdfHits.nth(i);
+    if (!(await nameHit.isVisible({ timeout: 400 }).catch(() => false))) continue;
+    const text = ((await nameHit.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (!text || COVER_AS_RESUME_RE.test(text)) continue;
+    if (!wantRe.test(text) && scoreResumeForRole(text, kind) < 70) continue;
+    if (scoreResumeForRole(text, kind) < 70) continue;
+
+    await nameHit.click({ force: true, timeout: 4000 }).catch(() => {});
+    const parentRadio = nameHit
+      .locator("xpath=ancestor::*[.//input[@type='radio']][1]//input[@type='radio']")
+      .first();
+    if (await parentRadio.count().catch(() => 0)) {
+      await parentRadio.check({ force: true }).catch(() =>
+        parentRadio.click({ force: true })
+      );
     }
+    console.log(`   ↳ Resume: click PDF ${kind} → ${text.slice(0, 80)}`);
+    await sleep(500);
+    return true;
   }
 
   return false;
@@ -1487,16 +1502,14 @@ export async function selectResumeForRole(
     );
   };
 
-  /** ¿Hay un CV del rol visible en la lista default (sin Show more)? */
+  /** ¿Hay un CV del rol (.pdf) en la lista default? */
   const roleCvVisibleInDefault = async (): Promise<boolean> => {
-    const radios = root.locator("input[type='radio']");
-    const rn = await radios.count().catch(() => 0);
-    for (let i = 0; i < rn; i++) {
-      const radio = radios.nth(i);
-      if (!(await radio.isVisible().catch(() => false))) continue;
-      const blob = await radioCardText(radio);
-      if (COVER_AS_RESUME_RE.test(blob)) continue;
-      if (scoreResumeForRole(blob, kind) >= 70) return true;
+    const pdfHits = root.getByText(/\.pdf/i);
+    const pn = await pdfHits.count().catch(() => 0);
+    for (let i = 0; i < pn; i++) {
+      const t = ((await pdfHits.nth(i).innerText().catch(() => "")) ?? "").trim();
+      if (COVER_AS_RESUME_RE.test(t)) continue;
+      if (scoreResumeForRole(t, kind) >= 70) return true;
     }
     return false;
   };

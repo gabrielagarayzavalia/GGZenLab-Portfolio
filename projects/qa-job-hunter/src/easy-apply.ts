@@ -42,11 +42,15 @@ import {
   hasMandatoryFieldError,
   recoverMandatoryTypeaheadOrClose,
   isCoverOrSummaryLabel,
+  isSummaryLabel,
+  isCoverLetterLabel,
   hasPrefillValue,
+  uploadCoverLetterPdf,
+  fillApplicationSummary,
 } from "./apply/fill-answers.js";
 import {
-  APPLICATION_SUMMARY,
   COVER_LETTER_DEFAULT,
+  resolveApplicationSummary,
 } from "./apply/canonical-text.js";
 import {
   MAXIMIZED_LAUNCH_ARGS,
@@ -135,7 +139,7 @@ async function afterSaveContinueToSubmit(
   job: ApplyJob,
   record: ApplicationRecord
 ): Promise<ApplicationRecord | "continue"> {
-  await fillPseudoAnswers(page);
+  await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
   await sleep(800);
 
   // Next / Review hasta Submit
@@ -413,8 +417,13 @@ async function tryEasyApply(
         return record;
       }
 
+      // Cover letter = PDF upload; summary = texto según Analyst/Automation
+      await uploadCoverLetterPdf(page);
+      await fillApplicationSummary(page, job.title, job.company);
+
       if (openTextareas > 0) {
-        const letter = resolveCoverLetter(job.jobId, job.company);
+        const letter = resolveCoverLetter(job.jobId, job.company) || COVER_LETTER_DEFAULT;
+        const summary = resolveApplicationSummary(job.title, job.company);
         const areas = page.locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea");
         const count = await areas.count();
         for (let t = 0; t < count; t++) {
@@ -428,10 +437,19 @@ async function tryEasyApply(
             const lab = wrap?.querySelector("label, legend, span[class*='label']");
             return (lab?.textContent ?? "").trim();
           }).catch(() => ""))}`;
-          // Cover/summary: siempre nuestros textos. Otros: respetar prefill.
+          if (isSummaryLabel(labelBlob)) {
+            await area.fill("");
+            await area.fill(summary);
+            continue;
+          }
+          // Cover letter: preferir PDF; textarea solo fallback si vacío
+          if (isCoverLetterLabel(labelBlob)) {
+            if (!hasPrefillValue(current)) await area.fill(letter);
+            continue;
+          }
           if (isCoverOrSummaryLabel(labelBlob)) {
-            const text = /summary|resumen/i.test(labelBlob) ? APPLICATION_SUMMARY : letter || COVER_LETTER_DEFAULT;
-            await area.fill(text);
+            await area.fill("");
+            await area.fill(summary);
             continue;
           }
           if (!hasPrefillValue(current)) await area.fill(letter);
@@ -458,7 +476,7 @@ async function tryEasyApply(
         }
       }
 
-      await fillPseudoAnswers(page);
+      await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
       // Re-scroll tras rellenar (dropdowns / campos nuevos)
       await scrollEasyApplyFormToEnd(page);
 
@@ -479,7 +497,7 @@ async function tryEasyApply(
             .catch(() => {});
           return record;
         }
-        await fillPseudoAnswers(page);
+        await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
         await scrollEasyApplyFormToEnd(page);
       }
 

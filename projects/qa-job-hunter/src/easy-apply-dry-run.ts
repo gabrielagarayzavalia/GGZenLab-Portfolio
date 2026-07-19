@@ -14,8 +14,8 @@
 import path from "path";
 import { chromium, type Browser, type Locator, type Page } from "playwright";
 import {
-  APPLICATION_SUMMARY,
   COVER_LETTER_DEFAULT,
+  resolveApplicationSummary,
 } from "./apply/canonical-text.js";
 import {
   clickEasyApply,
@@ -34,6 +34,8 @@ import {
   RequiredFieldsBlockedError,
   saveEasyApplyFieldInventory,
   saveRequiredFieldsDump,
+  uploadCoverLetterPdf,
+  fillApplicationSummary,
 } from "./apply/fill-answers.js";
 import {
   clickButtonOrLink,
@@ -159,25 +161,34 @@ async function stepFingerprint(page: Page): Promise<string> {
   return `${url}|h:${heading}|p:${progress}|btn:${primary}|${bodySlice}`;
 }
 
-async function maybeFillOptionalTexts(page: Page): Promise<void> {
+async function maybeFillOptionalTexts(
+  page: Page,
+  jobTitle = "",
+  company = ""
+): Promise<void> {
+  await uploadCoverLetterPdf(page);
+  await fillApplicationSummary(page, jobTitle, company);
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
     .first();
   if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return;
   const areas = root.locator("textarea");
   const n = await areas.count();
+  const summary = resolveApplicationSummary(jobTitle, company);
   for (let i = 0; i < n; i++) {
     const area = areas.nth(i);
     if (!(await area.isVisible().catch(() => false))) continue;
     const current = (await area.inputValue().catch(() => "")).trim();
     const label = ((await area.getAttribute("aria-label")) ?? "").toLowerCase();
-    const isCoverSummary = /cover\s*letter|carta|summary|resumen|message|mensaje/i.test(label);
-    // Cover/summary: pisar con nuestros textos. Resto: solo si vacío.
-    if (!isCoverSummary && current) continue;
-    const text = /summary|resumen|message|mensaje/i.test(label)
-      ? APPLICATION_SUMMARY
-      : COVER_LETTER_DEFAULT;
-    await area.fill(text);
+    if (/summary|resumen|message|mensaje/i.test(label)) {
+      await area.fill("");
+      await area.fill(summary);
+      continue;
+    }
+    if (/cover\s*letter|carta/i.test(label)) {
+      if (!current) await area.fill(COVER_LETTER_DEFAULT);
+      continue;
+    }
   }
 }
 
@@ -228,11 +239,13 @@ async function stopForRequiredFields(
 
 async function tryAdvanceNext(
   page: Page,
-  scope: Page | Locator
+  scope: Page | Locator,
+  jobTitle = "",
+  company = ""
 ): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit"> {
   await scrollEasyApplyFormToEnd(page);
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review
-  await fillPseudoAnswers(page);
+  await fillPseudoAnswers(page, { jobTitle, company });
 
   // 2) Si hay obligatorios vacíos → NO click (evita Save or Discard)
   const blocking = await hasBlockingEmptyFields(page);
@@ -313,7 +326,9 @@ async function tryAdvanceNext(
 async function dryRunThroughModal(
   page: Page,
   jobId: string,
-  jobUrl: string
+  jobUrl: string,
+  jobTitle = "",
+  company = ""
 ): Promise<"ok" | "no_modal"> {
   if (!(await waitForEasyApplyModalReady(page))) {
     console.error("   ✗ Modal Easy Apply no terminó de cargar");
@@ -340,9 +355,9 @@ async function dryRunThroughModal(
     saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
     logFieldInventory(inventory);
 
-    await maybeFillOptionalTexts(page);
+    await maybeFillOptionalTexts(page, jobTitle, company);
     await maybeAnswerYesNo(page);
-    const filled = await fillPseudoAnswers(page);
+    const filled = await fillPseudoAnswers(page, { jobTitle, company });
     if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
     await scrollEasyApplyFormToEnd(page);
 
@@ -351,7 +366,7 @@ async function dryRunThroughModal(
       return "ok";
     }
 
-    const step = await tryAdvanceNext(page, scope);
+    const step = await tryAdvanceNext(page, scope, jobTitle, company);
     if (step === "advanced") continue;
 
     if (step === "discarded_exit") {
@@ -455,7 +470,13 @@ async function processJob(
   }
   await sleep(2000);
 
-  const result = await dryRunThroughModal(page, row.jobId, job.url);
+  const result = await dryRunThroughModal(
+    page,
+    row.jobId,
+    job.url,
+    row.title,
+    row.company
+  );
   if (result === "no_modal") {
     await saveDebugScreenshot(page, row.jobId, "no-modal");
     updateQueueRow(row.jobId, {

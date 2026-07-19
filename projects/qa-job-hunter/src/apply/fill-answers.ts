@@ -4,9 +4,14 @@
 import fs from "fs";
 import path from "path";
 import type { Locator, Page } from "playwright";
+import fs from "fs";
 import { APPLY_DIR, ensureDirs } from "./paths.js";
 import { dismissModalOverlays, easyApplyModalRoot } from "./modal-controls.js";
 import { resolveSkillYesNo } from "./my-skills.js";
+import {
+  resolveApplicationSummary,
+  resolveCoverLetterPdfPath,
+} from "./canonical-text.js";
 
 export interface CapturedField {
   label: string;
@@ -86,11 +91,21 @@ export const PSEUDO_ANSWERS = {
 const EMPTY_SELECT_RE = /select an option|seleccion(a|á)|choose|elegí|elegir/i;
 const PLEASE_SELECT_RE = /please make a selection|hac[eé] una selecci[oó]n|seleccion(a|á) una opci[oó]n/i;
 
-/** Cover letter / summary: sí se pisan. Resto: respetar respuesta ya cargada. */
-export function isCoverOrSummaryLabel(blob: string): boolean {
-  return /cover\s*letter|carta\s*de\s*presentaci[oó]n|summary|resumen(\s*profesional)?|\bmessage\b|\bmensaje\b/i.test(
+export function isSummaryLabel(blob: string): boolean {
+  return /summary|resumen(\s*profesional)?|professional\s*summary|about\s*you|tell\s*us\s*about/i.test(
     blob
   );
+}
+
+export function isCoverLetterLabel(blob: string): boolean {
+  return /cover\s*letter|carta\s*de\s*presentaci[oó]n|introduction\s*letter|intro\s*letter/i.test(
+    blob
+  );
+}
+
+/** Cover letter / summary: sí se pisan (o upload). Resto: respetar prefill. */
+export function isCoverOrSummaryLabel(blob: string): boolean {
+  return isSummaryLabel(blob) || isCoverLetterLabel(blob) || /\bmessage\b|\bmensaje\b/i.test(blob);
 }
 
 /** ¿Ya hay respuesta usable? (no placeholder de select vacío). */
@@ -1165,8 +1180,123 @@ export async function answerSkillYesNoQuestions(page: Page): Promise<number> {
   return answered;
 }
 
+/** Sube intro-GGZ.pdf si hay input file de cover letter. */
+export async function uploadCoverLetterPdf(page: Page): Promise<boolean> {
+  const pdf = resolveCoverLetterPdfPath();
+  if (!fs.existsSync(pdf)) {
+    console.log(`   ↳ Cover letter PDF no encontrado: ${pdf}`);
+    return false;
+  }
+
+  const root = scopeRoot(page);
+  const fileInputs = root.locator("input[type='file']");
+  const n = await fileInputs.count().catch(() => 0);
+  let uploaded = false;
+
+  for (let i = 0; i < n; i++) {
+    const input = fileInputs.nth(i);
+    // Puede estar hidden (LinkedIn): igual setInputFiles
+    const near = await input
+      .evaluate((node) => {
+        const wrap =
+          node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div, label") ??
+          node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 240);
+      })
+      .catch(() => "");
+    const name = ((await input.getAttribute("name")) ?? "").trim();
+    const aria = ((await input.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${near} ${name} ${aria}`;
+    // Evitar pisar el CV/resume si el label es claramente resume
+    const isResume = /resume|cv\b|curriculum/i.test(blob) && !isCoverLetterLabel(blob);
+    if (isResume) continue;
+    if (!isCoverLetterLabel(blob) && n > 1) continue;
+    // Un solo file input en el paso y no es resume → asumir cover si label ambiguo
+    if (!isCoverLetterLabel(blob) && /resume|cv\b/i.test(blob)) continue;
+
+    try {
+      await input.setInputFiles(pdf);
+      console.log(`   ↳ Cover letter upload: ${pdf}`);
+      uploaded = true;
+      await sleep(500);
+      break;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`   ↳ Cover letter upload falló: ${msg.slice(0, 100)}`);
+    }
+  }
+
+  // Si hay un solo file input no-resume en el modal
+  if (!uploaded && n === 1) {
+    const input = fileInputs.first();
+    const blob = `${(await input.getAttribute("aria-label")) ?? ""} ${(await input.getAttribute("name")) ?? ""}`;
+    if (!/resume|cv\b|curriculum/i.test(blob)) {
+      try {
+        await input.setInputFiles(pdf);
+        console.log(`   ↳ Cover letter upload (único file): ${pdf}`);
+        uploaded = true;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return uploaded;
+}
+
+/**
+ * Summary: borrar default y pegar texto Analyst vs Automation según título del aviso.
+ * jobTitle opcional (si no, usa Analyst).
+ */
+export async function fillApplicationSummary(
+  page: Page,
+  jobTitle = "",
+  company = ""
+): Promise<boolean> {
+  const text = resolveApplicationSummary(jobTitle, company);
+  const root = scopeRoot(page);
+  const areas = root.locator("textarea");
+  const n = await areas.count();
+  let filled = false;
+
+  for (let i = 0; i < n; i++) {
+    const area = areas.nth(i);
+    if (!(await area.isVisible().catch(() => false))) continue;
+    const aria = ((await area.getAttribute("aria-label")) ?? "").trim();
+    const near = await area
+      .evaluate((node) => {
+        const wrap =
+          node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
+          node.parentElement;
+        const lab = wrap?.querySelector("label, legend, span[class*='label']");
+        return (lab?.textContent ?? "").trim();
+      })
+      .catch(() => "");
+    const blob = `${aria} ${near}`;
+    if (!isSummaryLabel(blob) && !/\bmessage\b|\bmensaje\b/i.test(blob)) continue;
+    // No tratar cover letter textarea como summary
+    if (isCoverLetterLabel(blob) && !isSummaryLabel(blob)) continue;
+
+    await waitForControlReady(area);
+    await area.click({ timeout: 3000 }).catch(() => {});
+    await area.fill("");
+    await area.fill(text);
+    console.log(
+      `   ↳ Summary (${jobTitle ? "según puesto" : "analyst default"}): ${text.slice(0, 60)}…`
+    );
+    filled = true;
+    await sleep(300);
+  }
+  return filled;
+}
+
 /** Aplica pseudo-respuestas conocidas en el paso actual. */
-export async function fillPseudoAnswers(page: Page): Promise<number> {
+export async function fillPseudoAnswers(
+  page: Page,
+  ctx?: { jobTitle?: string; company?: string }
+): Promise<number> {
+  const jobTitle = ctx?.jobTitle ?? "";
+  const company = ctx?.company ?? "";
   let filled = 0;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
@@ -1174,6 +1304,8 @@ export async function fillPseudoAnswers(page: Page): Promise<number> {
   if (await fillWorkOrLiveCityFreeText(page)) filled++;
   if (await fillStartAvailability(page)) filled++;
   filled += await answerSkillYesNoQuestions(page);
+  if (await uploadCoverLetterPdf(page)) filled++;
+  if (await fillApplicationSummary(page, jobTitle, company)) filled++;
   if (
     await fillTextByFieldMatch(
       page,

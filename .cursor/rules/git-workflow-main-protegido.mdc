@@ -20,8 +20,18 @@ alwaysApply: true
 ## Commits
 
 - Mensajes en **español**, enfocados en el **por qué**.
-- Un tema por rama/PR cuando sea posible.
 - **No** commitear secretos: `.env`, credenciales, `src/config.ts` (gitignored).
+
+## PRs chicos — 1 PR = 1 tema
+
+- **Un tema por rama/PR.** No mezclar CV + remuneración + Excel + Chrome en el mismo PR.
+- Preferir PRs **revisables en ~1 pasada** (pocos archivos / un solo concern).
+- Si el pedido abarca varios temas: **proponer split** (lista corta de PRs) y pedir OK antes de apilar todo en una rama.
+- Stack solo si hay dependencia real (base → consumidor); si no, PRs independientes desde `main`.
+- Al abrir PR: título = el tema; body con summary acotado a ese tema.
+- Si la rama ya creció de más: avisar y ofrecer partir antes del merge (sin reescribir historial salvo que lo pida).
+
+Ejemplos de temas separados: `fix/easy-apply-cv-toggle`, `fix/easy-apply-remuneracion`, `chore/disable-chrome-translate`.
 
 ## Al terminar
 

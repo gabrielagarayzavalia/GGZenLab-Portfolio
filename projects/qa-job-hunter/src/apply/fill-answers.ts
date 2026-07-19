@@ -28,7 +28,13 @@ export const PSEUDO_ANSWERS = {
     /** Si el valor/hint menciona comuna 9 → tipear Liniers */
     hintMatch: /comuna\s*9/i,
     typeText: "Liniers",
+    /** Click obligatorio en el item del dropdown (no basta tipear). */
     suggestionMatch: /Liniers/i,
+    /** Preferir la fila completa: Liniers, Comuna 9, … */
+    preferredSuggestion: /Liniers[\s\S]*Comuna\s*9|Comuna\s*9[\s\S]*Liniers/i,
+    /** Valor válido tras el click (GEO completo). */
+    validValue: /Liniers/i,
+    validValueExtra: /Comuna\s*9|,/i,
   },
   country: {
     fieldMatch: /^country$|country\*|pa[ií]s/i,
@@ -240,7 +246,56 @@ async function findLocationInput(page: Page): Promise<Locator | null> {
   return null;
 }
 
-/** Location (city): si lee comuna 9 (o es Location), tipear Liniers y elegir sugerencia. */
+function locationValueOk(val: string): boolean {
+  const { validValue, validValueExtra } = PSEUDO_ANSWERS.locationCity;
+  return validValue.test(val) && validValueExtra.test(val);
+}
+
+function typeaheadHits(page: Page): Locator {
+  return page.locator(
+    [
+      "[data-test-single-typeahead-entity-form-search-result]",
+      ".basic-typeahead__selectable",
+      "[role='listbox'] [role='option']",
+      "[role='option']",
+      ".search-typeahead-v2__hit",
+      ".search-typeahead-v2__hit--autocomplete",
+    ].join(", ")
+  );
+}
+
+/** Click en el item del dropdown (obligatorio). Prefiere Liniers + Comuna 9. */
+async function clickLocationSuggestion(page: Page): Promise<string | null> {
+  const { preferredSuggestion, suggestionMatch } = PSEUDO_ANSWERS.locationCity;
+  const hits = typeaheadHits(page);
+
+  await hits
+    .first()
+    .waitFor({ state: "visible", timeout: 4000 })
+    .catch(() => {});
+
+  const preferred = hits.filter({ hasText: preferredSuggestion }).first();
+  const fallback = hits.filter({ hasText: suggestionMatch }).first();
+  const target = (await preferred.isVisible({ timeout: 1500 }).catch(() => false))
+    ? preferred
+    : fallback;
+
+  if (!(await target.isVisible({ timeout: 2000 }).catch(() => false))) {
+    return null;
+  }
+
+  const text = ((await target.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+  await target.scrollIntoViewIfNeeded().catch(() => {});
+  // El click en el <li>/hit es lo que valida el GEO; tipear solo no alcanza.
+  const clicked =
+    (await target.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+    (await target.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+  if (!clicked) return null;
+  await sleep(700);
+  return text || "Liniers";
+}
+
+/** Location (city): tipear Liniers y CLICK en dropdown (Liniers, Comuna 9, …). */
 export async function fillLocationLiniers(page: Page): Promise<boolean> {
   const input = await findLocationInput(page);
   if (!input) return false;
@@ -248,48 +303,46 @@ export async function fillLocationLiniers(page: Page): Promise<boolean> {
   const label = await fieldLabel(input);
   const val = ((await input.inputValue().catch(() => "")) ?? "").trim();
   const blob = `${label} ${val}`;
-  const { fieldMatch, hintMatch, typeText, suggestionMatch } = PSEUDO_ANSWERS.locationCity;
+  const { fieldMatch, hintMatch, typeText } = PSEUDO_ANSWERS.locationCity;
 
-  // Solo actuar si es location/city o ya menciona comuna 9
   if (!fieldMatch.test(blob) && !hintMatch.test(blob)) return false;
-  if (suggestionMatch.test(val) && !hintMatch.test(val)) {
-    return true; // ya tiene Liniers
-  }
 
-  console.log(`   ↳ Location: tipeando "${typeText}" (hint: ${blob.slice(0, 80)})`);
-  await input.click({ timeout: 3000 }).catch(() => {});
-  await input.fill("");
-  await input.pressSequentially(typeText, { delay: 80 });
-  await sleep(1200);
-
-  // Sugerencia typeahead LinkedIn
-  const suggestion = page
-    .locator(
-      [
-        "[data-test-single-typeahead-entity-form-search-result]",
-        ".basic-typeahead__selectable",
-        "[role='option']",
-        ".search-typeahead-v2__hit",
-      ].join(", ")
-    )
-    .filter({ hasText: suggestionMatch })
-    .first();
-
-  if (await suggestion.isVisible({ timeout: 2500 }).catch(() => false)) {
-    await suggestion.click({ timeout: 4000 }).catch(async () => {
-      await suggestion.click({ force: true, timeout: 4000 });
-    });
-    await sleep(600);
-    console.log(`   ↳ Location: seleccionado "${typeText}"`);
+  // Solo OK si ya quedó el GEO completo (Liniers + Comuna 9 o con coma)
+  if (locationValueOk(val)) {
     return true;
   }
 
-  // Fallback: Enter sobre primera opción
-  await page.keyboard.press("ArrowDown").catch(() => {});
-  await page.keyboard.press("Enter").catch(() => {});
-  await sleep(500);
-  const after = ((await input.inputValue().catch(() => "")) ?? "").trim();
-  return suggestionMatch.test(after) || after.length > 0;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    console.log(
+      `   ↳ Location: tipeando "${typeText}" y click en dropdown (intento ${attempt})`
+    );
+    await input.click({ timeout: 3000 }).catch(() => {});
+    await input.fill("");
+    await sleep(200);
+    await input.pressSequentially(typeText, { delay: 90 });
+    await sleep(1400);
+
+    const picked = await clickLocationSuggestion(page);
+    if (!picked) {
+      // Último recurso: bajar + Enter sobre la primera opción del listbox
+      await page.keyboard.press("ArrowDown").catch(() => {});
+      await sleep(200);
+      await page.keyboard.press("Enter").catch(() => {});
+      await sleep(700);
+    } else {
+      console.log(`   ↳ Location: click en "${picked.slice(0, 90)}"`);
+    }
+
+    const after = ((await input.inputValue().catch(() => "")) ?? "").trim();
+    if (locationValueOk(after)) {
+      console.log(`   ↳ Location: valor OK → ${after.slice(0, 90)}`);
+      return true;
+    }
+    console.log(
+      `   ↳ Location: valor aún inválido ("${after.slice(0, 60)}") — hace falta click en Comuna 9`
+    );
+  }
+  return false;
 }
 
 /** Select Country → Argentina (Greenhouse Additional Questions). */

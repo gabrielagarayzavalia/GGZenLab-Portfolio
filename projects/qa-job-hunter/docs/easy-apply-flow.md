@@ -76,6 +76,7 @@ Antes de clicks Easy Apply:
 1. **Ventana maximizada** (`--start-maximized` + CDP) — evita misses por viewport chico.
 2. **Espera de página/modal listos** (`waitForJobPageReady` / `waitForEasyApplyModalReady`) — shell LinkedIn + red quieta + loader oculto.
 3. **Scroll del form al final** en cada paso del modal — revela campos fuera de pantalla; vuelca inventario required+optional a `output/apply/field-inventory-*.json` para ampliar `PSEUDO_ANSWERS` (cada aviso puede traer preguntas distintas).
+4. **waitFor en campos que fallan** — igual que Location: `waitFor` visible/enabled antes de tipar; si hay lista predictiva, `waitFor` de opciones (hasta 3 reintentos). Aplica a Location, remuneración, LinkedIn/Portfolio, etc.
 
 Assessment falso: la detección **solo** mira texto del modal (nunca `main`/JD/perfil).
 

@@ -369,23 +369,136 @@ function typeaheadHits(page: Page): Locator {
   );
 }
 
+/** Espera input/control usable (visible + enabled), como base antes de tipar. */
+async function waitForControlReady(el: Locator, timeoutMs = 6000): Promise<boolean> {
+  try {
+    await el.waitFor({ state: "visible", timeout: timeoutMs });
+    await el.scrollIntoViewIfNeeded().catch(() => {});
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const disabled = await el.isDisabled().catch(() => true);
+      if (!disabled) return true;
+      await sleep(150);
+    }
+    return !(await el.isDisabled().catch(() => true));
+  } catch {
+    return false;
+  }
+}
+
+/** Espera lista predictiva (typeahead) — mismo patrón que Location. */
+async function waitForTypeaheadList(page: Page, timeoutMs = 4500): Promise<boolean> {
+  try {
+    await typeaheadHits(page).first().waitFor({ state: "visible", timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fill robusto: waitFor ready → click → escribir; si aparece listbox, esperar hits.
+ * Reintenta si el valor no queda (campos que fallan por timing).
+ */
+async function fillInputWithWaits(
+  page: Page,
+  el: Locator,
+  value: string,
+  opts: {
+    logName: string;
+    maxAttempts?: number;
+    /** Si true, usa pressSequentially y espera dropdown (aunque no sea Location). */
+    expectTypeahead?: boolean;
+    valueOk?: (val: string) => boolean;
+  }
+): Promise<boolean> {
+  const maxAttempts = opts.maxAttempts ?? 3;
+  const ok =
+    opts.valueOk ??
+    ((val: string) => {
+      const a = val.replace(/[,\s]/g, "");
+      const b = value.replace(/[,\s]/g, "");
+      return val === value || a === b || val.includes(value);
+    });
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (!(await waitForControlReady(el))) {
+        console.log(`   ↳ ${opts.logName}: waitFor visible/enabled falló (intento ${attempt}/${maxAttempts})`);
+        await sleep(400);
+        continue;
+      }
+
+      await el.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
+        el.click({ force: true, timeout: 2000, noWaitAfter: true })
+      );
+      await sleep(200);
+      await el.press("Control+a").catch(() => {});
+      await el.press("Backspace").catch(() => {});
+      await el.fill("").catch(() => {});
+      await sleep(150);
+
+      if (opts.expectTypeahead) {
+        await el.pressSequentially(value, { delay: 90 });
+        const listOk = await waitForTypeaheadList(page, 4500);
+        if (!listOk) {
+          console.log(
+            `   ↳ ${opts.logName}: lista predictiva no apareció (intento ${attempt}/${maxAttempts})`
+          );
+          await sleep(400);
+          continue;
+        }
+      } else {
+        await el.fill(value);
+        // Algunos salary/URL abren sugerencias: esperar breve y cerrar sin pisar el valor
+        const listOk = await waitForTypeaheadList(page, 1200);
+        if (listOk) {
+          await page.keyboard.press("Escape").catch(() => {});
+          await sleep(200);
+        }
+      }
+
+      await sleep(350);
+      const after = ((await el.inputValue().catch(() => "")) ?? "").trim();
+      if (ok(after)) {
+        if (attempt > 1) {
+          console.log(`   ↳ ${opts.logName}: OK tras reintento ${attempt}`);
+        }
+        return true;
+      }
+      console.log(
+        `   ↳ ${opts.logName}: valor no quedó ("${after.slice(0, 50)}") — wait + reintento ${attempt}/${maxAttempts}`
+      );
+      await sleep(500);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`   ↳ ${opts.logName}: error intento ${attempt}: ${msg.slice(0, 100)}`);
+      await sleep(400);
+    }
+  }
+  return false;
+}
+
 /** Click en el item del dropdown (obligatorio). Prefiere Liniers + Comuna 9. */
 async function clickLocationSuggestion(page: Page): Promise<string | null> {
   const { preferredSuggestion, suggestionMatch } = PSEUDO_ANSWERS.locationCity;
   const hits = typeaheadHits(page);
 
-  await hits
-    .first()
-    .waitFor({ state: "visible", timeout: 4000 })
-    .catch(() => {});
+  if (!(await waitForTypeaheadList(page, 4500))) {
+    return null;
+  }
 
   const preferred = hits.filter({ hasText: preferredSuggestion }).first();
   const fallback = hits.filter({ hasText: suggestionMatch }).first();
-  const target = (await preferred.isVisible({ timeout: 1500 }).catch(() => false))
+
+  await preferred.waitFor({ state: "visible", timeout: 2000 }).catch(() => {});
+  const target = (await preferred.isVisible({ timeout: 800 }).catch(() => false))
     ? preferred
     : fallback;
 
-  if (!(await target.isVisible({ timeout: 2000 }).catch(() => false))) {
+  try {
+    await target.waitFor({ state: "visible", timeout: 2500 });
+  } catch {
     return null;
   }
 
@@ -393,8 +506,14 @@ async function clickLocationSuggestion(page: Page): Promise<string | null> {
   await target.scrollIntoViewIfNeeded().catch(() => {});
   // El click en el <li>/hit es lo que valida el GEO; tipear solo no alcanza.
   const clicked =
-    (await target.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-    (await target.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+    (await target
+      .click({ timeout: 4000, noWaitAfter: true })
+      .then(() => true)
+      .catch(() => false)) ||
+    (await target
+      .click({ force: true, timeout: 4000, noWaitAfter: true })
+      .then(() => true)
+      .catch(() => false));
   if (!clicked) return null;
   await sleep(700);
   return text || "Liniers";
@@ -447,8 +566,13 @@ async function typeaheadWithDropdownRetries(
       console.log(
         `   ↳ ${labelForLog}: click + tipear "${typeText}" hasta dropdown (intento ${attempt}/${maxAttempts})`
       );
-      await input.scrollIntoViewIfNeeded().catch(() => {});
-      await input.click({ timeout: 4000 });
+      if (!(await waitForControlReady(input))) {
+        console.log(`   ↳ ${labelForLog}: waitFor input no listo — reintento`);
+        continue;
+      }
+      await input.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
+        input.click({ force: true, timeout: 2000, noWaitAfter: true })
+      );
       await sleep(200);
       // Seleccionar todo y borrar (más fiable que fill("") en typeahead LinkedIn)
       await input.press("Control+a").catch(() => {});
@@ -456,17 +580,10 @@ async function typeaheadWithDropdownRetries(
       await input.fill("").catch(() => {});
       await sleep(250);
       await input.pressSequentially(typeText, { delay: 100 });
-      await sleep(1600);
 
-      const dropdownVisible = await typeaheadHits(page)
-        .first()
-        .isVisible({ timeout: 3500 })
-        .catch(() => false);
-
-      if (!dropdownVisible) {
-        console.log(`   ↳ ${labelForLog}: dropdown no apareció — reintento`);
-        // Forzar foco de nuevo
-        await input.click({ force: true, timeout: 2000 }).catch(() => {});
+      if (!(await waitForTypeaheadList(page, 4500))) {
+        console.log(`   ↳ ${labelForLog}: waitFor lista predictiva — no apareció, reintento`);
+        await input.click({ force: true, timeout: 2000, noWaitAfter: true }).catch(() => {});
         continue;
       }
 
@@ -583,7 +700,7 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
   const sn = await selects.count();
   for (let i = 0; i < sn; i++) {
     const el = selects.nth(i);
-    if (!(await el.isVisible().catch(() => false))) continue;
+    if (!(await waitForControlReady(el, 4000))) continue;
     const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
     // Evitar "Phone country code"
     if (/phone|tel[eé]fono|c[oó]digo/i.test(label)) continue;
@@ -591,6 +708,7 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
     if (val && !EMPTY_SELECT_RE.test(val) && selectText.test(val)) return true;
     const opt = el.locator("option").filter({ hasText: selectText }).first();
+    await opt.waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
     if (await opt.count().catch(() => 0)) {
       const v = await opt.getAttribute("value");
       if (v != null) {
@@ -701,12 +819,17 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
       continue;
     }
 
-    await el.click({ timeout: 2000 }).catch(() => {});
-    await el.fill("");
-    await el.fill(value);
-    console.log(`   ↳ Remuneración pretendida (${currency}): ${value}`);
-    await sleep(300);
-    filled = true;
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName: `Remuneración (${currency})`,
+      maxAttempts: 3,
+      expectTypeahead: false,
+    });
+    if (ok) {
+      console.log(`   ↳ Remuneración pretendida (${currency}): ${value}`);
+      filled = true;
+    } else {
+      console.log(`   ↳ Remuneración (${currency}): falló tras waits/reintentos`);
+    }
   }
 
   return filled;
@@ -735,10 +858,19 @@ async function fillTextByFieldMatch(
     if (current === value || current.includes("gabriela-garayzavalia")) {
       return true;
     }
-    await el.fill(value);
-    console.log(`   ↳ ${logName}: ${value}`);
-    await sleep(300);
-    return true;
+    // URLs / textos: waitFor + reintento; si hay lista predictiva, esperar y Escape
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName,
+      maxAttempts: 3,
+      expectTypeahead: false,
+      valueOk: (val) => val === value || val.includes(value) || val.includes("gabriela-garayzavalia"),
+    });
+    if (ok) {
+      console.log(`   ↳ ${logName}: ${value}`);
+      return true;
+    }
+    console.log(`   ↳ ${logName}: falló tras waits/reintentos`);
+    return false;
   }
   return false;
 }

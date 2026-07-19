@@ -7,8 +7,11 @@ type Scope = Page | Locator;
 
 export const MODAL_LABELS = {
   submit: /Submit application|Enviar solicitud/i,
-  /** Greenhouse a veces muestra solo "Review". */
-  review: /^Review$|Review your application|Revisar/i,
+  /**
+   * Aparece cuando ya no hay Next/Continue; antes de Submit.
+   * A veces solo "Review", a veces "Review your application".
+   */
+  review: /^Review$|Review your application|Revisar( solicitud)?/i,
   continue: /Continue to next step|Continuar|Siguiente/i,
   /** Solo dentro de dialog — "Next" suelto choca con el carrusel. */
   next: /^(Next|Siguiente)$/i,

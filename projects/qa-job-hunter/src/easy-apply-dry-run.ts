@@ -224,12 +224,16 @@ async function tryAdvanceNext(
   const beforeFp = await stepFingerprint(page);
   const beforeUrl = page.url();
 
-  // Preferir Next del modal (data-*); Review solo si no hay Next.
-  const nextEl = await findButtonOrLink(scope, MODAL_LABELS.continue, 800);
+  // Orden footer: Next/Continue → (si no hay) Review → (luego Submit se detecta en el loop).
+  const nextEl =
+    (await findButtonOrLink(scope, MODAL_LABELS.continue, 700)) ||
+    (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
   const reviewEl = nextEl
     ? null
-    : await findButtonOrLink(scope, MODAL_LABELS.review, 500);
+    : await findButtonOrLink(scope, MODAL_LABELS.review, 800);
   const target = nextEl ?? reviewEl;
+  const which = nextEl ? "Next/Continue" : reviewEl ? "Review" : "css-primary";
+
   if (!target) {
     const cssNext = cssPrimaryActions(scope);
     if (!(await cssNext.isVisible({ timeout: 400 }).catch(() => false))) return "no_next";
@@ -239,6 +243,7 @@ async function tryAdvanceNext(
       (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
     if (!ok) return "blocked";
   } else {
+    console.log(`   → Click ${which}`);
     await dismissModalOverlays(page);
     await target.scrollIntoViewIfNeeded().catch(() => {});
     const ok =
@@ -249,13 +254,31 @@ async function tryAdvanceNext(
 
   await sleep(2500);
 
-  if (await dismissSaveOrDiscard(page)) return "blocked";
+  // Save/Discard: no es fin del flujo — Discard y seguir si quedó Submit/Review.
+  if (await dismissSaveOrDiscard(page)) {
+    await sleep(800);
+    if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
+      console.log("   Submit visible tras Discard Save — dry-run OK");
+      return "advanced"; // el loop verá Submit
+    }
+    if (await findButtonOrLink(scope, MODAL_LABELS.review, 600)) {
+      console.log("   Review sigue visible tras Discard — reintentar en próximo ciclo");
+      return "advanced";
+    }
+    return "blocked";
+  }
 
   if (await isNextDisabled(page)) return "blocked";
   const fields = await captureRequiredFields(page);
   const hasErrors = fields.some((f) => f.errorText);
   if (hasErrors && page.url() === beforeUrl) return "blocked";
   if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
+
+  // Tras Review, Submit puede aparecer sin cambiar mucho el fingerprint
+  if (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) {
+    console.log("   ✓ Llegamos a pantalla con Submit (vía Review)");
+    return "advanced";
+  }
 
   const afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
@@ -264,7 +287,7 @@ async function tryAdvanceNext(
     console.log(`   fp after:  ${afterFp.slice(0, 120)}`);
     return "stuck";
   }
-  console.log(`   ✓ Paso avanzó (${beforeFp.slice(0, 40)}… → ${afterFp.slice(0, 40)}…)`);
+  console.log(`   ✓ Paso avanzó vía ${which}`);
   return "advanced";
 }
 

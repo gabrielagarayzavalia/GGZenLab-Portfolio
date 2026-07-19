@@ -81,20 +81,43 @@ Job: `4438016042` · UI: inglés · Variante: **multistep + pregunta radio** (no
 Secuencia observada:
 
 1. `getByRole('link', { name: 'Easy Apply to this job' })`
-2. `Continue to next step` × 3
-3. Radio / texto `Sí` (pregunta del empleador)
-4. `Review your application`
-5. `Submit application` → `Done` _(solo apply real; en dry-run se detiene antes)_
+2. `Continue to next step` / `Next` × N (mientras exista)
+3. Radio / texto `Yes` (pregunta del empleador, si aparece)
+4. Cuando **ya no hay Next** → botón/link **`Review`** / `Review your application`
+5. Pantalla de revisión → **`Submit application`** → `Done` _(Done solo apply real; dry-run para en Submit)_
 
 En ese aviso **no** pidieron CV picker / summary / cover (opcionales ausentes).
+
+### Diagrama de flujo (orden de botones del modal)
+
+```mermaid
+flowchart TD
+  A[Easy Apply link] --> B[Modal abierto]
+  B --> C{¿Campos known / required?}
+  C -->|rellenar| C
+  C -->|listo| D{¿Submit application visible?}
+  D -->|sí| E[DRY-RUN: STOP sin click\nProductivo: Submit → Done]
+  D -->|no| F{¿Next / Continue visible?}
+  F -->|sí| G[Click Next/Continue]
+  G --> C
+  F -->|no| H{¿Review / Review your application?}
+  H -->|sí| I[Click Review]
+  I --> C
+  H -->|no| J[STOP debug\nscreenshot + dump]
+```
+
+Orden canónico del footer:
+
+**Next/Continue** → (cuando desaparece) → **Review** → (pantalla review) → **Submit application** → **Done**
 
 Patrón de prueba generalizado:
 
 ```
 abrir Easy Apply
-→ (opcional) elegir CV / fill resumen / fill cover
-→ mientras haya Next/Continue: contestar yes/no conocidos → Next
-→ al ver Submit: STOP (dry-run) | Submit solo en apply real
+→ (opcional) CV / resumen / cover
+→ mientras haya Next/Continue: fill conocidos → Next
+→ si no hay Next pero hay Review: click Review
+→ al ver Submit application: STOP (dry-run) | Submit+Done (productivo)
 ```
 
 ---
@@ -107,9 +130,9 @@ Priorizar `getByRole` / `aria-label` (EN observados + fallbacks ES).
 |---|---|---|---|
 | Easy Apply | `getByRole('link', { name: 'Easy Apply to this job' })` | Estable | **Es link, no button** (codegen Macro/GLOBAL HR) |
 | Easy Apply (fallback) | otros `link`/`button` con Easy Apply | Heurística | Solo si falla el primario |
-| Continuar / Next | `button` **o** `link` (`modal-controls.ts`) | Estable | Probar ambos roles |
-| Revisar | idem Review | Estable | |
-| Enviar / Submit | idem Submit application | Estable | Dry-run: detectar, no click |
+| Continuar / Next | `button` **o** `link` (`modal-controls.ts`) | Estable | Mientras exista, avanzar con esto |
+| Review | `Review` / `Review your application` (button o link) | Estable | **Aparece cuando ya no hay Next**; antes de Submit |
+| Enviar / Submit | `Submit application` | Estable | Dry-run: detectar, no click; viene **después** de Review |
 | Done | idem Done/Listo | Estable | Post-submit |
 | Yes/No | `getByText(/^Sí$\|^Yes$/i)` | Media | Heurística; ampliar con apply-answers |
 | Modal | `getByRole('dialog')` | Estable | |

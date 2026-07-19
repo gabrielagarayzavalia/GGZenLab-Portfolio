@@ -18,25 +18,46 @@ export function resolveTrackerXlsx(): string {
   return process.env.EMPLEOS_TRACKER_XLSX ?? DEFAULT_XLSX;
 }
 
-/** Exporta cola → Empleos_Tracker.xlsx */
-export function exportQueueToExcel(): boolean {
+function sleepSync(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* Excel a veces suelta el lock en 1–2s */
+  }
+}
+
+/** Exporta cola → Empleos_Tracker.xlsx (reintenta si el archivo está bloqueado). */
+export function exportQueueToExcel(maxAttempts = 3): boolean {
   const xlsx = resolveTrackerXlsx();
   if (!fs.existsSync(SYNC_SCRIPT)) {
     console.error(`   ✗ No está ${SYNC_SCRIPT}`);
     return false;
   }
-  try {
-    console.log(`\n📤 Exportando cola → Excel…`);
-    execFileSync("python", [SYNC_SCRIPT, "export", xlsx], {
-      cwd: ROOT,
-      stdio: "inherit",
-      shell: false,
-    });
-    return true;
-  } catch (err) {
-    console.error("   ✗ Export Excel falló:", err);
-    return false;
+  console.log(`\n📤 Exportando cola → Excel…`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      execFileSync("python", [SYNC_SCRIPT, "export", xlsx], {
+        cwd: ROOT,
+        stdio: "inherit",
+        shell: false,
+      });
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const locked = /Permission denied|EPERM|EBUSY|being used by another/i.test(msg);
+      console.error(
+        `   ✗ Export Excel falló (intento ${attempt}/${maxAttempts})${
+          locked ? " — cerrá Empleos_Tracker.xlsx si está abierto" : ""
+        }`
+      );
+      if (attempt < maxAttempts) sleepSync(2000);
+      else {
+        console.error(
+          "   ✗ Export sin éxito. La cola CSV ya tiene enviada; re-exportá al cerrar Excel."
+        );
+      }
+    }
   }
+  return false;
 }
 
 /** Abre el Excel del tracker para revisión / postulación manual. */

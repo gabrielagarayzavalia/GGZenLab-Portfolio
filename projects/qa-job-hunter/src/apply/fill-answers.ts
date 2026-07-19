@@ -389,7 +389,98 @@ async function clickLocationSuggestion(page: Page): Promise<string | null> {
   return text || "Liniers";
 }
 
-/** Location (city): tipear Liniers y CLICK en dropdown (Liniers, Comuna 9, …). */
+const MANDATORY_FIELD_RE =
+  /please enter|is required|required|mandatory|obligatorio|enter a valid|make a selection|seleccion(a|á)|please make a selection|completar|campo obligatorio/i;
+
+/** ¿Hay mensaje de campo mandatorio / error de typeahead en el modal? */
+export async function hasMandatoryFieldError(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const blob = ((await root.innerText().catch(() => "")) ?? "").slice(0, 4000);
+  if (MANDATORY_FIELD_RE.test(blob)) return true;
+  const blocking = await hasBlockingEmptyFields(page);
+  return blocking.some(
+    (f) =>
+      f.errorText ||
+      PSEUDO_ANSWERS.locationCity.fieldMatch.test(f.label) ||
+      PSEUDO_ANSWERS.locationCity.hintMatch.test(f.label)
+  );
+}
+
+/**
+ * Click en el campo + reescribir hasta que aparezca el dropdown.
+ * 3 intentos; si falla → false (caller cierra y prueba otra estrategia).
+ */
+async function typeaheadWithDropdownRetries(
+  page: Page,
+  input: Locator,
+  typeText: string,
+  labelForLog: string,
+  valueOk: (val: string) => boolean,
+  maxAttempts = 3
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(
+        `   ↳ ${labelForLog}: click + tipear "${typeText}" hasta dropdown (intento ${attempt}/${maxAttempts})`
+      );
+      await input.scrollIntoViewIfNeeded().catch(() => {});
+      await input.click({ timeout: 4000 });
+      await sleep(200);
+      // Seleccionar todo y borrar (más fiable que fill("") en typeahead LinkedIn)
+      await input.press("Control+a").catch(() => {});
+      await input.press("Backspace").catch(() => {});
+      await input.fill("").catch(() => {});
+      await sleep(250);
+      await input.pressSequentially(typeText, { delay: 100 });
+      await sleep(1600);
+
+      const dropdownVisible = await typeaheadHits(page)
+        .first()
+        .isVisible({ timeout: 3500 })
+        .catch(() => false);
+
+      if (!dropdownVisible) {
+        console.log(`   ↳ ${labelForLog}: dropdown no apareció — reintento`);
+        // Forzar foco de nuevo
+        await input.click({ force: true, timeout: 2000 }).catch(() => {});
+        continue;
+      }
+
+      const picked = await clickLocationSuggestion(page);
+      if (!picked) {
+        await page.keyboard.press("ArrowDown").catch(() => {});
+        await sleep(200);
+        await page.keyboard.press("Enter").catch(() => {});
+        await sleep(700);
+      } else {
+        console.log(`   ↳ ${labelForLog}: click en "${picked.slice(0, 90)}"`);
+      }
+
+      const after = ((await input.inputValue().catch(() => "")) ?? "").trim();
+      if (valueOk(after)) {
+        console.log(`   ↳ ${labelForLog}: valor OK → ${after.slice(0, 90)}`);
+        return true;
+      }
+
+      // Error mandatorio tras elegir mal / no elegir
+      if (await hasMandatoryFieldError(page)) {
+        console.log(
+          `   ↳ ${labelForLog}: sigue error mandatorio ("${after.slice(0, 50)}") — reintento`
+        );
+      } else {
+        console.log(
+          `   ↳ ${labelForLog}: valor aún inválido ("${after.slice(0, 60)}") — reintento`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`   ↳ ${labelForLog}: error intento ${attempt}: ${msg.slice(0, 120)}`);
+    }
+  }
+  return false;
+}
+
+/** Location (city): tipear Liniers y CLICK en dropdown (Liniers, Comuna 9, …). Hasta 3 intentos. */
 export async function fillLocationLiniers(page: Page): Promise<boolean> {
   const input = await findLocationInput(page);
   if (!input) return false;
@@ -406,37 +497,53 @@ export async function fillLocationLiniers(page: Page): Promise<boolean> {
     return true;
   }
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    console.log(
-      `   ↳ Location: tipeando "${typeText}" y click en dropdown (intento ${attempt})`
-    );
-    await input.click({ timeout: 3000 }).catch(() => {});
-    await input.fill("");
-    await sleep(200);
-    await input.pressSequentially(typeText, { delay: 90 });
-    await sleep(1400);
+  return typeaheadWithDropdownRetries(page, input, typeText, "Location", locationValueOk, 3);
+}
 
-    const picked = await clickLocationSuggestion(page);
-    if (!picked) {
-      // Último recurso: bajar + Enter sobre la primera opción del listbox
-      await page.keyboard.press("ArrowDown").catch(() => {});
-      await sleep(200);
-      await page.keyboard.press("Enter").catch(() => {});
-      await sleep(700);
-    } else {
-      console.log(`   ↳ Location: click en "${picked.slice(0, 90)}"`);
-    }
+export type MandatoryRecoverResult = "ok" | "failed_close";
 
-    const after = ((await input.inputValue().catch(() => "")) ?? "").trim();
-    if (locationValueOk(after)) {
-      console.log(`   ↳ Location: valor OK → ${after.slice(0, 90)}`);
-      return true;
-    }
-    console.log(
-      `   ↳ Location: valor aún inválido ("${after.slice(0, 60)}") — hace falta click en Comuna 9`
+/**
+ * Si hay error de campo mandatorio (p.ej. Location sin dropdown):
+ * reintenta typeahead 3 veces; si falla, cierra el modal para otra estrategia.
+ */
+export async function recoverMandatoryTypeaheadOrClose(
+  page: Page
+): Promise<MandatoryRecoverResult> {
+  const needs =
+    (await hasMandatoryFieldError(page)) ||
+    (await hasBlockingEmptyFields(page)).some((f) =>
+      PSEUDO_ANSWERS.locationCity.fieldMatch.test(f.label)
     );
+  if (!needs) return "ok";
+
+  console.log("   ⚠ Campo mandatorio / typeahead — recover (máx. 3 intentos)…");
+  const ok = await fillLocationLiniers(page);
+  if (ok && !(await hasMandatoryFieldError(page))) {
+    console.log("   ✓ Recover typeahead OK");
+    return "ok";
   }
-  return false;
+
+  // Tras 3 intentos: cerrar modal y dejar para otra estrategia
+  console.log(
+    "   ✗ Typeahead mandatorio falló tras 3 intentos — cierro modal (otra estrategia después)"
+  );
+  const dismiss = page
+    .locator(
+      "button[aria-label='Dismiss'], button[aria-label='Cerrar'], button[aria-label*='Dismiss'], a[aria-label='Dismiss']"
+    )
+    .first();
+  if (await dismiss.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await dismiss.click({ timeout: 4000 }).catch(() =>
+      dismiss.click({ force: true, timeout: 4000 })
+    );
+  } else {
+    await page.keyboard.press("Escape").catch(() => {});
+    await sleep(400);
+    // Save/Discard → Discard para no dejar basura inconsistente
+    await handleSaveDiscardModal(page, "dry_run");
+  }
+  await sleep(600);
+  return "failed_close";
 }
 
 /** Select Country → Argentina (Greenhouse Additional Questions). */

@@ -38,6 +38,8 @@ import {
   saveRequiredFieldsDump,
   logCapturedFields,
   hasBlockingEmptyFields,
+  hasMandatoryFieldError,
+  recoverMandatoryTypeaheadOrClose,
 } from "./apply/fill-answers.js";
 import {
   MAXIMIZED_LAUNCH_ARGS,
@@ -48,7 +50,7 @@ import {
   waitForEasyApplyModalReady,
   waitForJobPageReady,
 } from "./apply/page-ready.js";
-import { finishProductiveRun } from "./apply/post-run.js";
+import { exportQueueToExcel, finishProductiveRun } from "./apply/post-run.js";
 import {
   canonicalJobUrl,
   ensureQueueFromMatched,
@@ -68,7 +70,10 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Tras Submit: Done + Excel enviada. */
+/**
+ * Tras Submit exitoso: Excel/cola → enviada siempre (Done es opcional).
+ * Caso 1: sin botón Done sigue contando como enviada.
+ */
 async function completeSubmitAndDone(
   page: import("playwright").Page,
   job: ApplyJob,
@@ -78,10 +83,19 @@ async function completeSubmitAndDone(
     .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
     .catch(() => {});
 
-  let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
+  // Submit ya clickeado → marcar enviada de inmediato (no depender de Done).
+  record.status = "submitted";
+  record.reason = "Easy Apply enviada (Submit; sincronizando Done…)";
+  markEnviadaIfAllowed(job.jobId, record.reason);
+  setApplicationStatus(
+    { id: job.jobId, title: job.title, company: job.company },
+    "applied"
+  );
+
+  const clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
   if (clickedDone) await sleep(1500);
 
-  const confirmed =
+  const uiConfirmed =
     clickedDone ||
     (await detectAlreadyApplied(page)) ||
     (await page
@@ -90,24 +104,20 @@ async function completeSubmitAndDone(
       .isVisible({ timeout: 3000 })
       .catch(() => false));
 
-  if (confirmed) {
-    record.status = "submitted";
-    record.reason = clickedDone
-      ? "Easy Apply enviada (Submit + Done)"
-      : "Easy Apply enviada (Submit; Done no visible)";
-    markEnviadaIfAllowed(job.jobId, record.reason);
-    setApplicationStatus(
-      { id: job.jobId, title: job.title, company: job.company },
-      "applied"
-    );
-    await page
-      .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
-      .catch(() => {});
-    return record;
-  }
+  record.reason = clickedDone
+    ? "Easy Apply enviada (Submit + Done)"
+    : uiConfirmed
+      ? "Easy Apply enviada (Submit; Done no visible)"
+      : "Easy Apply enviada (Submit; Done no visible — Excel enviada)";
+  markEnviadaIfAllowed(job.jobId, record.reason);
 
-  record.status = "blocked";
-  record.reason = "Submit sin Done/confirmación — verificar en LinkedIn";
+  await page
+    .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
+    .catch(() => {});
+
+  // Intento inmediato a Excel (si el archivo está abierto, finishProductiveRun reintenta).
+  exportQueueToExcel();
+
   return record;
 }
 
@@ -332,6 +342,27 @@ async function tryEasyApply(
       // Re-scroll tras rellenar (dropdowns / campos nuevos)
       await scrollEasyApplyFormToEnd(page);
 
+      // Antes de avanzar: si hay mandatorio/typeahead roto → 3 reintentos o cerrar
+      if (await hasMandatoryFieldError(page)) {
+        const recover = await recoverMandatoryTypeaheadOrClose(page);
+        if (recover === "failed_close") {
+          record.status = "blocked";
+          record.reason =
+            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+          updateQueueRow(job.jobId, {
+            status: "pendiente",
+            easyApply: "yes",
+            reason: record.reason,
+          });
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
+            .catch(() => {});
+          return record;
+        }
+        await fillPseudoAnswers(page);
+        await scrollEasyApplyFormToEnd(page);
+      }
+
       const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1500);
 
       if (submitBtn) {
@@ -361,6 +392,26 @@ async function tryEasyApply(
         });
         await sleep(2000);
 
+        // Tras Next: error mandatorio → recover typeahead (3×) o cerrar
+        if (await hasMandatoryFieldError(page)) {
+          const recover = await recoverMandatoryTypeaheadOrClose(page);
+          if (recover === "failed_close") {
+            record.status = "blocked";
+            record.reason =
+              "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+            updateQueueRow(job.jobId, {
+              status: "pendiente",
+              easyApply: "yes",
+              reason: record.reason,
+            });
+            await page
+              .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
+              .catch(() => {});
+            return record;
+          }
+          continue;
+        }
+
         const sd = await handleSaveDiscardModal(page, "productive");
         if (sd === "saved") {
           const afterSave = await afterSaveContinueToSubmit(page, modal, job, record);
@@ -378,20 +429,45 @@ async function tryEasyApply(
           (await nextBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
         if (ok) {
           await sleep(1500);
+          if (await hasMandatoryFieldError(page)) {
+            const recover = await recoverMandatoryTypeaheadOrClose(page);
+            if (recover === "failed_close") {
+              record.status = "blocked";
+              record.reason =
+                "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+              updateQueueRow(job.jobId, {
+                status: "pendiente",
+                easyApply: "yes",
+                reason: record.reason,
+              });
+              return record;
+            }
+          }
           continue;
         }
       }
 
       const blocking = await hasBlockingEmptyFields(page);
       if (blocking.length > 0) {
-        const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
-        logCapturedFields(blocking);
-        record.status = "blocked";
-        record.reason = `Campos obligatorios sin completar — ver ${path.basename(dump)}`;
-        await page
-          .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-required.png`) })
-          .catch(() => {});
-        return record;
+        const recover = await recoverMandatoryTypeaheadOrClose(page);
+        if (recover === "failed_close") {
+          record.status = "blocked";
+          record.reason =
+            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+          updateQueueRow(job.jobId, {
+            status: "pendiente",
+            easyApply: "yes",
+            reason: record.reason,
+          });
+          const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
+          logCapturedFields(blocking);
+          record.reason += ` — ver ${path.basename(dump)}`;
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-required.png`) })
+            .catch(() => {});
+          return record;
+        }
+        continue;
       }
 
       break;

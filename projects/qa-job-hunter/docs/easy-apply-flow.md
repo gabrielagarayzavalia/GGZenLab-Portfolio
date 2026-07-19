@@ -59,7 +59,8 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**
   - **Dry-run (prueba):** → **Discard** y **salir** (cerrar sin guardar ni enviar).
-  - **Productivo:** → **Save** → buscar **Submit** → click → **Done** → Excel `enviada` → siguiente puesto. Al terminar la cola: **export Excel + abrir Excel** (sin mailto / sin abrir Gmail).
+  - **Productivo:** → **Save** → buscar **Submit** → click → Excel `enviada` **aunque no haya Done** → intentar Done si aparece → siguiente puesto. Al terminar la cola: **export Excel + abrir Excel** (sin mailto / sin abrir Gmail; reintenta si Excel está abierto).
+  - **Typeahead mandatorio** (Location, etc.): si falla validación → click en el campo + reescribir hasta ver dropdown, **hasta 3 veces**; si sigue fallando → cerrar modal y dejar para otra estrategia.
 - **Sin reintentos:** si falla el primer intento de un paso → **STOP** y debug (exit 3/4); no seguir al siguiente aviso.
 - **Capturas de error (dry-run):** `output/apply/screenshots/<jobId>-dryrun-<tag>.png` (+ dump JSON en `output/apply/required-fields-*.json`).
 - **Fingerprint de paso:** solo modal Easy Apply (nunca `<main>` del aviso); si no, Next válido se marca `stuck` en falso.

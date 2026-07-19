@@ -245,6 +245,44 @@ export function markEnviadaIfAllowed(jobId: string, reason: string): boolean {
 }
 
 /**
+ * Fuerza pendiente (p. ej. APPLY_JOB_ID reintento).
+ * No pisa cerrada/descartada. Sí puede bajar de enviada si el Submit no se confirmó.
+ */
+export function forcePendienteForRetry(
+  jobId: string,
+  patch: Partial<Pick<QueueRow, "reason" | "notes" | "easyApply" | "title" | "company" | "url" | "matchPercent">>
+): QueueRow | null {
+  const rows = loadQueue();
+  const idx = rows.findIndex((r) => r.jobId === jobId);
+  if (idx >= 0) {
+    if (isFinalStatus(rows[idx].status)) return null;
+    rows[idx] = {
+      ...rows[idx],
+      ...patch,
+      status: "pendiente",
+      easyApply: (patch.easyApply ?? rows[idx].easyApply) || "yes",
+      updatedAt: new Date().toISOString(),
+    };
+    saveQueue(rows);
+    return rows[idx];
+  }
+  const row: QueueRow = {
+    jobId,
+    title: patch.title ?? "Forced apply",
+    company: patch.company ?? "Forced",
+    url: patch.url ?? `https://www.linkedin.com/jobs/view/${jobId}/`,
+    matchPercent: patch.matchPercent ?? 0,
+    easyApply: patch.easyApply ?? "yes",
+    status: "pendiente",
+    reason: patch.reason ?? "APPLY_JOB_ID",
+    notes: patch.notes ?? "",
+    updatedAt: new Date().toISOString(),
+  };
+  saveQueue([row, ...rows]);
+  return row;
+}
+
+/**
  * Siguiente pendiente.
  * Orden: easyApply=yes → unknown → no (reintento).
  * `excludeJobIds` evita re-tomar el mismo aviso en la misma corrida.

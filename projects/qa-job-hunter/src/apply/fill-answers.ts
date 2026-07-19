@@ -5,7 +5,11 @@ import fs from "fs";
 import path from "path";
 import type { Locator, Page } from "playwright";
 import { APPLY_DIR, ensureDirs } from "./paths.js";
-import { dismissModalOverlays, easyApplyModalRoot } from "./modal-controls.js";
+import {
+  clickSafeInEasyApply,
+  dismissModalOverlays,
+  easyApplyModalRoot,
+} from "./modal-controls.js";
 import { resolveSkillYesNo } from "./my-skills.js";
 import {
   detectApplyRoleKind,
@@ -612,18 +616,8 @@ async function clickLocationSuggestion(page: Page): Promise<string | null> {
   }
 
   const text = ((await target.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-  await target.scrollIntoViewIfNeeded().catch(() => {});
   // El click en el <li>/hit es lo que valida el GEO; tipear solo no alcanza.
-  const clicked =
-    (await target
-      .click({ timeout: 4000, noWaitAfter: true })
-      .then(() => true)
-      .catch(() => false)) ||
-    (await target
-      .click({ force: true, timeout: 4000, noWaitAfter: true })
-      .then(() => true)
-      .catch(() => false));
-  if (!clicked) return null;
+  if (!(await clickSafeInEasyApply(target, { timeoutMs: 4000 }))) return null;
   await sleep(700);
   return text || "Liniers";
 }
@@ -885,21 +879,23 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
   if (await countryBtn.isVisible({ timeout: 800 }).catch(() => false)) {
     const text = ((await countryBtn.innerText().catch(() => "")) ?? "").trim();
     if (selectText.test(text)) return true;
-    await countryBtn.click({ timeout: 3000 }).catch(() => {});
+    await clickSafeInEasyApply(countryBtn, { timeoutMs: 3000 });
     await sleep(400);
-    const opt = page.getByRole("option", { name: selectText }).first();
+    const opt = page.getByRole("listbox").getByRole("option", { name: selectText }).first();
     if (await opt.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await opt.click();
-      console.log(`   ↳ Country: opción Argentina`);
-      await sleep(400);
-      return true;
+      if (await clickSafeInEasyApply(opt)) {
+        console.log(`   ↳ Country: opción Argentina`);
+        await sleep(400);
+        return true;
+      }
     }
-    const byText = page.getByText(/^Argentina$/i).first();
+    const byText = root.getByRole("option", { name: selectText }).first();
     if (await byText.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await byText.click();
-      console.log(`   ↳ Country: click Argentina`);
-      await sleep(400);
-      return true;
+      if (await clickSafeInEasyApply(byText)) {
+        console.log(`   ↳ Country: click Argentina (modal)`);
+        await sleep(400);
+        return true;
+      }
     }
   }
 
@@ -934,9 +930,10 @@ async function fillCompensationFromCaptured(
       continue;
     }
     if (!f.id && !f.label) continue;
+    const modal = page.locator(".jobs-easy-apply-modal").first();
     const el = f.id
-      ? page.locator(`[id="${f.id}"]`).first()
-      : page.getByLabel(f.label.replace(/\s*\*\s*$/, "").trim()).first();
+      ? modal.locator(`[id="${f.id}"]`).first()
+      : modal.getByLabel(f.label.replace(/\s*\*\s*$/, "").trim()).first();
     if (!(await el.count().catch(() => 0))) continue;
     const { value, currency } = resolveCompensationValue(blob);
     const raw = ((await el.inputValue().catch(() => "")) ?? "").trim();
@@ -1146,7 +1143,7 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     if (await tryFillEl(el, blob || "remuneración pretendida", "control")) return true;
   }
 
-  // Fallbacks: texto de pregunta → input; getByLabel; id *-numeric
+  // Fallbacks: texto de pregunta → input; getByLabel; id *-numeric (solo modal)
   const question = root
     .getByText(/remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)|desired\s*salary/i)
     .first();
@@ -1164,12 +1161,7 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
 
   const candidates: { loc: Locator; via: string }[] = [
     { loc: root.getByLabel(/remuneraci[oó]n|sueldo|salary|compensation|pretendid/i).first(), via: "getByLabel" },
-    {
-      loc: page.getByLabel(/remuneraci[oó]n bruta pretendida|expected (salary|compensation)/i).first(),
-      via: "pageLabel",
-    },
     { loc: root.locator("input[id*='-numeric']").first(), via: "id-numeric" },
-    { loc: page.locator(".jobs-easy-apply-modal input[id*='-numeric']").first(), via: "modal-numeric" },
   ];
   for (const { loc, via } of candidates) {
     if (!(await loc.count().catch(() => 0))) continue;
@@ -1202,6 +1194,7 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
   }
 
   const hasQuestion = await page
+    .locator(".jobs-easy-apply-modal")
     .getByText(/remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)/i)
     .first()
     .isVisible({ timeout: 300 })
@@ -1214,16 +1207,18 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
 
 /** PageDown en el modal hasta ver la pregunta de remuneración (o agotar intentos). */
 async function revealCompensationQuestion(page: Page): Promise<boolean> {
-  const q = page.getByText(
-    /remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)|desired\s*salary/i
-  ).first();
+  const modal = page.locator(".jobs-easy-apply-modal").first();
+  if (!(await modal.isVisible({ timeout: 500 }).catch(() => false))) return false;
+
+  const q = modal
+    .getByText(
+      /remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)|desired\s*salary/i
+    )
+    .first();
   if (await q.isVisible({ timeout: 400 }).catch(() => false)) {
     await q.scrollIntoViewIfNeeded().catch(() => {});
     return true;
   }
-
-  const modal = page.locator(".jobs-easy-apply-modal").first();
-  if (!(await modal.isVisible({ timeout: 500 }).catch(() => false))) return false;
 
   for (let i = 0; i < 8; i++) {
     await modal
@@ -1518,7 +1513,7 @@ export async function fillPreferredWorkLocation(page: Page): Promise<boolean> {
         .filter({ hasText: /Argentina|Buenos Aires|Autonomous|Aut[oó]noma/i })
         .first();
       if (await hit.isVisible({ timeout: 1500 }).catch(() => false)) {
-        await hit.click({ force: true, timeout: 3000, noWaitAfter: true }).catch(() => {});
+        await clickSafeInEasyApply(hit, { timeoutMs: 3000 });
       }
     }
     if (ok) console.log(`   ↳ Preferred location: ${target}`);
@@ -1581,18 +1576,23 @@ export async function fillHowDidYouHear(page: Page): Promise<boolean> {
       const hit = typeaheadHits(page).filter({ hasText: suggestionMatch }).first();
       await hit.waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
       if (await hit.isVisible({ timeout: 800 }).catch(() => false)) {
-        await hit.click({ force: true, timeout: 3000, noWaitAfter: true }).catch(() => {});
-        console.log("   ↳ How did you hear: LinkedIn (dropdown click)");
-        await sleep(400);
-        return true;
+        if (await clickSafeInEasyApply(hit, { timeoutMs: 3000 })) {
+          console.log("   ↳ How did you hear: LinkedIn (dropdown click)");
+          await sleep(400);
+          return true;
+        }
       }
     }
-    // Fallback: opción visible en listbox / texto
-    const byText = page.getByText(/^LinkedIn$/i).first();
-    if (await byText.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await byText.click({ force: true }).catch(() => {});
-      console.log("   ↳ How did you hear: LinkedIn (click texto)");
-      return true;
+    // Fallback: solo option/listbox (nunca getByText en el feed)
+    const byOpt = page
+      .getByRole("listbox")
+      .getByRole("option", { name: /^LinkedIn$/i })
+      .first();
+    if (await byOpt.isVisible({ timeout: 1000 }).catch(() => false)) {
+      if (await clickSafeInEasyApply(byOpt)) {
+        console.log("   ↳ How did you hear: LinkedIn (option)");
+        return true;
+      }
     }
     console.log("   ↳ How did you hear: tipeé LinkedIn (sin hit de dropdown)");
     return true;
@@ -1684,25 +1684,14 @@ async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<bo
   // 1) Solo dentro del modal (nunca #interop-outlet del feed detrás)
   const pierced = modal.locator("#interop-outlet").locator(`[id="${toggleId}"]`);
   if ((await pierced.count().catch(() => 0)) > 0) {
-    await pierced.scrollIntoViewIfNeeded().catch(() => {});
-    const clicked =
-      (await pierced.click({ timeout: 4000, noWaitAfter: true }).then(() => true).catch(() => false)) ||
-      (await pierced.click({ force: true, timeout: 4000, noWaitAfter: true }).then(() => true).catch(() => false));
-    if (clicked) {
+    if (await clickSafeInEasyApply(pierced, { timeoutMs: 4000 })) {
       await sleep(400);
       return true;
     }
   }
   const inModal = modal.locator(`[id="${toggleId}"]`);
   if ((await inModal.count().catch(() => 0)) > 0) {
-    const clicked =
-      (await inModal.first().click({ timeout: 4000, noWaitAfter: true }).then(() => true).catch(() => false)) ||
-      (await inModal
-        .first()
-        .click({ force: true, timeout: 4000, noWaitAfter: true })
-        .then(() => true)
-        .catch(() => false));
-    if (clicked) {
+    if (await clickSafeInEasyApply(inModal.first(), { timeoutMs: 4000 })) {
       await sleep(400);
       return true;
     }
@@ -1800,9 +1789,7 @@ async function clickShowMoreResumes(root: Locator): Promise<boolean> {
   }
   const text = ((await target.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
   console.log(`   ↳ Resume: click "${text}" para desplegar CVs`);
-  await target.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
-    target.click({ force: true, timeout: 3000 })
-  );
+  if (!(await clickSafeInEasyApply(target, { timeoutMs: 4000 }))) return false;
   await sleep(1000);
   return true;
 }

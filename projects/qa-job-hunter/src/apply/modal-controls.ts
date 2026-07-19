@@ -93,8 +93,93 @@ export async function dismissModalOverlays(page: Page): Promise<void> {
   await new Promise((r) => setTimeout(r, 250));
 }
 
+/**
+ * ¿El nodo es clickeable del flujo Easy Apply?
+ * Modal + portales de listbox/typeahead + Save/Discard. Nunca el feed detrás.
+ */
+export async function isInsideEasyApplySurface(el: Locator): Promise<boolean> {
+  return el
+    .evaluate((node) => {
+      const n = node as Element;
+      if (n.closest?.(".jobs-easy-apply-modal")) return true;
+      if (n.closest?.("[class*='jobs-easy-apply']")) return true;
+      if (n.closest?.("[data-test-modal]")) return true;
+      if (n.closest?.("[role='listbox']")) return true;
+      if (n.closest?.("[role='option']")) return true;
+      if (n.closest?.("[data-test-single-typeahead-entity-form-search-result]")) return true;
+      if (n.closest?.(".basic-typeahead__selectable")) return true;
+      if (n.closest?.(".search-typeahead-v2__hit")) return true;
+      const saveDiscard = n.closest?.(".artdeco-modal, [role='dialog']");
+      if (
+        saveDiscard &&
+        /save this application|save or discard|guardar|descartar|unsaved/i.test(
+          saveDiscard.textContent || ""
+        )
+      ) {
+        return true;
+      }
+      return false;
+    })
+    .catch(() => false);
+}
+
+/** Click solo si el objetivo está en el modal / typeahead (bloquea links del feed). */
+export async function clickSafeInEasyApply(
+  el: Locator,
+  opts?: { force?: boolean; timeoutMs?: number }
+): Promise<boolean> {
+  const timeoutMs = opts?.timeoutMs ?? 4000;
+  const href = ((await el.getAttribute("href").catch(() => null)) ?? "").trim();
+  if (href && /\/jobs\/view\/|\/company\/|linkedin\.com\/in\/|\/jobs\/collections\//i.test(href)) {
+    console.log(`   ↳ click bloqueado (link de feed/perfil): ${href.slice(0, 90)}`);
+    return false;
+  }
+  if (href && /help\.linkedin|\/help\/|\/legal\//i.test(href)) {
+    console.log(`   ↳ click bloqueado (Help/legal fuera del form)`);
+    return false;
+  }
+  if (!(await isInsideEasyApplySurface(el))) {
+    console.log("   ↳ click bloqueado: objetivo fuera del modal Easy Apply");
+    return false;
+  }
+  await el.scrollIntoViewIfNeeded().catch(() => {});
+  if (
+    await el
+      .click({ timeout: timeoutMs, noWaitAfter: true })
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    return true;
+  }
+  if (opts?.force === false) return false;
+  return el
+    .click({ force: true, timeout: timeoutMs, noWaitAfter: true })
+    .then(() => true)
+    .catch(() => false);
+}
+
+function isPageScope(scope: Scope): scope is Page {
+  return typeof (scope as Page).goto === "function";
+}
+
 /** Primer control visible: data-* LinkedIn, button, o link. */
 export async function findButtonOrLink(
+  scope: Scope,
+  name: string | RegExp,
+  timeoutMs = 800
+): Promise<Locator | null> {
+  // Si nos pasan Page, buscar PRIMERO en el modal (evita Next/links del carrusel).
+  if (isPageScope(scope)) {
+    const modal = easyApplyModalRoot(scope);
+    if (await modal.isVisible({ timeout: 350 }).catch(() => false)) {
+      const inModal = await findButtonOrLinkInScope(modal, name, timeoutMs);
+      if (inModal) return inModal;
+    }
+  }
+  return findButtonOrLinkInScope(scope, name, timeoutMs);
+}
+
+async function findButtonOrLinkInScope(
   scope: Scope,
   name: string | RegExp,
   timeoutMs = 800
@@ -157,25 +242,10 @@ export async function clickButtonOrLink(
   if (!el) return false;
 
   const page =
-    pageForEscape ??
-    ("keyboard" in scope ? (scope as Page) : undefined);
+    pageForEscape ?? (isPageScope(scope) ? scope : undefined);
   if (page) await dismissModalOverlays(page);
 
-  await el.scrollIntoViewIfNeeded().catch(() => {});
-  // noWaitAfter: LinkedIn a veces dispara navegación parcial y el click “ok” termina en timeout.
-  if (
-    await el
-      .click({ timeout: 4000, noWaitAfter: true })
-      .then(() => true)
-      .catch(() => false)
-  ) {
-    return true;
-  }
-  // Typeahead u overlay intercepta → force
-  return el
-    .click({ force: true, timeout: 4000, noWaitAfter: true })
-    .then(() => true)
-    .catch(() => false);
+  return clickSafeInEasyApply(el, { timeoutMs: 4000 });
 }
 
 /**

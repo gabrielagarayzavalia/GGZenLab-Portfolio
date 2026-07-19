@@ -1,6 +1,7 @@
 // Detección de Easy Apply / Applied / aviso cerrado en LinkedIn (idioma base: inglés).
 
 import type { Locator, Page } from "playwright";
+import { resolveApplyScope } from "./modal-controls.js";
 
 /** Ya postulada (EN prioritario + ES). Incluye "Application submitted". */
 const APPLIED_RE =
@@ -137,30 +138,45 @@ export async function findEasyApplyControl(
   return false;
 }
 
-/** Click robusto: overlay de LinkedIn a veces intercepta el click normal. */
+async function applyFlowOpened(page: Page): Promise<boolean> {
+  return Boolean(await resolveApplyScope(page, 2500));
+}
+
+/** Click robusto: overlay intercepta click; si no abre flujo, goto /apply/. */
 async function clickEasyApplyElement(page: Page, el: Locator): Promise<boolean> {
   await el.scrollIntoViewIfNeeded().catch(() => {});
   const href = (await el.getAttribute("href").catch(() => "")) ?? "";
 
-  const clicked =
-    (await el.click({ timeout: 5000 }).then(() => true).catch(() => false)) ||
-    (await el.click({ force: true, timeout: 5000 }).then(() => true).catch(() => false));
+  const tryClick = (force: boolean) =>
+    el.click({ timeout: 5000, force }).then(() => true).catch(() => false);
 
-  if (clicked) {
-    await new Promise((r) => setTimeout(r, 1000));
+  if ((await tryClick(false)) || (await tryClick(true))) {
+    await new Promise((r) => setTimeout(r, 1500));
     if (/search-results/i.test(page.url())) {
       await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
-      return false;
+    } else if (await applyFlowOpened(page)) {
+      return true;
     }
-    return true;
+    // Click “ok” pero no abrió modal → seguir a href
   }
 
-  // Fallback: el link real apunta a /jobs/view/<id>/apply/
-  if (/\/apply\//i.test(href)) {
-    const abs = href.startsWith("http") ? href : new URL(href, page.url()).href;
-    await page.goto(abs, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await new Promise((r) => setTimeout(r, 1500));
-    return !/search-results/i.test(page.url());
+  const applyHref = /\/apply\//i.test(href)
+    ? href.startsWith("http")
+      ? href
+      : new URL(href, page.url()).href
+    : (() => {
+        const m = page.url().match(/\/jobs\/view\/(\d+)/);
+        return m
+          ? `https://www.linkedin.com/jobs/view/${m[1]}/apply/?openSDUIApplyFlow=true`
+          : "";
+      })();
+
+  if (applyHref) {
+    console.log(`   Fallback: navegando a ${applyHref}`);
+    await page.goto(applyHref, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await new Promise((r) => setTimeout(r, 2000));
+    if (/search-results/i.test(page.url())) return false;
+    return applyFlowOpened(page);
   }
 
   return false;

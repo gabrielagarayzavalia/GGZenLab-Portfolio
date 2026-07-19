@@ -9,6 +9,7 @@
 // - Con Easy Apply → dry-run hasta Submit → Excel pendiente
 // - Easy Apply visible y modal no abre → STOP (exit 2)
 // - Next bloqueado por required → captura campos, cierra sesión (exit 3)
+// - Cualquier fallo en un intento Easy Apply → STOP (exit 4); no seguir al siguiente
 
 import { chromium, type Browser, type Locator, type Page } from "playwright";
 import {
@@ -70,6 +71,29 @@ export class EasyApplyModalNotOpenedError extends Error {
   }
 }
 
+/** Primer fallo del dry-run → parar y debuguear (no reintentar / no siguiente job). */
+export class DryRunDebugStopError extends Error {
+  constructor(
+    public readonly jobId: string,
+    public readonly url: string,
+    detail: string,
+    public readonly dumpPath?: string
+  ) {
+    super(`STOP/DEBUG: ${detail}. jobId=${jobId} url=${url}`);
+    this.name = "DryRunDebugStopError";
+  }
+}
+
+async function stepFingerprint(page: Page): Promise<string> {
+  const url = page.url();
+  const root = page
+    .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
+    .first();
+  const text = (await root.innerText().catch(() => "")).slice(0, 400).replace(/\s+/g, " ");
+  const heading = (await root.locator("h2, h3").first().innerText().catch(() => "")).trim();
+  return `${url}|${heading}|${text.slice(0, 120)}`;
+}
+
 async function maybeFillOptionalTexts(page: Page): Promise<void> {
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
@@ -118,7 +142,7 @@ async function stopForRequiredFields(
 async function tryAdvanceNext(
   page: Page,
   scope: Page | Locator
-): Promise<"advanced" | "blocked" | "no_next"> {
+): Promise<"advanced" | "blocked" | "no_next" | "stuck"> {
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review
   await fillPseudoAnswers(page);
 
@@ -136,6 +160,7 @@ async function tryAdvanceNext(
 
   if (await isNextDisabled(page)) return "blocked";
 
+  const beforeFp = await stepFingerprint(page);
   const beforeUrl = page.url();
   const advanced =
     (await clickButtonOrLink(scope, MODAL_LABELS.review, 600, page)) ||
@@ -145,7 +170,6 @@ async function tryAdvanceNext(
   if (!advanced) {
     const cssNext = cssPrimaryActions(scope);
     if (await cssNext.isVisible({ timeout: 400 }).catch(() => false)) {
-      // Re-check por si acaso
       if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
       await page.keyboard.press("Escape").catch(() => {});
       await sleep(200);
@@ -160,7 +184,6 @@ async function tryAdvanceNext(
 
   await sleep(1200);
 
-  // Si saltó Save/Discard → descartar y tratar como bloqueado
   if (await dismissSaveOrDiscard(page)) return "blocked";
 
   if (await isNextDisabled(page)) return "blocked";
@@ -168,6 +191,12 @@ async function tryAdvanceNext(
   const hasErrors = fields.some((f) => f.errorText);
   if (hasErrors && page.url() === beforeUrl) return "blocked";
   if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
+
+  const afterFp = await stepFingerprint(page);
+  if (afterFp === beforeFp) {
+    console.log("   ⛔ Next/Review clickeado pero el paso no cambió");
+    return "stuck";
+  }
   return "advanced";
 }
 
@@ -175,7 +204,7 @@ async function dryRunThroughModal(
   page: Page,
   jobId: string,
   jobUrl: string
-): Promise<"ok" | "incomplete" | "no_modal"> {
+): Promise<"ok" | "no_modal"> {
   const scope = await resolveApplyScope(page, 12000);
   if (!scope) {
     console.error("   ✗ Modal/flujo Easy Apply NO visible tras el click");
@@ -188,6 +217,7 @@ async function dryRunThroughModal(
       : "   Modal Easy Apply abierto"
   );
 
+  // Un solo intento por paso; si falla → STOP (sin reintentos ni siguiente job).
   for (let i = 0; i < 10; i++) {
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
@@ -202,25 +232,27 @@ async function dryRunThroughModal(
     const step = await tryAdvanceNext(page, scope);
     if (step === "advanced") continue;
 
-    if (step === "blocked" || step === "no_next") {
-      // Reintentar fill (ej. Location) y un Next más
-      await fillPseudoAnswers(page);
-      await sleep(500);
-      if (await isNextDisabled(page)) {
-        await stopForRequiredFields(page, jobId, jobUrl);
-      }
-      const retry = await tryAdvanceNext(page, scope);
-      if (retry === "advanced") continue;
-      await stopForRequiredFields(page, jobId, jobUrl);
-    }
+    // Primer fallo → dump + parar (no segundo intento)
+    console.error(`   � dump + parar (no segundo intento)
+    console.error(`   ✗ Fallo en paso ${i + 1}: ${step}`);
+    await stopForRequiredFields(page, jobId, jobUrl);
   }
-  return "incomplete";
+
+  const fields = await captureRequiredFields(page);
+  const dumpPath = saveRequiredFieldsDump(jobId, jobUrl, fields);
+  logCapturedFields(fields);
+  throw new DryRunDebugStopError(
+    jobId,
+    jobUrl,
+    "no se llegó a Submit tras varios pasos — debug",
+    dumpPath
+  );
 }
 
 async function processJob(
   page: Page,
   row: QueueRow
-): Promise<"dry_ok" | "skip_no_ea" | "enviada" | "cerrada" | "skip_final" | "incomplete"> {
+): Promise<"dry_ok" | "skip_no_ea" | "enviada" | "cerrada" | "skip_final"> {
   if (isFinalStatus(row.status)) {
     console.log(`\n↷ Skip ${row.jobId} (estado final: ${row.status})`);
     return "skip_final";
@@ -300,13 +332,11 @@ async function processJob(
     throw new EasyApplyModalNotOpenedError(row.jobId, job.url, "modal no abrió");
   }
 
+  // result === "ok" (fallos ya tiraron STOP)
   updateQueueRow(row.jobId, {
     status: "pendiente",
     easyApply: "yes",
-    reason:
-      result === "ok"
-        ? "Dry-run OK hasta Submit (sin enviar) — pendiente"
-        : "Dry-run incompleto (modal sí abrió) — pendiente",
+    reason: "Dry-run OK hasta Submit (sin enviar) — pendiente",
   });
 
   if (!(await clickButtonOrLink(page, MODAL_LABELS.dismiss, 500))) {
@@ -320,7 +350,7 @@ async function processJob(
     }
   }
 
-  return result === "ok" ? "dry_ok" : "incomplete";
+  return "dry_ok";
 }
 
 async function main() {
@@ -372,19 +402,29 @@ async function main() {
       } catch (err) {
         if (err instanceof EasyApplyModalNotOpenedError) {
           console.error(`\n🛑 ${err.message}`);
-          await closeSession("modal no abrió");
+          await closeSession("modal no abrió — debug");
           process.exit(2);
         }
         if (err instanceof RequiredFieldsBlockedError) {
           console.error(`\n🛑 ${err.message}`);
-          await closeSession("campos obligatorios — esperando tus opciones de relleno");
+          await closeSession("campos obligatorios — debug (no se sigue al siguiente)");
           process.exit(3);
         }
-        throw err;
+        if (err instanceof DryRunDebugStopError) {
+          console.error(`\n🛑 ${err.message}`);
+          if (err.dumpPath) console.error(`   Dump → ${err.dumpPath}`);
+          await closeSession("fallo dry-run — debug (no se sigue al siguiente)");
+          process.exit(4);
+        }
+        console.error(`\n🛑 Error inesperado — frenando para debug:`);
+        console.error(err);
+        await closeSession("error inesperado");
+        process.exit(1);
       }
 
       if (outcome === "dry_ok") {
         dryOk++;
+        // Default: un éxito y listo (salvo DRY_RUN_ALL=1)
         if (process.env.DRY_RUN_ALL !== "1") break;
       } else if (outcome === "enviada") enviada++;
       else if (outcome === "cerrada") cerrada++;

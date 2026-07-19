@@ -1487,30 +1487,41 @@ export async function selectResumeForRole(
     );
   };
 
-  // Analyst: el CV suele estar oculto → Siempre "Show N more" primero, luego mejor match
-  if (kind === "analyst") {
-    console.log("   ↳ Resume: puesto Analyst → Show more + mejor CV Analyst");
-    await clickShowMoreResumes(root);
-    if (await clickResumeRadioMatching(root, wantRe, kind)) {
-      if (await resumeOk()) return true;
+  /** ¿Hay un CV del rol visible en la lista default (sin Show more)? */
+  const roleCvVisibleInDefault = async (): Promise<boolean> => {
+    const radios = root.locator("input[type='radio']");
+    const rn = await radios.count().catch(() => 0);
+    for (let i = 0; i < rn; i++) {
+      const radio = radios.nth(i);
+      if (!(await radio.isVisible().catch(() => false))) continue;
+      const blob = await radioCardText(radio);
+      if (COVER_AS_RESUME_RE.test(blob)) continue;
+      if (scoreResumeForRole(blob, kind) >= 70) return true;
     }
+    return false;
+  };
+
+  const visible = await roleCvVisibleInDefault();
+  if (!visible) {
+    console.log(
+      `   ↳ Resume: CV ${kind} no visible en default → Show more + mejor match`
+    );
     await clickShowMoreResumes(root);
-    if (await clickResumeRadioMatching(root, wantRe, kind)) {
-      if (await resumeOk()) return true;
-    }
   } else {
-    // Automation: si ya está visible, click; si no, Show more
-    if (await clickResumeRadioMatching(root, wantRe, kind)) {
-      if (await resumeOk()) return true;
-    }
-    await clickShowMoreResumes(root);
-    if (await clickResumeRadioMatching(root, wantRe, kind)) {
-      if (await resumeOk()) return true;
-    }
-    await clickShowMoreResumes(root);
-    if (await clickResumeRadioMatching(root, wantRe, kind)) {
-      if (await resumeOk()) return true;
-    }
+    console.log(`   ↳ Resume: CV ${kind} visible → seleccionar mejor match`);
+  }
+
+  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+    if (await resumeOk()) return true;
+  }
+  // Reintentar expandir (lista larga / Analyst oculto)
+  await clickShowMoreResumes(root);
+  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+    if (await resumeOk()) return true;
+  }
+  await clickShowMoreResumes(root);
+  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+    if (await resumeOk()) return true;
   }
 
   if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(root))) {

@@ -476,11 +476,13 @@ function typeaheadHits(page: Page): Locator {
   );
 }
 
-/** Espera input/control usable (visible + enabled), como base antes de tipar. */
+/** Espera input/control usable (attached + enabled). Scroll para revelar off-viewport. */
 async function waitForControlReady(el: Locator, timeoutMs = 6000): Promise<boolean> {
   try {
-    await el.waitFor({ state: "visible", timeout: timeoutMs });
+    await el.waitFor({ state: "attached", timeout: timeoutMs });
     await el.scrollIntoViewIfNeeded().catch(() => {});
+    // Visible ayuda pero LinkedIn a veces reporta false fuera del fold del modal
+    await el.waitFor({ state: "visible", timeout: Math.min(1500, timeoutMs) }).catch(() => {});
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const disabled = await el.isDisabled().catch(() => true);
@@ -924,30 +926,73 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
   const { fieldMatch } = PSEUDO_ANSWERS.expectedCompensation;
 
-  // Campo a menudo bajo el fold (ej. tras "top choice")
+  // Campo a menudo bajo el fold (ej. tras "top choice") — scrollear todos los scrollables del modal
   await root
     .evaluate((node) => {
-      const scrollables = node.querySelectorAll(
-        ".jobs-easy-apply-content, .overflow-y-auto, [class*='scroll']"
-      );
-      for (const s of Array.from(scrollables)) {
-        (s as HTMLElement).scrollTop = (s as HTMLElement).scrollHeight;
-      }
+      const isScrollable = (el: Element) => {
+        if (!(el instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(el);
+        const oy = style.overflowY;
+        return (
+          (oy === "auto" || oy === "scroll" || oy === "overlay") &&
+          el.scrollHeight > el.clientHeight + 8
+        );
+      };
+      const stack: HTMLElement[] = [];
+      const walk = (el: Element) => {
+        if (isScrollable(el)) stack.push(el as HTMLElement);
+        for (const child of Array.from(el.children)) walk(child);
+      };
+      walk(node);
+      for (const s of stack) s.scrollTop = s.scrollHeight;
     })
     .catch(() => {});
-  await sleep(300);
+  await sleep(400);
+
+  const tryFillEl = async (el: Locator, blob: string, via: string): Promise<boolean> => {
+    const { value, currency } = resolveCompensationValue(blob);
+    const raw = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(raw)) {
+      console.log(`   ↳ Remuneración: dejo prefill ("${raw.slice(0, 40)}")`);
+      return true;
+    }
+    await el.scrollIntoViewIfNeeded().catch(() => {});
+    let ok = await fillInputWithWaits(page, el, value, {
+      logName: `Remuneración (${currency})`,
+      maxAttempts: 3,
+      expectTypeahead: false,
+    });
+    // LinkedIn numeric a veces no acepta .fill — tipiar
+    if (!ok) {
+      try {
+        await el.click({ force: true, timeout: 2000 });
+        await el.press("Control+a").catch(() => {});
+        await el.pressSequentially(value, { delay: 40 });
+        await sleep(300);
+        const after = ((await el.inputValue().catch(() => "")) ?? "").trim();
+        ok = after.replace(/[.,\s]/g, "").includes(value.replace(/[.,\s]/g, ""));
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      console.log(`   ↳ Remuneración pretendida (${currency}, ${via}): ${value}`);
+      return true;
+    }
+    console.log(`   ↳ Remuneración (${currency}, ${via}): falló tras waits/reintentos`);
+    return false;
+  };
 
   const controls = root.locator(
     "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
   );
   const n = await controls.count();
-  let filled = false;
 
   for (let i = 0; i < n; i++) {
     const el = controls.nth(i);
     await el.scrollIntoViewIfNeeded().catch(() => {});
-    // attached basta: LinkedIn a veces marca isVisible=false fuera del viewport
     if (!(await el.count().catch(() => 0))) continue;
+    const id = ((await el.getAttribute("id")) ?? "").trim();
     const label = await fieldLabel(el);
     const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
     const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
@@ -955,79 +1000,64 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     const near = await el
       .evaluate((node) => {
         const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 300);
+      })
+      .catch(() => "");
+    const blob = `${label} ${aria} ${ph} ${name} ${id} ${near}`;
+    const looksNumeric = /numeric/i.test(id);
+    const isComp =
+      fieldMatch.test(blob) ||
+      (looksNumeric && /remuneraci|salary|compensation|sueldo|pretendid/i.test(blob));
+    if (!isComp) continue;
+
+    if (await tryFillEl(el, blob || "remuneración pretendida", "control")) return true;
+  }
+
+  // Fallbacks: texto de pregunta → input; getByLabel; id *-numeric
+  const question = root
+    .getByText(/remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)|desired\s*salary/i)
+    .first();
+  if (await question.count().catch(() => 0)) {
+    await question.scrollIntoViewIfNeeded().catch(() => {});
+    const nearInput = question
+      .locator(
+        "xpath=ancestor::*[contains(@class,'form') or contains(@class,'fb-') or self::fieldset or self::li][1]//input[not(@type='hidden') and not(@type='checkbox') and not(@type='radio')]"
+      )
+      .first();
+    if (await nearInput.count().catch(() => 0)) {
+      if (await tryFillEl(nearInput, "remuneración bruta pretendida", "question→input")) return true;
+    }
+  }
+
+  const candidates: { loc: Locator; via: string }[] = [
+    { loc: root.getByLabel(/remuneraci[oó]n|sueldo|salary|compensation|pretendid/i).first(), via: "getByLabel" },
+    {
+      loc: page.getByLabel(/remuneraci[oó]n bruta pretendida|expected (salary|compensation)/i).first(),
+      via: "pageLabel",
+    },
+    { loc: root.locator("input[id*='-numeric']").first(), via: "id-numeric" },
+    { loc: page.locator(".jobs-easy-apply-modal input[id*='-numeric']").first(), via: "modal-numeric" },
+  ];
+  for (const { loc, via } of candidates) {
+    if (!(await loc.count().catch(() => 0))) continue;
+    const id = ((await loc.getAttribute("id")) ?? "").trim();
+    const near = await loc
+      .evaluate((node) => {
+        const wrap =
           node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
           node.parentElement;
         return (wrap?.textContent ?? "").trim().slice(0, 300);
       })
       .catch(() => "");
-    const blob = `${label} ${aria} ${ph} ${name} ${near}`;
-    if (!fieldMatch.test(blob)) continue;
-
-    const { value, currency } = resolveCompensationValue(blob);
-    const raw = ((await el.inputValue().catch(() => "")) ?? "").trim();
-    if (hasPrefillValue(raw)) {
-      console.log(`   ↳ Remuneración: dejo prefill ("${raw.slice(0, 40)}")`);
-      filled = true;
-      continue;
-    }
-
-    const ok = await fillInputWithWaits(page, el, value, {
-      logName: `Remuneración (${currency})`,
-      maxAttempts: 3,
-      expectTypeahead: false,
-    });
-    if (ok) {
-      console.log(`   ↳ Remuneración pretendida (${currency}): ${value}`);
-      filled = true;
-    } else {
-      console.log(`   ↳ Remuneración (${currency}): falló tras waits/reintentos`);
-    }
+    const blob = `${near} ${id} remuneración`;
+    if (await tryFillEl(loc, blob, via)) return true;
   }
 
-  // Fallback: label ES/EN (scope o page) + input *-numeric de LinkedIn
-  if (!filled) {
-    const candidates = [
-      root.getByLabel(/remuneraci[oó]n|sueldo|salary|compensation|pretendid/i).first(),
-      page.getByLabel(/remuneraci[oó]n bruta pretendida|expected (salary|compensation)/i).first(),
-      root.locator("input[id*='-numeric'], input[id*='numeric']").first(),
-      page.locator(".jobs-easy-apply-modal input[id*='-numeric']").first(),
-    ];
-    for (const byLabel of candidates) {
-      if (!(await byLabel.count().catch(() => 0))) continue;
-      await byLabel.scrollIntoViewIfNeeded().catch(() => {});
-      const near = await byLabel
-        .evaluate((node) => {
-          const wrap =
-            node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
-            node.parentElement;
-          return (wrap?.textContent ?? "").trim().slice(0, 300);
-        })
-        .catch(() => "");
-      const blob = `${(await byLabel.getAttribute("aria-label")) ?? ""} ${near} remuneración`;
-      if (!fieldMatch.test(blob) && !/numeric|remuneraci|salary|compensation|sueldo/i.test(blob)) {
-        continue;
-      }
-      const raw = ((await byLabel.inputValue().catch(() => "")) ?? "").trim();
-      if (hasPrefillValue(raw)) {
-        console.log(`   ↳ Remuneración: dejo prefill ("${raw.slice(0, 40)}")`);
-        filled = true;
-        break;
-      }
-      const { value, currency } = resolveCompensationValue(blob);
-      const ok = await fillInputWithWaits(page, byLabel, value, {
-        logName: `Remuneración (${currency})`,
-        maxAttempts: 2,
-        expectTypeahead: false,
-      });
-      if (ok) {
-        console.log(`   ↳ Remuneración pretendida (${currency}, fallback): ${value}`);
-        filled = true;
-        break;
-      }
-    }
-  }
-
-  return filled;
+  console.log("   ↳ Remuneración: no se encontró input en el modal");
+  return false;
 }
 
 async function fillTextByFieldMatch(

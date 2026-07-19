@@ -89,7 +89,15 @@ export async function waitForEasyApplyModalReady(page: Page): Promise<boolean> {
  * campos/preguntas que no entran en el viewport del modal.
  */
 export async function scrollEasyApplyFormToEnd(page: Page): Promise<void> {
-  const modal = page.locator(".jobs-easy-apply-modal, [role='dialog']").first();
+  // Priorizar modal Easy Apply (evitar [role=dialog] del chrome con Select language).
+  const modal = page
+    .locator(".jobs-easy-apply-modal")
+    .or(
+      page.locator("[role='dialog']").filter({
+        hasText: /Apply to|Postular|Additional|Preguntas|Review|Resume|Curr[ií]culum/i,
+      })
+    )
+    .first();
   if (!(await modal.isVisible({ timeout: 1000 }).catch(() => false))) return;
 
   await modal

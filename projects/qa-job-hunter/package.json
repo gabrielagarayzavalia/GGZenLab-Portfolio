@@ -13,7 +13,12 @@
     "test:api": "npx tsx --test tests/api/jobs.test.ts",
     "playwright:ide": "npx tsx src/open-playwright-ide.ts",
     "easy-apply": "npx tsx src/easy-apply.ts",
-    "easy-apply:dry-run": "npx tsx src/easy-apply-dry-run.ts"
+    "easy-apply:dry-run": "npx tsx src/easy-apply-dry-run.ts",
+    "campaign": "npx tsx src/campaign/run-campaign.ts",
+    "agent:gmail-fetch": "npx tsx agents/gmail-fetch/run.ts",
+    "agent:pipeline": "npx tsx agents/pipeline-match/run.ts",
+    "agent:excel": "npx tsx agents/excel-bridge/run.ts",
+    "agent:gmail-reconcile": "npx tsx agents/gmail-reconcile/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

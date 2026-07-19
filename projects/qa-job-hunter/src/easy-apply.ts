@@ -257,7 +257,12 @@ async function tryEasyApply(
         .innerText()
         .catch(() => "");
 
-      if (/assessment|evaluaci[oó]n|quiz|test/i.test(bodyText)) {
+      // NO usar /\btest\b/: matchea "Test Automation" del perfil y bloquea en falso.
+      if (
+        /skills assessment|online assessment|coding assessment|assessment required|completar (la |una )?evaluaci[oó]n|\bquiz\b|honeypot|workday assessment/i.test(
+          bodyText
+        )
+      ) {
         record.status = "blocked";
         record.reason = "Requiere assessment — completar manualmente";
         await page

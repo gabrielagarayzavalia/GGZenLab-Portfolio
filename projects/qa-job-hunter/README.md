@@ -259,6 +259,21 @@ Para cada empleo con **70%+ de match**:
 
 *Construido con Playwright + Ollama / Claude + TypeScript*
 
+## 📬 Campaña (sub-agentes)
+
+Orden canónico: **fetch → pipeline → Easy Apply → Excel manual → Gmail reconcile**.
+
+```powershell
+npm run campaign
+npm run campaign -- --from=apply --apply-max=2
+```
+
+- Docs: [`docs/campaign-flow.md`](docs/campaign-flow.md), [`agents/README.md`](agents/README.md)
+- `APPLIED_LIST_ROOT` apunta a `qa-job-applied-list` (Gmail fetch/pipeline/reconcile)
+- Cierre Easy Apply: export + abrir Excel — **sin mailto / sin Gmail UI**
+
+---
+
 ## Roadmap y GitHub Issues
 
 Backlog completo (B-06…B-16): [`BACKLOG.md`](BACKLOG.md)  

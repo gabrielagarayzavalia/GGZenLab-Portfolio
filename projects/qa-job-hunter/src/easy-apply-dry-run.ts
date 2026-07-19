@@ -22,7 +22,9 @@ import {
 } from "./apply/detect-apply.js";
 import {
   captureRequiredFields,
+  dismissSaveOrDiscard,
   fillPseudoAnswers,
+  hasBlockingEmptyFields,
   isNextDisabled,
   logCapturedFields,
   RequiredFieldsBlockedError,
@@ -117,6 +119,21 @@ async function tryAdvanceNext(
   page: Page,
   scope: Page | Locator
 ): Promise<"advanced" | "blocked" | "no_next"> {
+  // 1) Rellenar lo conocido ANTES de cualquier Next/Review
+  await fillPseudoAnswers(page);
+
+  // 2) Si hay obligatorios vacíos → NO click (evita Save or Discard)
+  const blocking = await hasBlockingEmptyFields(page);
+  if (blocking.length > 0) {
+    console.log(
+      `   ⛔ Next/Review bloqueado: ${blocking.length} campo(s) sin rellenar (no click)`
+    );
+    for (const f of blocking.slice(0, 6)) {
+      console.log(`      · ${f.label}${f.errorText ? ` — ${f.errorText}` : ""}`);
+    }
+    return "blocked";
+  }
+
   if (await isNextDisabled(page)) return "blocked";
 
   const beforeUrl = page.url();
@@ -128,6 +145,8 @@ async function tryAdvanceNext(
   if (!advanced) {
     const cssNext = cssPrimaryActions(scope);
     if (await cssNext.isVisible({ timeout: 400 }).catch(() => false)) {
+      // Re-check por si acaso
+      if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
       await page.keyboard.press("Escape").catch(() => {});
       await sleep(200);
       const ok =
@@ -140,11 +159,15 @@ async function tryAdvanceNext(
   }
 
   await sleep(1200);
-  // Si Next sigue disabled o aparecen errores → bloqueado
+
+  // Si saltó Save/Discard → descartar y tratar como bloqueado
+  if (await dismissSaveOrDiscard(page)) return "blocked";
+
   if (await isNextDisabled(page)) return "blocked";
   const fields = await captureRequiredFields(page);
   const hasErrors = fields.some((f) => f.errorText);
   if (hasErrors && page.url() === beforeUrl) return "blocked";
+  if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
   return "advanced";
 }
 

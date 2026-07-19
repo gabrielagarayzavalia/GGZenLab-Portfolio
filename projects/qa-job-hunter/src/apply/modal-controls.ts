@@ -7,12 +7,16 @@ type Scope = Page | Locator;
 
 export const MODAL_LABELS = {
   submit: /Submit application|Enviar solicitud/i,
-  review: /Review your application|Revisar/i,
+  /** Greenhouse a veces muestra solo "Review". */
+  review: /^Review$|Review your application|Revisar/i,
   continue: /Continue to next step|Continuar|Siguiente/i,
   /** Solo dentro de dialog — "Next" suelto choca con el carrusel. */
   next: /^(Next|Siguiente)$/i,
   done: /^Done$|^Listo$/i,
   dismiss: /^(Dismiss|Cerrar|Close)$/i,
+  /** Modal al salir con campos incompletos — NO avanzar; descartar. */
+  discard: /^Discard$|Discard changes|Descartar/i,
+  saveDraft: /^Save$|Save for later|Guardar/i,
 } as const;
 
 /** Contenedores conocidos del flujo Easy Apply (modal clásico + SDUI). */

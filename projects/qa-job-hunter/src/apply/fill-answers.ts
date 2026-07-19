@@ -23,14 +23,21 @@ export interface CapturedField {
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
 export const PSEUDO_ANSWERS = {
   locationCity: {
-    /** Campo Location / City / Comuna */
-    fieldMatch: /location|city|ciudad|ubicaci[oó]n|comuna|localidad|where do you live/i,
+    /** Campo Location / City / Comuna (typeahead) */
+    fieldMatch: /location\s*\(city\)|location|city|ciudad|ubicaci[oó]n|comuna|localidad|where do you live/i,
     /** Si el valor/hint menciona comuna 9 → tipear Liniers */
     hintMatch: /comuna\s*9/i,
     typeText: "Liniers",
     suggestionMatch: /Liniers/i,
   },
+  country: {
+    fieldMatch: /^country$|country\*|pa[ií]s/i,
+    selectText: /Argentina/i,
+  },
 } as const;
+
+const EMPTY_SELECT_RE = /select an option|seleccion(a|á)|choose|elegí|elegir/i;
+const PLEASE_SELECT_RE = /please make a selection|hac[eé] una selecci[oó]n|seleccion(a|á) una opci[oó]n/i;
 
 export class RequiredFieldsBlockedError extends Error {
   constructor(
@@ -277,12 +284,146 @@ export async function fillLocationLiniers(page: Page): Promise<boolean> {
   return suggestionMatch.test(after) || after.length > 0;
 }
 
+/** Select Country → Argentina (Greenhouse Additional Questions). */
+export async function fillCountrySelect(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, selectText } = PSEUDO_ANSWERS.country;
+
+  // <select> nativo
+  const selects = root.locator("select");
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    if (!fieldMatch.test(label) && !/country/i.test(label)) continue;
+    const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (val && !EMPTY_SELECT_RE.test(val) && selectText.test(val)) return true;
+    const opt = el.locator("option").filter({ hasText: selectText }).first();
+    if (await opt.count().catch(() => 0)) {
+      const v = await opt.getAttribute("value");
+      if (v != null) {
+        await el.selectOption(v);
+        console.log(`   ↳ Country: seleccionado Argentina`);
+        await sleep(400);
+        return true;
+      }
+    }
+    await el.selectOption({ label: "Argentina" }).catch(async () => {
+      // Algunas UIs usan value ISO
+      await el.selectOption({ value: "Argentina" }).catch(async () => {
+        await el.selectOption({ value: "AR" }).catch(() => {});
+      });
+    });
+    console.log(`   ↳ Country: select Argentina`);
+    await sleep(400);
+    return true;
+  }
+
+  // Dropdown custom (button + listbox)
+  const combos = root.getByRole("combobox").or(root.locator("button").filter({ hasText: EMPTY_SELECT_RE }));
+  // Prefer label Country*
+  const countryBtn = root
+    .locator("label, span, div")
+    .filter({ hasText: /^Country/i })
+    .locator("xpath=ancestor::*[self::div or self::li or self::fieldset][1]")
+    .locator("select, button, [role='combobox']")
+    .first();
+  if (await countryBtn.isVisible({ timeout: 800 }).catch(() => false)) {
+    const text = ((await countryBtn.innerText().catch(() => "")) ?? "").trim();
+    if (selectText.test(text)) return true;
+    await countryBtn.click({ timeout: 3000 }).catch(() => {});
+    await sleep(400);
+    const opt = page.getByRole("option", { name: selectText }).first();
+    if (await opt.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await opt.click();
+      console.log(`   ↳ Country: opción Argentina`);
+      await sleep(400);
+      return true;
+    }
+    const byText = page.getByText(/^Argentina$/i).first();
+    if (await byText.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await byText.click();
+      console.log(`   ↳ Country: click Argentina`);
+      await sleep(400);
+      return true;
+    }
+  }
+
+  void combos;
+  return false;
+}
+
 /** Aplica pseudo-respuestas conocidas en el paso actual. */
 export async function fillPseudoAnswers(page: Page): Promise<number> {
   let filled = 0;
   if (await fillLocationLiniers(page)) filled++;
+  if (await fillCountrySelect(page)) filled++;
   await dismissModalOverlays(page);
   return filled;
+}
+
+/**
+ * ¿Hay campos bloqueantes vacíos? (required / error / "Select an option" en Country*).
+ * Si hay → NO clickear Next/Review (evita modal Save or Discard).
+ */
+export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[]> {
+  const root = scopeRoot(page);
+  if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return [];
+
+  // Error global "Please make a selection"
+  const pageErrors = root.getByText(PLEASE_SELECT_RE);
+  const hasPlease = await pageErrors.first().isVisible({ timeout: 400 }).catch(() => false);
+
+  const all = await captureRequiredFields(page);
+  const blocking = all.filter((f) => {
+    const label = f.label.replace(/\s+/g, " ");
+    const starred = /\*/.test(label);
+    const emptySelect =
+      !f.value || EMPTY_SELECT_RE.test(f.value) || f.value === "0";
+    const isCountry = PSEUDO_ANSWERS.country.fieldMatch.test(label) || /country/i.test(label);
+    if (f.errorText || PLEASE_SELECT_RE.test(f.errorText)) return true;
+    if ((f.required || starred || isCountry) && emptySelect) return true;
+    if (hasPlease && isCountry && emptySelect) return true;
+    // Vacío con aria/html required
+    if ((f.required || starred) && !f.value.trim()) return true;
+    return false;
+  });
+
+  // Dedup por label
+  const seen = new Set<string>();
+  return blocking.filter((f) => {
+    const k = f.label.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/** Si aparece Save/Discard (por haber clickeado Next con incompletos), descartar. */
+export async function dismissSaveOrDiscard(page: Page): Promise<boolean> {
+  const dialog = page.getByRole("dialog").filter({
+    hasText: /save|discard|guardar|descartar|unsaved|sin guardar/i,
+  });
+  if (!(await dialog.first().isVisible({ timeout: 800 }).catch(() => false))) {
+    // A veces es un artdeco modal sin role=dialog claro
+    const discard = page.getByRole("button", { name: /Discard|Descartar/i }).first();
+    if (!(await discard.isVisible({ timeout: 400 }).catch(() => false))) return false;
+    await discard.click({ timeout: 3000 }).catch(() => {});
+    console.log("   ↳ Modal Save/Discard → Discard");
+    await sleep(500);
+    return true;
+  }
+  const discard = dialog.getByRole("button", { name: /Discard|Descartar/i }).first();
+  if (await discard.isVisible({ timeout: 800 }).catch(() => false)) {
+    await discard.click({ timeout: 3000 }).catch(() => {});
+    console.log("   ↳ Modal Save/Discard → Discard");
+    await sleep(500);
+    return true;
+  }
+  await page.keyboard.press("Escape").catch(() => {});
+  await sleep(300);
+  return true;
 }
 
 export async function isNextDisabled(page: Page): Promise<boolean> {
@@ -290,7 +431,7 @@ export async function isNextDisabled(page: Page): Promise<boolean> {
   const scope = (await root.isVisible({ timeout: 500 }).catch(() => false)) ? root : page;
   const next = scope
     .locator(
-      "button[data-easy-apply-next-button], button[data-live-test-easy-apply-next-button], button[aria-label*='Continue to next step'], button[aria-label*='Continue']"
+      "button[data-easy-apply-next-button], button[data-live-test-easy-apply-next-button], button[aria-label*='Continue to next step'], button[aria-label*='Continue'], button[aria-label*='Review']"
     )
     .first();
   if (!(await next.isVisible({ timeout: 800 }).catch(() => false))) return false;

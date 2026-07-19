@@ -1034,7 +1034,10 @@ export async function fillCitySelect(page: Page): Promise<boolean> {
     if (!(await opt.count().catch(() => 0))) continue;
     const v = await opt.getAttribute("value");
     if (v != null) await el.selectOption(v);
-    else await el.selectOption({ label: /Buenos Aires/i }).catch(() => {});
+    else {
+      const lab = ((await opt.innerText().catch(() => "")) ?? "Buenos Aires").trim();
+      await el.selectOption({ label: lab }).catch(() => {});
+    }
     console.log("   ↳ City select: Buenos Aires");
     await sleep(300);
     return true;
@@ -1141,7 +1144,10 @@ export async function answerSkillYesNoQuestions(page: Page): Promise<number> {
         if (await opt.count().catch(() => 0)) {
           const v = await opt.getAttribute("value");
           if (v != null) await sel.selectOption(v);
-          else await sel.selectOption({ label: wantYes ? /Yes|Sí/i : /^No$/i });
+          else {
+            const lab = ((await opt.innerText().catch(() => "")) ?? (wantYes ? "Yes" : "No")).trim();
+            await sel.selectOption({ label: lab }).catch(() => {});
+          }
           clicked = true;
         }
       }

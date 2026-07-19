@@ -3,7 +3,13 @@
 
 /** Criterio para elegir CV en el modal si aparece el picker (opcional). */
 export const RESUME_LABEL_HINT =
-  "Prefer the generic QA / most recent resume already on LinkedIn — do not pick a company-specific CV.";
+  "Show more / See more si hace falta; radio QA_Analyst vs QA_Automation según el puesto.";
+
+/** Nombre de archivo (regex) del CV según rol. */
+export const RESUME_FILE_MATCH = {
+  analyst: /QA_Analyst|QA Analyst|Analyst\.pdf/i,
+  automation: /QA_Automation|QA Automation|Automation\.pdf/i,
+} as const;
 
 /** Cover letter: archivo a subir (upload). Override con COVER_LETTER_PDF. */
 export const COVER_LETTER_PDF_DEFAULT =

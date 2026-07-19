@@ -8,8 +8,10 @@ import { APPLY_DIR, ensureDirs } from "./paths.js";
 import { dismissModalOverlays, easyApplyModalRoot } from "./modal-controls.js";
 import { resolveSkillYesNo } from "./my-skills.js";
 import {
+  detectApplyRoleKind,
   resolveApplicationSummary,
   resolveCoverLetterPdfPath,
+  RESUME_FILE_MATCH,
 } from "./canonical-text.js";
 
 export interface CapturedField {
@@ -32,16 +34,14 @@ export interface CapturedField {
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
 export const PSEUDO_ANSWERS = {
   locationCity: {
-    /** Campo Location / City / Comuna (typeahead) */
-    fieldMatch: /location\s*\(city\)|location|city|ciudad|ubicaci[oó]n|comuna|localidad|where do you live/i,
-    /** Si el valor/hint menciona comuna 9 → tipear Liniers */
+    /**
+     * Solo Location (city) typeahead de LinkedIn — NO "preferred location for work".
+     */
+    fieldMatch: /location\s*\(city\)|ubicaci[oó]n\s*\(ciudad\)|comuna|localidad|where do you live/i,
     hintMatch: /comuna\s*9/i,
     typeText: "Liniers",
-    /** Click obligatorio en el item del dropdown (no basta tipear). */
     suggestionMatch: /Liniers/i,
-    /** Preferir la fila completa: Liniers, Comuna 9, … */
     preferredSuggestion: /Liniers[\s\S]*Comuna\s*9|Comuna\s*9[\s\S]*Liniers/i,
-    /** Valor válido tras el click (GEO completo). */
     validValue: /Liniers/i,
     validValueExtra: /Comuna\s*9|,/i,
   },
@@ -61,7 +61,7 @@ export const PSEUDO_ANSWERS = {
   /** Remuneración pretendida bruta (mensual). */
   expectedCompensation: {
     fieldMatch:
-      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*salary|gross\s*(salary|pay)/i,
+      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)/i,
     usdMatch: /\b(usd|u\$s|us\$|d[oó]lar(es)?|dollars?)\b|\$\s*usd/i,
     arsMatch: /\b(ars|peso(s)?(\s*argentinos?)?|\$\s*ar|arg(?:entina)?)\b/i,
     usdValue: "2750",
@@ -77,13 +77,27 @@ export const PSEUDO_ANSWERS = {
   },
   workOrLiveCityFreeText: {
     fieldMatch:
-      /where (would you like to work|do you (live|want to work)|are you (based|located))|preferred (work )?location|work location|based in|d[oó]nde (viv|te gustar[ií]a trabajar|prefer[ií]s trabajar)|ciudad (de residencia|donde)|lugar de (trabajo|residencia)/i,
+      /where (would you like to work|do you (live|want to work)|are you (based|located))|work location|based in|d[oó]nde (viv|te gustar[ií]a trabajar|prefer[ií]s trabajar)|ciudad (de residencia|donde)|lugar de (trabajo|residencia)/i,
     en: "Buenos Aires city",
     es: "Ciudad Autonoma de Buenos Aires",
   },
+  /** Preferred location for work (Country, City) — texto fijo EN. */
+  preferredWorkLocation: {
+    fieldMatch:
+      /preferred location for work|preferred (work )?location|location for work\s*\(?\s*country/i,
+    value: "Argentina, Autonomous City of Buenos Aires",
+  },
   citySelect: {
     fieldMatch: /^(city|ciudad)\s*\*?$/i,
-    optionMatch: /Buenos Aires/i,
+    /** Preferir CABA; fallback Buenos Aires. */
+    preferredOption: /Ciudad Aut[oó]noma de Buenos Aires|Autonomous City of Buenos Aires/i,
+    optionMatch: /Ciudad Aut[oó]noma de Buenos Aires|Autonomous City of Buenos Aires|Buenos Aires/i,
+  },
+  howDidYouHear: {
+    fieldMatch:
+      /where did you (learn|hear) about|how did you (learn|hear|find) (about|out)|c[oó]mo te enteraste|c[oó]mo te enteraste de/i,
+    typeText: "LinkedIn",
+    suggestionMatch: /LinkedIn/i,
   },
 } as const;
 
@@ -399,6 +413,8 @@ async function findLocationInput(page: Page): Promise<Locator | null> {
     const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
     const blob = `${label} ${aria} ${ph} ${val}`;
+    // No confundir con "preferred location for work"
+    if (PSEUDO_ANSWERS.preferredWorkLocation.fieldMatch.test(blob)) continue;
     if (fieldMatch.test(blob) || hintMatch.test(blob)) return el;
   }
   return null;
@@ -958,10 +974,37 @@ async function fillTextByFieldMatch(
   return false;
 }
 
-/** Cuándo empezar → Immediately / Inmediatamente (solo si vacío). */
+/** Cuándo empezar → Immediately / Inmediatamente (input o select). */
 export async function fillStartAvailability(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
   const { fieldMatch, en, es } = PSEUDO_ANSWERS.startAvailability;
+  const immediateOpt = /immediate|inmediata|asap|available now|0\s*week|sin aviso|right away/i;
+
+  const selects = root.locator("select");
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await waitForControlReady(el, 2500))) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    if (!fieldMatch.test(label) && !/notice period|availability to join/i.test(label)) continue;
+    const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(val) && immediateOpt.test(val)) {
+      console.log(`   ↳ Start/notice: dejo prefill`);
+      return true;
+    }
+    const opt = el.locator("option").filter({ hasText: immediateOpt }).first();
+    await opt.waitFor({ state: "attached", timeout: 2000 }).catch(() => {});
+    if (await opt.count().catch(() => 0)) {
+      const v = await opt.getAttribute("value");
+      const lab = ((await opt.innerText().catch(() => "")) ?? "Immediately").trim();
+      if (v != null) await el.selectOption(v);
+      else await el.selectOption({ label: lab }).catch(() => {});
+      console.log(`   ↳ Start/notice select: ${lab.slice(0, 50)}`);
+      await sleep(300);
+      return true;
+    }
+  }
+
   const controls = root.locator(
     "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
   );
@@ -1027,10 +1070,10 @@ export async function fillWorkOrLiveCityFreeText(page: Page): Promise<boolean> {
   return false;
 }
 
-/** City <select> → Buenos Aires si vacío. */
+/** City <select> → Ciudad Autonoma de Buenos Aires (o Buenos Aires) si vacío. */
 export async function fillCitySelect(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
-  const { fieldMatch, optionMatch } = PSEUDO_ANSWERS.citySelect;
+  const { fieldMatch, optionMatch, preferredOption } = PSEUDO_ANSWERS.citySelect;
   const selects = root.locator("select");
   const n = await selects.count();
   for (let i = 0; i < n; i++) {
@@ -1039,23 +1082,233 @@ export async function fillCitySelect(page: Page): Promise<boolean> {
     const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
     if (!fieldMatch.test(label)) continue;
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
-    if (hasPrefillValue(val)) {
-      console.log(`   ↳ City select: dejo prefill ("${val.slice(0, 40)}")`);
+    if (hasPrefillValue(val) && /Buenos Aires|Aut[oó]noma/i.test(val)) {
+      console.log(`   ↳ City select: dejo prefill ("${val.slice(0, 50)}")`);
       return true;
     }
-    const opt = el.locator("option").filter({ hasText: optionMatch }).first();
-    await opt.waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+    const preferred = el.locator("option").filter({ hasText: preferredOption }).first();
+    const fallback = el.locator("option").filter({ hasText: optionMatch }).first();
+    await preferred.waitFor({ state: "attached", timeout: 2000 }).catch(() => {});
+    const opt = (await preferred.count().catch(() => 0)) ? preferred : fallback;
     if (!(await opt.count().catch(() => 0))) continue;
     const v = await opt.getAttribute("value");
+    const lab = ((await opt.innerText().catch(() => "")) ?? "Ciudad Autonoma de Buenos Aires").trim();
     if (v != null) await el.selectOption(v);
-    else {
-      const lab = ((await opt.innerText().catch(() => "")) ?? "Buenos Aires").trim();
-      await el.selectOption({ label: lab }).catch(() => {});
-    }
-    console.log("   ↳ City select: Buenos Aires");
+    else await el.selectOption({ label: lab }).catch(() => {});
+    console.log(`   ↳ City select: ${lab.slice(0, 60)}`);
     await sleep(300);
     return true;
   }
+  return false;
+}
+
+/** Preferred location for work → Argentina, Autonomous City of Buenos Aires. */
+export async function fillPreferredWorkLocation(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, value } = PSEUDO_ANSWERS.preferredWorkLocation;
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
+    const blob = `${label} ${aria} ${ph}`;
+    if (!fieldMatch.test(blob)) continue;
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (
+      hasPrefillValue(current) &&
+      /Argentina/i.test(current) &&
+      /Buenos Aires|Autonomous/i.test(current)
+    ) {
+      console.log(`   ↳ Preferred location: dejo prefill`);
+      return true;
+    }
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName: "Preferred location",
+      maxAttempts: 2,
+      expectTypeahead: false,
+      valueOk: (v) => /Argentina/i.test(v) && /Buenos Aires|Autonomous/i.test(v),
+    });
+    // Si abre typeahead, click sugerencia Argentina / Buenos Aires
+    if (await waitForTypeaheadList(page, 2000)) {
+      const hit = typeaheadHits(page)
+        .filter({ hasText: /Argentina|Buenos Aires|Autonomous/i })
+        .first();
+      if (await hit.isVisible({ timeout: 1500 }).catch(() => false)) {
+        await hit.click({ force: true, timeout: 3000, noWaitAfter: true }).catch(() => {});
+      }
+    }
+    if (ok) console.log(`   ↳ Preferred location: ${value}`);
+    return ok;
+  }
+  return false;
+}
+
+/** Where did you learn about… → LinkedIn (select o typeahead). */
+export async function fillHowDidYouHear(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, typeText, suggestionMatch } = PSEUDO_ANSWERS.howDidYouHear;
+
+  // <select>
+  const selects = root.locator("select");
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await waitForControlReady(el, 2500))) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    if (!fieldMatch.test(label)) continue;
+    const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(val) && /linkedin/i.test(val)) {
+      console.log(`   ↳ How did you hear: dejo prefill LinkedIn`);
+      return true;
+    }
+    const opt = el.locator("option").filter({ hasText: suggestionMatch }).first();
+    await opt.waitFor({ state: "attached", timeout: 2500 }).catch(() => {});
+    if (await opt.count().catch(() => 0)) {
+      const v = await opt.getAttribute("value");
+      const lab = ((await opt.innerText().catch(() => "")) ?? "LinkedIn").trim();
+      if (v != null) await el.selectOption(v);
+      else await el.selectOption({ label: lab }).catch(() => {});
+      console.log("   ↳ How did you hear: LinkedIn (select)");
+      await sleep(300);
+      return true;
+    }
+  }
+
+  // Input + typeahead
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio'])"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${label} ${aria}`;
+    if (!fieldMatch.test(blob)) continue;
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(current) && /linkedin/i.test(current)) return true;
+
+    await waitForControlReady(el);
+    await el.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
+    await el.fill("");
+    await el.pressSequentially(typeText, { delay: 80 });
+    if (await waitForTypeaheadList(page, 4000)) {
+      const hit = typeaheadHits(page).filter({ hasText: suggestionMatch }).first();
+      await hit.waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
+      if (await hit.isVisible({ timeout: 800 }).catch(() => false)) {
+        await hit.click({ force: true, timeout: 3000, noWaitAfter: true }).catch(() => {});
+        console.log("   ↳ How did you hear: LinkedIn (dropdown click)");
+        await sleep(400);
+        return true;
+      }
+    }
+    // Fallback: opción visible en listbox / texto
+    const byText = page.getByText(/^LinkedIn$/i).first();
+    if (await byText.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await byText.click({ force: true }).catch(() => {});
+      console.log("   ↳ How did you hear: LinkedIn (click texto)");
+      return true;
+    }
+    console.log("   ↳ How did you hear: tipeé LinkedIn (sin hit de dropdown)");
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Selecciona CV Analyst vs Automation.
+ * Si el default no coincide → click See more / Show more y elegir el radio correcto.
+ */
+export async function selectResumeForRole(
+  page: Page,
+  jobTitle = "",
+  company = ""
+): Promise<boolean> {
+  const kind = detectApplyRoleKind(jobTitle, company);
+  const wantRe = kind === "automation" ? RESUME_FILE_MATCH.automation : RESUME_FILE_MATCH.analyst;
+  const root = scopeRoot(page);
+
+  const resumeRadios = root.locator(
+    "label:has(input[type='radio']), [role='radio'], input[type='radio']"
+  );
+  // Heurística: bloques con .pdf
+  const pdfLabels = root.locator("label, span, div").filter({ hasText: /\.pdf/i });
+  const pdfCount = await pdfLabels.count().catch(() => 0);
+  if (pdfCount === 0) return false;
+
+  const selectedBlob = await root
+    .locator("input[type='radio']:checked")
+    .evaluateAll((nodes) =>
+      nodes
+        .map((n) => {
+          const id = n.getAttribute("id");
+          const lab = id
+            ? document.querySelector(`label[for="${id}"]`)?.textContent
+            : n.closest("label")?.textContent;
+          return (lab ?? "").trim();
+        })
+        .join(" | ")
+    )
+    .catch(() => "");
+
+  const alreadyOk =
+    wantRe.test(selectedBlob) && !/intro-GGZ|cover|letter/i.test(selectedBlob);
+  if (alreadyOk) {
+    console.log(`   ↳ Resume: ya seleccionado OK (${kind})`);
+    return true;
+  }
+
+  // Expandir lista
+  const showMore = root
+    .getByRole("button", { name: /see more|show more|ver m[aá]s|mostrar m[aá]s/i })
+    .or(root.getByRole("link", { name: /see more|show more|ver m[aá]s|mostrar m[aá]s/i }))
+    .or(root.locator("button, a").filter({ hasText: /see more|show more|ver m[aá]s|mostrar m[aá]s/i }))
+    .first();
+  if (await showMore.isVisible({ timeout: 1200 }).catch(() => false)) {
+    console.log("   ↳ Resume: click See/Show more para ampliar CVs");
+    await showMore.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
+      showMore.click({ force: true, timeout: 3000 })
+    );
+    await sleep(800);
+  }
+
+  // Click radio cuyo label matchee el CV del rol (no intro letter)
+  const candidates = root.locator("label").filter({ hasText: /\.pdf/i });
+  const cn = await candidates.count().catch(() => 0);
+  for (let i = 0; i < cn; i++) {
+    const lab = candidates.nth(i);
+    const text = ((await lab.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (/intro-GGZ|cover\s*letter|introduction/i.test(text)) continue;
+    if (!wantRe.test(text)) continue;
+    const radio = lab.locator("input[type='radio']").first();
+    if (await radio.count().catch(() => 0)) {
+      await radio.check({ force: true }).catch(async () => {
+        await lab.click({ force: true, timeout: 3000 });
+      });
+    } else {
+      await lab.click({ force: true, timeout: 3000 }).catch(() => {});
+    }
+    console.log(`   ↳ Resume: seleccionado ${kind} → ${text.slice(0, 70)}`);
+    await sleep(400);
+    return true;
+  }
+
+  // Fallback: getByText filename pattern
+  const byName = root.getByText(wantRe).first();
+  if (await byName.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await byName.click({ force: true }).catch(() => {});
+    console.log(`   ↳ Resume: click texto ${kind}`);
+    return true;
+  }
+
+  console.log(`   ↳ Resume: no encontré CV ${kind} tras Show more`);
+  void resumeRadios;
   return false;
 }
 
@@ -1297,10 +1550,13 @@ export async function fillPseudoAnswers(
   const jobTitle = ctx?.jobTitle ?? "";
   const company = ctx?.company ?? "";
   let filled = 0;
+  if (await selectResumeForRole(page, jobTitle, company)) filled++;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
   if (await fillCitySelect(page)) filled++;
+  if (await fillPreferredWorkLocation(page)) filled++;
   if (await fillWorkOrLiveCityFreeText(page)) filled++;
+  if (await fillHowDidYouHear(page)) filled++;
   if (await fillStartAvailability(page)) filled++;
   filled += await answerSkillYesNoQuestions(page);
   if (await uploadCoverLetterPdf(page)) filled++;

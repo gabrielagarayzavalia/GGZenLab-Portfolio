@@ -58,6 +58,10 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
 - **Cover letter:** upload `intro-GGZ.pdf` (`COVER_LETTER_PDF` / path en `canonical-text.ts`).
 - **Summary:** borrar default y pegar texto **QA Analyst** o **QA Automation** según el título del aviso (`resolveApplicationSummary`).
+- **CV:** si el radio default no matchea el rol → **See more / Show more** y elegir `QA_Analyst` vs `QA_Automation`.
+- **Country** = Argentina; **City** = Ciudad Autonoma de Buenos Aires.
+- **Preferred location for work** = `Argentina, Autonomous City of Buenos Aires`.
+- **Where did you learn about…** = LinkedIn (select o typeahead + click).
 - **Prefill:** si el campo ya trae respuesta, **no pisar** — excepto **summary** (siempre pisar) y cover letter (upload).
 - **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` → **Yes/Sí**; si no → **No**.
 - Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).

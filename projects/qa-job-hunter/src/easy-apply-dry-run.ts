@@ -62,6 +62,7 @@ import {
   markEnviadaIfAllowed,
   nextPending,
   rebuildQueueFromMatched,
+  saveQueue,
   toApplyJob,
   updateQueueRow,
   APPLY_QUEUE_PATH,
@@ -324,8 +325,29 @@ async function tryAdvanceNext(
     return "advanced";
   }
 
-  const afterFp = await stepFingerprint(page);
+  let afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
+    // Reintento 1×: a veces el form de CV tarda en aceptar el toggle
+    const needResume = page.getByText(
+      /se necesita un curr[ií]culum|resume is required|please select a resume/i
+    );
+    if (await needResume.isVisible({ timeout: 600 }).catch(() => false)) {
+      console.log("   ↳ Next stuck + error currículum — re-fill resume y Next 1×");
+      await selectResumeForRole(page, jobTitle, company);
+      await sleep(800);
+      const next2 =
+        (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
+        (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
+      if (next2) {
+        await next2.click({ force: true, timeout: 4000 }).catch(() => {});
+        await sleep(2000);
+      }
+      afterFp = await stepFingerprint(page);
+      if (afterFp !== beforeFp) {
+        console.log(`   ✓ Paso avanzó tras re-bind CV`);
+        return "advanced";
+      }
+    }
     console.log("   ⛔ Next/Review clickeado pero el paso no cambió");
     console.log(`   fp before: ${beforeFp.slice(0, 120)}`);
     console.log(`   fp after:  ${afterFp.slice(0, 120)}`);
@@ -559,12 +581,39 @@ async function main() {
   let cerrada = 0;
   let skipNoEa = 0;
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
+  const forceJobId = (process.env.DRY_RUN_JOB_ID ?? "").trim();
   const seen = new Set<string>();
   resetRunUnknownQuestions();
 
   try {
     for (let n = 0; n < maxJobs; n++) {
-      const row = nextPending(true, seen);
+      let row: QueueRow | null = null;
+      if (forceJobId && n === 0) {
+        // Forzar un jobId concreto (ej. Stefanini 4439867066)
+        const q = loadQueue();
+        row = q.find((r) => r.jobId === forceJobId) ?? null;
+        if (!row) {
+          row = {
+            jobId: forceJobId,
+            matchPercent: 85,
+            title: process.env.DRY_RUN_JOB_TITLE ?? "QA Automation (forced dry-run)",
+            company: process.env.DRY_RUN_JOB_COMPANY ?? "Forced",
+            url: `https://www.linkedin.com/jobs/view/${forceJobId}/`,
+            easyApply: "yes",
+            status: "pendiente",
+            reason: "DRY_RUN_JOB_ID",
+            notes: "",
+            updatedAt: new Date().toISOString(),
+          };
+          saveQueue([row, ...q.filter((r) => r.jobId !== forceJobId)]);
+        } else if (row.status !== "pendiente") {
+          updateQueueRow(forceJobId, { status: "pendiente", reason: "DRY_RUN_JOB_ID reintento" });
+          row = loadQueue().find((r) => r.jobId === forceJobId) ?? row;
+        }
+        console.log(`   🎯 DRY_RUN_JOB_ID=${forceJobId} → ${row.url}`);
+      } else {
+        row = nextPending(true, seen);
+      }
       if (!row) {
         console.log("\nNo hay más pendiente distinto.");
         break;

@@ -1313,79 +1313,132 @@ type DocumentCardToggle = {
   aria: string;
 };
 
-/** Recorre #interop-outlet.shadowRoot (+ nested) buscando jobsDocumentCardToggleLabel-*. */
+/**
+ * Recorre #interop-outlet.shadowRoot (+ nested) buscando jobsDocumentCardToggleLabel-*.
+ * evaluate como string: evita __name de tsx/esbuild en el browser.
+ */
 async function listDocumentCardToggles(page: Page): Promise<DocumentCardToggle[]> {
-  return page.evaluate(() => {
-    type T = { id: string; title: string; selected: boolean; aria: string };
-    const out: T[] = [];
-    const seen = new Set<string>();
-
-    function walk(root: Document | ShadowRoot): void {
+  return page.evaluate(`(() => {
+    const out = [];
+    const seen = new Set();
+    function walk(root) {
       const toggles = root.querySelectorAll('[id^="jobsDocumentCardToggleLabel-"]');
       for (const el of Array.from(toggles)) {
         const id = el.id;
         if (!id || seen.has(id)) continue;
         seen.add(id);
-        const aria = (el.getAttribute("aria-label") ?? "").trim();
-        if (/download\s+resume/i.test(aria)) continue;
-
+        const aria = (el.getAttribute("aria-label") || "").trim();
+        if (/download\\s+resume/i.test(aria)) continue;
         const card =
           el.closest(
             "[class*='document'], [class*='JobsDocument'], [class*='resume'], li, label"
-          ) ?? el.parentElement;
-        const raw = `${aria} ${card?.textContent ?? ""}`.replace(/\s+/g, " ").trim();
-        if (/download\s+resume/i.test(raw) && !/(select|deselect)\s+resume/i.test(aria)) {
+          ) || el.parentElement;
+        const raw = (aria + " " + (card && card.textContent ? card.textContent : ""))
+          .replace(/\\s+/g, " ")
+          .trim();
+        if (/download\\s+resume/i.test(raw) && !/(select|deselect)\\s+resume/i.test(aria)) {
           continue;
         }
-        const fromAria =
-          aria.match(/(?:select|deselect)\s+resume\s+(.+\.pdf)/i)?.[1]?.trim() ?? "";
-        const pdf = raw.match(/[\w.\-]+\.pdf/i)?.[0] ?? "";
+        const ariaMatch = aria.match(/(?:select|deselect)\\s+resume\\s+(.+\\.pdf)/i);
+        const fromAria = ariaMatch && ariaMatch[1] ? ariaMatch[1].trim() : "";
+        const pdfMatch = raw.match(/[\\w.\\-]+\\.pdf/i);
+        const pdf = pdfMatch ? pdfMatch[0] : "";
         const title = fromAria || pdf || aria;
         if (!title) continue;
-
-        const selected =
-          /deselect\s+resume/i.test(aria) ||
-          el.getAttribute("aria-checked") === "true" ||
-          el.getAttribute("aria-pressed") === "true" ||
-          (el as HTMLInputElement).checked === true;
-
-        out.push({ id, title, selected, aria });
+        // "Deselect resume X" = ya seleccionado; "Select resume X" = no
+        var selected = /deselect\\s+resume/i.test(aria);
+        var forId = el.getAttribute("for");
+        if (forId) {
+          var input = null;
+          try {
+            input = root.querySelector("#" + CSS.escape(forId));
+          } catch (e1) {
+            input = root.querySelector('[id="' + forId + '"]');
+          }
+          if (input && (input.checked === true || input.getAttribute("aria-checked") === "true")) {
+            selected = true;
+          }
+        }
+        if (el.getAttribute("aria-checked") === "true" || el.checked === true) selected = true;
+        out.push({ id: id, title: title, selected: selected, aria: aria });
       }
       for (const node of Array.from(root.querySelectorAll("*"))) {
-        const sr = (node as Element).shadowRoot;
-        if (sr) walk(sr);
+        if (node.shadowRoot) walk(node.shadowRoot);
       }
     }
-
     const outlet = document.querySelector("#interop-outlet");
-    if (outlet?.shadowRoot) walk(outlet.shadowRoot);
+    if (outlet && outlet.shadowRoot) walk(outlet.shadowRoot);
     walk(document);
     return out;
-  });
+  })()`) as Promise<DocumentCardToggle[]>;
 }
 
 async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<boolean> {
-  return page.evaluate((id) => {
-    function findIn(root: Document | ShadowRoot): HTMLElement | null {
-      const el = root.querySelector(`#${CSS.escape(id)}`) as HTMLElement | null;
-      if (el) return el;
-      for (const node of Array.from(root.querySelectorAll("*"))) {
-        const sr = (node as Element).shadowRoot;
-        if (sr) {
-          const found = findIn(sr);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-    const outlet = document.querySelector("#interop-outlet");
-    let el = outlet?.shadowRoot ? findIn(outlet.shadowRoot) : null;
-    if (!el) el = findIn(document);
-    if (!el) return false;
-    el.scrollIntoView({ block: "center", inline: "nearest" });
-    el.click();
+  // 1) Playwright (pierce shadow de #interop-outlet) — eventos reales CDP
+  const pierced = page.locator("#interop-outlet").locator(`[id="${toggleId}"]`);
+  if ((await pierced.count().catch(() => 0)) > 0) {
+    await pierced.scrollIntoViewIfNeeded().catch(() => {});
+    await pierced.click({ force: true, timeout: 4000 }).catch(() =>
+      pierced.click({ timeout: 4000 })
+    );
+    await sleep(400);
     return true;
-  }, toggleId);
+  }
+  const any = page.locator(`[id="${toggleId}"]`);
+  if ((await any.count().catch(() => 0)) > 0) {
+    await any.first().click({ force: true, timeout: 4000 }).catch(() => {});
+    await sleep(400);
+    return true;
+  }
+
+  // 2) Fallback evaluate + pointer events
+  return page.evaluate(
+    `(() => {
+      const id = ${JSON.stringify(toggleId)};
+      function findIn(root) {
+        var el = null;
+        try { el = root.querySelector("#" + CSS.escape(id)); }
+        catch (e) { el = root.querySelector('[id="' + id + '"]'); }
+        if (el) return el;
+        for (const node of Array.from(root.querySelectorAll("*"))) {
+          if (node.shadowRoot) {
+            const found = findIn(node.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+      const outlet = document.querySelector("#interop-outlet");
+      let el = outlet && outlet.shadowRoot ? findIn(outlet.shadowRoot) : null;
+      if (!el) el = findIn(document);
+      if (!el) return false;
+      el.scrollIntoView({ block: "center", inline: "nearest" });
+      var forId = el.getAttribute("for");
+      var input = null;
+      if (forId) {
+        try {
+          input = (outlet && outlet.shadowRoot
+            ? outlet.shadowRoot.querySelector("#" + CSS.escape(forId))
+            : null) || document.getElementById(forId);
+        } catch (e2) { input = document.getElementById(forId); }
+      }
+      var target = input || el;
+      if (input && (input.checked === true || input.getAttribute("aria-checked") === "true")) {
+        return true;
+      }
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(function (type) {
+        target.dispatchEvent(
+          new MouseEvent(type, { bubbles: true, cancelable: true, view: window })
+        );
+      });
+      if (input) {
+        input.checked = true;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      return true;
+    })()`
+  ) as Promise<boolean>;
 }
 
 async function selectedResumeLabel(page: Page, root: Locator): Promise<string> {
@@ -1433,11 +1486,27 @@ async function clickShowMoreResumes(root: Locator): Promise<boolean> {
   return true;
 }
 
+async function isRoleResumeSelected(page: Page, kind: ApplyRoleKind): Promise<boolean> {
+  const toggles = await listDocumentCardToggles(page);
+  return toggles.some(
+    (t) =>
+      t.selected &&
+      scoreResumeForRole(t.title, kind) >= 70 &&
+      !COVER_AS_RESUME_RE.test(t.title) &&
+      !DOWNLOAD_RESUME_RE.test(t.aria)
+  );
+}
+
 /**
- * Click en jobsDocumentCardToggleLabel-* del card con mejor score.
- * Nunca Download. Nunca el título del puesto.
+ * Click UNA vez en jobsDocumentCardToggleLabel-* del mejor score.
+ * Si ya está seleccionado (Deselect resume), no re-clickear (evita deseleccionar).
  */
 async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<boolean> {
+  if (await isRoleResumeSelected(page, kind)) {
+    console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — no re-click`);
+    return true;
+  }
+
   const toggles = await listDocumentCardToggles(page);
   let best: DocumentCardToggle | null = null;
   let bestScore = 0;
@@ -1453,10 +1522,8 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
   }
 
   if (!best || bestScore < 70) {
-    // Fallback: aria "Select resume <pdf>" en light DOM (excluir Download)
-    const selectLabels = page.locator(
-      '[aria-label^="Select resume" i], [aria-label*="Select resume " i]'
-    );
+    // Fallback light DOM: solo "Select resume" (no Download, no Deselect)
+    const selectLabels = page.locator('[aria-label^="Select resume" i]');
     const n = await selectLabels.count().catch(() => 0);
     let fbBest = -1;
     let fbScore = 0;
@@ -1465,6 +1532,7 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
       const el = selectLabels.nth(i);
       const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
       if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
+      if (/^deselect\s+resume/i.test(aria)) continue;
       const title = aria.replace(/^select\s+resume\s+/i, "").trim();
       const score = scoreResumeForRole(title || aria, kind);
       if (score > fbScore) {
@@ -1480,13 +1548,12 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
       console.log(
         `   ↳ Resume: click TOGGLE (aria) ${kind} (score=${fbScore}) → ${fbTitle.slice(0, 90)}`
       );
-      await sleep(500);
-      return true;
+      await sleep(600);
+      return isRoleResumeSelected(page, kind);
     }
     return false;
   }
 
-  // Ya seleccionado el correcto
   if (best.selected) {
     console.log(
       `   ↳ Resume: toggle ya seleccionado ${kind} → ${best.title.slice(0, 90)}`
@@ -1495,14 +1562,77 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
   }
 
   const ok = await clickDocumentCardToggle(page, best.id);
-  if (ok) {
-    console.log(
-      `   ↳ Resume: click TOGGLE ${kind} (score=${bestScore}) id=${best.id} → ${best.title.slice(0, 90)}`
-    );
-    await sleep(500);
-    return true;
+  if (!ok) {
+    console.log(`   ↳ Resume: no pude clickear toggle id=${best.id}`);
+    return false;
   }
-  console.log(`   ↳ Resume: no pude clickear toggle id=${best.id}`);
+  console.log(
+    `   ↳ Resume: click TOGGLE ${kind} (score=${bestScore}) id=${best.id} → ${best.title.slice(0, 90)}`
+  );
+  await sleep(700);
+
+  // Refuerzo: aria Select/Deselect resume <filename> (sin Download)
+  const fileKey = best.title.replace(/\.pdf$/i, "").slice(0, 48);
+  const deselectAria = page.locator(
+    `[aria-label^="Deselect resume"][aria-label*="${fileKey}" i]`
+  );
+  const selectAria = page.locator(
+    `[aria-label^="Select resume"][aria-label*="${fileKey}" i]`
+  );
+  if (await selectAria.first().isVisible({ timeout: 800 }).catch(() => false)) {
+    await selectAria
+      .first()
+      .click({ force: true, timeout: 4000 })
+      .catch(() => {});
+    await sleep(500);
+  } else if (await deselectAria.first().isVisible({ timeout: 500 }).catch(() => false)) {
+    console.log("   ↳ Resume: form ya en Deselect (seleccionado)");
+  }
+
+  const pdfToken = best.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const formRadio = page.getByRole("radio", { name: new RegExp(pdfToken, "i") }).first();
+  if (await formRadio.count().catch(() => 0)) {
+    const checked = await formRadio.isChecked().catch(() => false);
+    if (!checked) {
+      await formRadio.check({ force: true }).catch(async () => {
+        await formRadio.click({ force: true, timeout: 3000 });
+      });
+      await sleep(400);
+    }
+  }
+
+  const needResume = page.getByText(
+    /se necesita un curr[ií]culum|resume is required|please select a resume/i
+  );
+  for (let w = 0; w < 8; w++) {
+    if (!(await needResume.isVisible({ timeout: 400 }).catch(() => false))) {
+      console.log("   ↳ Resume: error currículum ausente — form OK");
+      break;
+    }
+    console.log("   ↳ Resume: error 'Se necesita un currículum' — re-bind…");
+    // Click Playwright en toggle + Select aria si aparece
+    await clickDocumentCardToggle(page, best.id);
+    if (await selectAria.first().isVisible({ timeout: 400 }).catch(() => false)) {
+      await selectAria.first().click({ force: true }).catch(() => {});
+    }
+    // A veces el form reacciona al click en el nombre del PDF (no Download)
+    const name = page.getByText(best.title, { exact: true }).first();
+    if (await name.isVisible({ timeout: 400 }).catch(() => false)) {
+      await name.click({ force: true }).catch(() => {});
+    }
+    await sleep(800);
+  }
+
+  const uiOk = await isRoleResumeSelected(page, kind);
+  const errGone = !(await needResume.isVisible({ timeout: 500 }).catch(() => false));
+  if (uiOk && errGone) return true;
+  if (uiOk && !errGone) {
+    console.log(
+      "   ↳ Resume: ⚠ toggle UI OK pero form sigue con 'Se necesita un currículum'"
+    );
+    return false;
+  }
+  console.log("   ↳ Resume: no quedó seleccionado tras re-bind");
   return false;
 }
 
@@ -1516,7 +1646,9 @@ export async function selectResumeForRole(
   company = ""
 ): Promise<boolean> {
   const kind = detectApplyRoleKind(jobTitle, company);
-  const root = scopeRoot(page);
+  // Solo modal Easy Apply (nunca <main>: evita falsos .pdf del JD)
+  const root = page.locator(".jobs-easy-apply-modal, [role='dialog']").first();
+  if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return false;
 
   const toggles0 = await listDocumentCardToggles(page);
   const pdfVisible = await root
@@ -1530,7 +1662,7 @@ export async function selectResumeForRole(
     .isVisible({ timeout: 800 })
     .catch(() => false);
   const curriculumStep = await root
-    .getByText(/curr[ií]culum|resume|be sure to include an updated resume/i)
+    .getByText(/curr[ií]culum|be sure to include an updated resume/i)
     .first()
     .isVisible({ timeout: 600 })
     .catch(() => false);
@@ -1538,17 +1670,13 @@ export async function selectResumeForRole(
     return false;
   }
 
-  const selectedBlob = await selectedResumeLabel(page, root);
-  const coverSelected = COVER_AS_RESUME_RE.test(selectedBlob);
-  const alreadyOk =
-    scoreResumeForRole(selectedBlob, kind) >= 70 && !coverSelected;
-
-  if (alreadyOk) {
+  if (await isRoleResumeSelected(page, kind)) {
     console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — no es cover letter`);
     return true;
   }
 
-  if (coverSelected || /intro-GGZ/i.test(selectedBlob)) {
+  const selectedBlob = await selectedResumeLabel(page, root);
+  if (COVER_AS_RESUME_RE.test(selectedBlob) || /intro-GGZ/i.test(selectedBlob)) {
     console.log(
       `   ↳ Resume: ⚠ default es cover letter ("${selectedBlob.slice(0, 60)}") — cambiar a ${kind}`
     );
@@ -1557,11 +1685,6 @@ export async function selectResumeForRole(
       `   ↳ Resume: default no matchea ${kind} ("${selectedBlob.slice(0, 50)}") — buscar CV`
     );
   }
-
-  const resumeOk = async () => {
-    const after = await selectedResumeLabel(page, root);
-    return scoreResumeForRole(after, kind) >= 70 && !COVER_AS_RESUME_RE.test(after);
-  };
 
   const roleCvVisibleInDefault = async (): Promise<boolean> => {
     const toggles = await listDocumentCardToggles(page);
@@ -1579,34 +1702,24 @@ export async function selectResumeForRole(
     return false;
   };
 
-  const visible = await roleCvVisibleInDefault();
-  if (!visible) {
-    console.log(
-      `   ↳ Resume: CV ${kind} no visible en default → Show more + toggle`
-    );
+  if (!(await roleCvVisibleInDefault())) {
+    console.log(`   ↳ Resume: CV ${kind} no visible en default → Show more + toggle`);
     await clickShowMoreResumes(root);
   } else {
     console.log(`   ↳ Resume: CV ${kind} visible → click TOGGLE (no Download)`);
   }
 
-  if (await clickBestResumeToggle(page, kind)) {
-    if (await resumeOk()) return true;
-  }
+  // Un intento (+ Show more si falla). clickBestResumeToggle ya evita re-click si OK.
+  if (await clickBestResumeToggle(page, kind)) return true;
   await clickShowMoreResumes(root);
-  if (await clickBestResumeToggle(page, kind)) {
-    if (await resumeOk()) return true;
-  }
-  await clickShowMoreResumes(root);
-  if (await clickBestResumeToggle(page, kind)) {
-    if (await resumeOk()) return true;
-  }
+  if (await clickBestResumeToggle(page, kind)) return true;
 
   if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(page, root))) {
     console.log("   ↳ Resume: ✗ sigue seleccionado intro-GGZ / cover — no avanzar");
     return false;
   }
 
-  console.log(`   ↳ Resume: no encontré toggle CV ${kind} tras Show more`);
+  console.log(`   ↳ Resume: no encontré / no quedó seleccionado CV ${kind}`);
   return false;
 }
 

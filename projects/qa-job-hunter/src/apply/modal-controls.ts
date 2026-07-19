@@ -71,12 +71,46 @@ export async function resolveApplyScope(
   return null;
 }
 
-/** Primer control visible: button, si no link (mismo accessible name). */
+/** Cierra typeahead/autocomplete que tapa Next/Submit en el modal. */
+export async function dismissModalOverlays(page: Page): Promise<void> {
+  await page.keyboard.press("Escape").catch(() => {});
+  await new Promise((r) => setTimeout(r, 300));
+  // Click fuera del typeahead si sigue abierto
+  const hit = page.locator("[data-test-single-typeahead-entity-form-search-result]").first();
+  if (await hit.isVisible({ timeout: 200 }).catch(() => false)) {
+    await page.keyboard.press("Escape").catch(() => {});
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+/** Primer control visible: data-* LinkedIn, button, o link. */
 export async function findButtonOrLink(
   scope: Scope,
   name: string | RegExp,
   timeoutMs = 800
 ): Promise<Locator | null> {
+  // Atributos estables del modal Easy Apply
+  if (name === MODAL_LABELS.continue || name === MODAL_LABELS.next) {
+    const nextData = scope
+      .locator(
+        "button[data-easy-apply-next-button], button[data-live-test-easy-apply-next-button], [data-easy-apply-next-button]"
+      )
+      .first();
+    if (await nextData.isVisible({ timeout: Math.min(timeoutMs, 600) }).catch(() => false)) {
+      return nextData;
+    }
+  }
+  if (name === MODAL_LABELS.submit) {
+    const submitData = scope
+      .locator(
+        "button[data-live-test-easy-apply-submit-button], button[aria-label*='Submit application'], button[aria-label*='Enviar solicitud']"
+      )
+      .first();
+    if (await submitData.isVisible({ timeout: Math.min(timeoutMs, 600) }).catch(() => false)) {
+      return submitData;
+    }
+  }
+
   const button = scope.getByRole("button", { name }).first();
   if (await button.isVisible({ timeout: timeoutMs }).catch(() => false)) {
     return button;
@@ -91,12 +125,23 @@ export async function findButtonOrLink(
 export async function clickButtonOrLink(
   scope: Scope,
   name: string | RegExp,
-  timeoutMs = 800
+  timeoutMs = 800,
+  pageForEscape?: Page
 ): Promise<boolean> {
   const el = await findButtonOrLink(scope, name, timeoutMs);
   if (!el) return false;
-  await el.click({ timeout: 5000 });
-  return true;
+
+  const page =
+    pageForEscape ??
+    ("keyboard" in scope ? (scope as Page) : undefined);
+  if (page) await dismissModalOverlays(page);
+
+  await el.scrollIntoViewIfNeeded().catch(() => {});
+  if (await el.click({ timeout: 4000 }).then(() => true).catch(() => false)) {
+    return true;
+  }
+  // Typeahead u overlay intercepta → force
+  return el.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false);
 }
 
 /**

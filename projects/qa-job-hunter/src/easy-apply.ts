@@ -179,18 +179,23 @@ async function tryEasyApply(
         }
         await sleep(800);
         if (
-          (await clickButtonOrLink(modal, MODAL_LABELS.review, 800)) ||
-          (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800)) ||
-          (await clickButtonOrLink(modal, MODAL_LABELS.next, 500))
+          (await clickButtonOrLink(modal, MODAL_LABELS.review, 800, page)) ||
+          (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800, page)) ||
+          (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page))
         ) {
           await sleep(1500);
           continue;
         }
         const nextAfterFill = cssPrimaryActions(modal);
         if (await nextAfterFill.isVisible({ timeout: 800 }).catch(() => false)) {
-          await nextAfterFill.click();
-          await sleep(1500);
-          continue;
+          await page.keyboard.press("Escape").catch(() => {});
+          const ok =
+            (await nextAfterFill.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+            (await nextAfterFill.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+          if (ok) {
+            await sleep(1500);
+            continue;
+          }
         }
       }
 
@@ -200,11 +205,19 @@ async function tryEasyApply(
         await page
           .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
           .catch(() => {});
-        await submitBtn.click();
+        await page.keyboard.press("Escape").catch(() => {});
+        const submitted =
+          (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+          (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+        if (!submitted) {
+          record.status = "blocked";
+          record.reason = "Submit visible pero click falló (overlay)";
+          return record;
+        }
         await sleep(2500);
 
         // Productivo: tras Submit hay que clickear Done (button o link).
-        let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000);
+        let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
         if (clickedDone) await sleep(1500);
 
         const confirmed =
@@ -238,9 +251,9 @@ async function tryEasyApply(
       }
 
       if (
-        (await clickButtonOrLink(modal, MODAL_LABELS.review, 800)) ||
-        (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800)) ||
-        (await clickButtonOrLink(modal, MODAL_LABELS.next, 500))
+        (await clickButtonOrLink(modal, MODAL_LABELS.review, 800, page)) ||
+        (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800, page)) ||
+        (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page))
       ) {
         await sleep(1500);
         continue;
@@ -248,9 +261,14 @@ async function tryEasyApply(
 
       const nextBtn = cssPrimaryActions(modal);
       if (await nextBtn.isVisible({ timeout: 800 }).catch(() => false)) {
-        await nextBtn.click();
-        await sleep(1500);
-        continue;
+        await page.keyboard.press("Escape").catch(() => {});
+        const ok =
+          (await nextBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+          (await nextBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+        if (ok) {
+          await sleep(1500);
+          continue;
+        }
       }
 
       if (requiredEmpty > 0) {

@@ -110,26 +110,32 @@ async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete" | "no
       return "ok";
     }
 
-    if (await clickButtonOrLink(scope, MODAL_LABELS.review, 800)) {
+    if (await clickButtonOrLink(scope, MODAL_LABELS.review, 800, page)) {
       await sleep(1200);
       continue;
     }
 
     // Preferir Continue — Next solo dentro del scope (no carrusel del feed).
-    if (await clickButtonOrLink(scope, MODAL_LABELS.continue, 800)) {
+    if (await clickButtonOrLink(scope, MODAL_LABELS.continue, 800, page)) {
       await sleep(1200);
       continue;
     }
-    if (await clickButtonOrLink(scope, MODAL_LABELS.next, 500)) {
+    if (await clickButtonOrLink(scope, MODAL_LABELS.next, 500, page)) {
       await sleep(1200);
       continue;
     }
 
     const cssNext = cssPrimaryActions(scope);
     if (await cssNext.isVisible({ timeout: 500 }).catch(() => false)) {
-      await cssNext.click({ timeout: 5000 }).catch(() => {});
-      await sleep(1200);
-      continue;
+      await page.keyboard.press("Escape").catch(() => {});
+      await sleep(200);
+      const ok =
+        (await cssNext.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+        (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+      if (ok) {
+        await sleep(1200);
+        continue;
+      }
     }
 
     break;

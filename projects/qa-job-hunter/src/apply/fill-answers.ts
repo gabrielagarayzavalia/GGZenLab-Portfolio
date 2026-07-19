@@ -1301,26 +1301,112 @@ export async function fillHowDidYouHear(page: Page): Promise<boolean> {
 }
 
 const COVER_AS_RESUME_RE = /intro-GGZ|intro\s*letter|cover\s*letter|introduction\s*letter/i;
+const DOWNLOAD_RESUME_RE = /download\s+resume/i;
 /** Link LinkedIn EN/ES: "Show 3 more resumes" / "Mostrar N currículums más". */
 const SHOW_MORE_RESUMES_RE =
   /show\s+\d+\s+more\s+resumes?|mostrar\s+\d+\s+(curr[ií]culums?|cvs?|resumes?)\s+m[aá]s|ver\s+\d+\s+m[aá]s/i;
 
-async function selectedResumeLabel(root: Locator): Promise<string> {
+type DocumentCardToggle = {
+  id: string;
+  title: string;
+  selected: boolean;
+  aria: string;
+};
+
+/** Recorre #interop-outlet.shadowRoot (+ nested) buscando jobsDocumentCardToggleLabel-*. */
+async function listDocumentCardToggles(page: Page): Promise<DocumentCardToggle[]> {
+  return page.evaluate(() => {
+    type T = { id: string; title: string; selected: boolean; aria: string };
+    const out: T[] = [];
+    const seen = new Set<string>();
+
+    function walk(root: Document | ShadowRoot): void {
+      const toggles = root.querySelectorAll('[id^="jobsDocumentCardToggleLabel-"]');
+      for (const el of Array.from(toggles)) {
+        const id = el.id;
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        const aria = (el.getAttribute("aria-label") ?? "").trim();
+        if (/download\s+resume/i.test(aria)) continue;
+
+        const card =
+          el.closest(
+            "[class*='document'], [class*='JobsDocument'], [class*='resume'], li, label"
+          ) ?? el.parentElement;
+        const raw = `${aria} ${card?.textContent ?? ""}`.replace(/\s+/g, " ").trim();
+        if (/download\s+resume/i.test(raw) && !/(select|deselect)\s+resume/i.test(aria)) {
+          continue;
+        }
+        const fromAria =
+          aria.match(/(?:select|deselect)\s+resume\s+(.+\.pdf)/i)?.[1]?.trim() ?? "";
+        const pdf = raw.match(/[\w.\-]+\.pdf/i)?.[0] ?? "";
+        const title = fromAria || pdf || aria;
+        if (!title) continue;
+
+        const selected =
+          /deselect\s+resume/i.test(aria) ||
+          el.getAttribute("aria-checked") === "true" ||
+          el.getAttribute("aria-pressed") === "true" ||
+          (el as HTMLInputElement).checked === true;
+
+        out.push({ id, title, selected, aria });
+      }
+      for (const node of Array.from(root.querySelectorAll("*"))) {
+        const sr = (node as Element).shadowRoot;
+        if (sr) walk(sr);
+      }
+    }
+
+    const outlet = document.querySelector("#interop-outlet");
+    if (outlet?.shadowRoot) walk(outlet.shadowRoot);
+    walk(document);
+    return out;
+  });
+}
+
+async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<boolean> {
+  return page.evaluate((id) => {
+    function findIn(root: Document | ShadowRoot): HTMLElement | null {
+      const el = root.querySelector(`#${CSS.escape(id)}`) as HTMLElement | null;
+      if (el) return el;
+      for (const node of Array.from(root.querySelectorAll("*"))) {
+        const sr = (node as Element).shadowRoot;
+        if (sr) {
+          const found = findIn(sr);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    const outlet = document.querySelector("#interop-outlet");
+    let el = outlet?.shadowRoot ? findIn(outlet.shadowRoot) : null;
+    if (!el) el = findIn(document);
+    if (!el) return false;
+    el.scrollIntoView({ block: "center", inline: "nearest" });
+    el.click();
+    return true;
+  }, toggleId);
+}
+
+async function selectedResumeLabel(page: Page, root: Locator): Promise<string> {
+  const toggles = await listDocumentCardToggles(page);
+  const fromToggle = toggles
+    .filter((t) => t.selected)
+    .map((t) => t.title)
+    .join(" | ");
+  if (fromToggle) return fromToggle;
+
+  // Fallback light DOM: Deselect/Select resume (nunca Download)
   return root
-    .locator("input[type='radio']:checked")
+    .locator(
+      "[aria-label*='Deselect resume' i], [aria-label*='Select resume' i], input[type='radio']:checked"
+    )
     .evaluateAll((nodes) =>
       nodes
         .map((n) => {
-          const id = n.getAttribute("id");
           const aria = n.getAttribute("aria-label") ?? "";
-          const lab = id
-            ? document.querySelector(`label[for="${id}"]`)?.textContent
-            : null;
-          const wrap =
-            n.closest(
-              "label, [class*='document'], [class*='resume'], [class*='JobsDocument'], li, div"
-            )?.textContent ?? "";
-          return `${aria} ${(lab ?? "").trim()} ${wrap}`.replace(/\s+/g, " ").trim();
+          if (/download\s+resume/i.test(aria)) return "";
+          return aria.trim();
         })
         .filter(Boolean)
         .join(" | ")
@@ -1348,145 +1434,81 @@ async function clickShowMoreResumes(root: Locator): Promise<boolean> {
 }
 
 /**
- * Texto del card del CV asociado a un radio (círculo a la derecha).
- * Preferir aria-label / filename .pdf — no el título del aviso.
+ * Click en jobsDocumentCardToggleLabel-* del card con mejor score.
+ * Nunca Download. Nunca el título del puesto.
  */
-async function radioCardText(radio: Locator): Promise<string> {
-  const aria = ((await radio.getAttribute("aria-label")) ?? "").trim();
-  if (/\.pdf/i.test(aria)) return aria;
-  const near = await radio
-    .evaluate((n) => {
-      const wrap =
-        n.closest("label") ||
-        n.closest("[class*='document']") ||
-        n.closest("[class*='JobsDocument']") ||
-        n.closest("[class*='resume']") ||
-        n.closest("li") ||
-        n.parentElement?.parentElement ||
-        n.parentElement;
-      const raw = (wrap?.textContent ?? "").replace(/\s+/g, " ").trim();
-      const pdf = raw.match(/[\w.\-]+\.pdf/i);
-      return pdf ? pdf[0] : raw.slice(0, 200);
-    })
-    .catch(() => "");
-  return `${aria} ${near}`.replace(/\s+/g, " ").trim();
-}
-
-/** Click SOLO en el radio (círculo), nunca en el nombre del archivo ni en el título. */
-async function clickResumeRadioControl(radio: Locator): Promise<boolean> {
-  await radio.scrollIntoViewIfNeeded().catch(() => {});
-  const tag = ((await radio.evaluate((n) => n.tagName).catch(() => "")) ?? "").toLowerCase();
-  if (tag === "input") {
-    const ok = await radio
-      .check({ force: true })
-      .then(() => true)
-      .catch(async () =>
-        radio.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false)
-      );
-    return ok;
-  }
-  // role=radio / botón circular LinkedIn
-  return radio
-    .click({ force: true, timeout: 4000 })
-    .then(() => true)
-    .catch(() => false);
-}
-
-/**
- * Encuentra el círculo/radio del card cuyo .pdf mejor matchea el rol.
- * Target = radio a la derecha del filename (flecha verde en la captura).
- */
-async function clickBestResumeRadio(
-  root: Locator,
-  kind: ApplyRoleKind
-): Promise<boolean> {
-  const radios = root.locator(
-    "input[type='radio'], [role='radio'], button[aria-label*='resume' i], button[aria-label*='Resume']"
-  );
-  const rn = await radios.count().catch(() => 0);
-  let bestIdx = -1;
+async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<boolean> {
+  const toggles = await listDocumentCardToggles(page);
+  let best: DocumentCardToggle | null = null;
   let bestScore = 0;
-  let bestBlob = "";
 
-  for (let i = 0; i < rn; i++) {
-    const radio = radios.nth(i);
-    const blob = await radioCardText(radio);
-    if (!blob) continue;
-    if (!/\.pdf/i.test(blob) && !/select\s+resume/i.test(blob)) continue;
-    if (COVER_AS_RESUME_RE.test(blob)) continue;
-    const score = scoreResumeForRole(blob, kind);
+  for (const t of toggles) {
+    if (DOWNLOAD_RESUME_RE.test(t.aria) || DOWNLOAD_RESUME_RE.test(t.title)) continue;
+    if (COVER_AS_RESUME_RE.test(t.title) || COVER_AS_RESUME_RE.test(t.aria)) continue;
+    const score = scoreResumeForRole(t.title, kind);
     if (score > bestScore) {
       bestScore = score;
-      bestIdx = i;
-      bestBlob = blob;
+      best = t;
     }
   }
 
-  if (bestIdx >= 0 && bestScore >= 70) {
-    const radio = radios.nth(bestIdx);
-    const ok = await clickResumeRadioControl(radio);
-    if (ok) {
-      console.log(
-        `   ↳ Resume: click RADIO ${kind} (score=${bestScore}) → ${bestBlob.slice(0, 90)}`
-      );
-      await sleep(500);
-      return true;
-    }
-  }
-
-  // Fallback: localizar card por filename .pdf → click al radio DENTRO del card (no al texto)
-  const pdfHits = root.getByText(/[\w.\-]+\.pdf/i);
-  const pn = await pdfHits.count().catch(() => 0);
-  let bestCardScore = 0;
-  let bestCardRadio: Locator | null = null;
-  let bestCardBlob = "";
-
-  for (let i = 0; i < pn; i++) {
-    const nameEl = pdfHits.nth(i);
-    if (!(await nameEl.isVisible({ timeout: 400 }).catch(() => false))) continue;
-    const text = ((await nameEl.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-    if (!text || COVER_AS_RESUME_RE.test(text)) continue;
-    const score = scoreResumeForRole(text, kind);
-    if (score < 70 || score <= bestCardScore) continue;
-
-    const card = nameEl.locator(
-      "xpath=ancestor::*[.//input[@type='radio'] or .//*[@role='radio']][1]"
+  if (!best || bestScore < 70) {
+    // Fallback: aria "Select resume <pdf>" en light DOM (excluir Download)
+    const selectLabels = page.locator(
+      '[aria-label^="Select resume" i], [aria-label*="Select resume " i]'
     );
-    const radio = card
-      .locator("input[type='radio'], [role='radio']")
-      .first();
-    if (!(await radio.count().catch(() => 0))) continue;
-    bestCardScore = score;
-    bestCardRadio = radio;
-    bestCardBlob = text;
-  }
-
-  if (bestCardRadio && bestCardScore >= 70) {
-    const ok = await clickResumeRadioControl(bestCardRadio);
-    if (ok) {
+    const n = await selectLabels.count().catch(() => 0);
+    let fbBest = -1;
+    let fbScore = 0;
+    let fbTitle = "";
+    for (let i = 0; i < n; i++) {
+      const el = selectLabels.nth(i);
+      const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+      if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
+      const title = aria.replace(/^select\s+resume\s+/i, "").trim();
+      const score = scoreResumeForRole(title || aria, kind);
+      if (score > fbScore) {
+        fbScore = score;
+        fbBest = i;
+        fbTitle = title || aria;
+      }
+    }
+    if (fbBest >= 0 && fbScore >= 70) {
+      const el = selectLabels.nth(fbBest);
+      await el.scrollIntoViewIfNeeded().catch(() => {});
+      await el.click({ force: true, timeout: 4000 }).catch(() => {});
       console.log(
-        `   ↳ Resume: click RADIO (vía card) ${kind} (score=${bestCardScore}) → ${bestCardBlob.slice(0, 80)}`
+        `   ↳ Resume: click TOGGLE (aria) ${kind} (score=${fbScore}) → ${fbTitle.slice(0, 90)}`
       );
       await sleep(500);
       return true;
     }
+    return false;
   }
 
+  // Ya seleccionado el correcto
+  if (best.selected) {
+    console.log(
+      `   ↳ Resume: toggle ya seleccionado ${kind} → ${best.title.slice(0, 90)}`
+    );
+    return true;
+  }
+
+  const ok = await clickDocumentCardToggle(page, best.id);
+  if (ok) {
+    console.log(
+      `   ↳ Resume: click TOGGLE ${kind} (score=${bestScore}) id=${best.id} → ${best.title.slice(0, 90)}`
+    );
+    await sleep(500);
+    return true;
+  }
+  console.log(`   ↳ Resume: no pude clickear toggle id=${best.id}`);
   return false;
 }
 
-async function clickResumeRadioMatching(
-  root: Locator,
-  _wantRe: RegExp,
-  kind: ApplyRoleKind
-): Promise<boolean> {
-  // Único camino: click en el radio del CV correcto (nunca título / nunca solo el texto del PDF)
-  return clickBestResumeRadio(root, kind);
-}
-
 /**
- * Selecciona CV Analyst vs Automation.
- * NUNCA dejar intro-GGZ / cover como resume.
+ * Selecciona CV Analyst vs Automation vía toggle Ember (shadow DOM).
+ * NUNCA dejar intro-GGZ / cover; NUNCA clickear Download.
  */
 export async function selectResumeForRole(
   page: Page,
@@ -1494,9 +1516,9 @@ export async function selectResumeForRole(
   company = ""
 ): Promise<boolean> {
   const kind = detectApplyRoleKind(jobTitle, company);
-  const wantRe = kind === "automation" ? RESUME_FILE_MATCH.automation : RESUME_FILE_MATCH.analyst;
   const root = scopeRoot(page);
 
+  const toggles0 = await listDocumentCardToggles(page);
   const pdfVisible = await root
     .getByText(/\.pdf/i)
     .first()
@@ -1512,9 +1534,11 @@ export async function selectResumeForRole(
     .first()
     .isVisible({ timeout: 600 })
     .catch(() => false);
-  if (!pdfVisible && !showLinkVisible && !curriculumStep) return false;
+  if (toggles0.length === 0 && !pdfVisible && !showLinkVisible && !curriculumStep) {
+    return false;
+  }
 
-  const selectedBlob = await selectedResumeLabel(root);
+  const selectedBlob = await selectedResumeLabel(page, root);
   const coverSelected = COVER_AS_RESUME_RE.test(selectedBlob);
   const alreadyOk =
     scoreResumeForRole(selectedBlob, kind) >= 70 && !coverSelected;
@@ -1535,14 +1559,16 @@ export async function selectResumeForRole(
   }
 
   const resumeOk = async () => {
-    const after = await selectedResumeLabel(root);
-    return (
-      scoreResumeForRole(after, kind) >= 70 && !COVER_AS_RESUME_RE.test(after)
-    );
+    const after = await selectedResumeLabel(page, root);
+    return scoreResumeForRole(after, kind) >= 70 && !COVER_AS_RESUME_RE.test(after);
   };
 
-  /** ¿Hay un CV del rol (.pdf) en la lista default? */
   const roleCvVisibleInDefault = async (): Promise<boolean> => {
+    const toggles = await listDocumentCardToggles(page);
+    for (const t of toggles) {
+      if (COVER_AS_RESUME_RE.test(t.title)) continue;
+      if (scoreResumeForRole(t.title, kind) >= 70) return true;
+    }
     const pdfHits = root.getByText(/\.pdf/i);
     const pn = await pdfHits.count().catch(() => 0);
     for (let i = 0; i < pn; i++) {
@@ -1556,32 +1582,31 @@ export async function selectResumeForRole(
   const visible = await roleCvVisibleInDefault();
   if (!visible) {
     console.log(
-      `   ↳ Resume: CV ${kind} no visible en default → Show more + mejor match`
+      `   ↳ Resume: CV ${kind} no visible en default → Show more + toggle`
     );
     await clickShowMoreResumes(root);
   } else {
-    console.log(`   ↳ Resume: CV ${kind} visible → seleccionar mejor match`);
+    console.log(`   ↳ Resume: CV ${kind} visible → click TOGGLE (no Download)`);
   }
 
-  if (await clickResumeRadioMatching(root, wantRe, kind)) {
-    if (await resumeOk()) return true;
-  }
-  // Reintentar expandir (lista larga / Analyst oculto)
-  await clickShowMoreResumes(root);
-  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+  if (await clickBestResumeToggle(page, kind)) {
     if (await resumeOk()) return true;
   }
   await clickShowMoreResumes(root);
-  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+  if (await clickBestResumeToggle(page, kind)) {
+    if (await resumeOk()) return true;
+  }
+  await clickShowMoreResumes(root);
+  if (await clickBestResumeToggle(page, kind)) {
     if (await resumeOk()) return true;
   }
 
-  if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(root))) {
+  if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(page, root))) {
     console.log("   ↳ Resume: ✗ sigue seleccionado intro-GGZ / cover — no avanzar");
     return false;
   }
 
-  console.log(`   ↳ Resume: no encontré CV ${kind} tras "Show N more resumes"`);
+  console.log(`   ↳ Resume: no encontré toggle CV ${kind} tras Show more`);
   return false;
 }
 

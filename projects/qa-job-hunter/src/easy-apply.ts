@@ -26,6 +26,7 @@ import {
   clickButtonOrLink,
   cssPrimaryActions,
   findButtonOrLink,
+  isLanguageOnlyShell,
   MODAL_LABELS,
   resolveApplyScope,
 } from "./apply/modal-controls.js";
@@ -136,8 +137,14 @@ async function afterSaveContinueToSubmit(
     const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1200);
     if (submitBtn) {
       const submitted =
-        (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-        (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+        (await submitBtn
+          .click({ timeout: 4000, noWaitAfter: true })
+          .then(() => true)
+          .catch(() => false)) ||
+        (await submitBtn
+          .click({ force: true, timeout: 4000, noWaitAfter: true })
+          .then(() => true)
+          .catch(() => false));
       if (!submitted) {
         record.status = "blocked";
         record.reason = "Tras Save: Submit visible pero click falló";
@@ -195,6 +202,44 @@ function loadMatchedJobs(): ApplyJob[] {
     .filter((m) => /^\d+$/.test(m.jobId));
 }
 
+/** Descarta borrador atascado (solo idioma) y reabre Easy Apply una vez. */
+async function discardStaleDraftAndReopen(
+  page: import("playwright").Page,
+  job: ApplyJob
+): Promise<"reopened" | "applied" | "failed"> {
+  console.log("   ↻ Shell solo-idioma / borrador — Descarto y reabro Easy Apply…");
+
+  await handleSaveDiscardModal(page, "dry_run");
+  const discardApp = page
+    .getByRole("button", {
+      name: /Discard application|Delete draft|Discard|Descartar solicitud|Descartar/i,
+    })
+    .first();
+  if (await discardApp.isVisible({ timeout: 1200 }).catch(() => false)) {
+    await discardApp.click({ timeout: 4000 }).catch(() =>
+      discardApp.click({ force: true, timeout: 4000 })
+    );
+    await sleep(800);
+    await handleSaveDiscardModal(page, "dry_run");
+  }
+  await clickButtonOrLink(page, MODAL_LABELS.dismiss, 800, page);
+  await page.keyboard.press("Escape").catch(() => {});
+  await sleep(600);
+
+  await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+  await waitForJobPageReady(page);
+
+  if (!(await findEasyApplyControl(page, 8000))) {
+    const signal = await detectPageApplySignal(page);
+    if (signal === "applied") return "applied";
+    return "failed";
+  }
+
+  const clicked = await clickEasyApply(page);
+  if (!clicked || !(await waitForEasyApplyModalReady(page))) return "failed";
+  return "reopened";
+}
+
 async function tryEasyApply(
   page: import("playwright").Page,
   job: ApplyJob
@@ -224,6 +269,7 @@ async function tryEasyApply(
             { id: job.jobId, title: job.title, company: job.company },
             "applied"
           );
+          exportQueueToExcel();
         }
         return record;
       }
@@ -260,7 +306,7 @@ async function tryEasyApply(
       return record;
     }
 
-    const modal = await resolveApplyScope(page, 12000);
+    let modal = await resolveApplyScope(page, 12000);
     if (!modal) {
       record.status = "blocked";
       record.reason = "Modal Easy Apply no abrió";
@@ -269,6 +315,8 @@ async function tryEasyApply(
 
     let steps = 0;
     const maxSteps = 8;
+    let restartedFromStale = false;
+    let languageOnlyStreak = 0;
 
     while (steps < maxSteps) {
       steps++;
@@ -280,6 +328,58 @@ async function tryEasyApply(
       logFieldInventory(inventory);
       if (inventory.length > 0) {
         console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
+      }
+
+      // Borrador atascado: solo "Select language" → descartar y reabrir (1 vez).
+      // No usar artdeco-primary genérico: LinkedIn siempre tiene uno y bloqueaba el restart.
+      if (isLanguageOnlyShell(inventory)) {
+        languageOnlyStreak++;
+        const eaAdvance = page.locator(
+          "button[data-easy-apply-next-button], button[data-live-test-easy-apply-next-button], button[data-live-test-easy-apply-submit-button]"
+        );
+        const hasEasyApplyAdvance =
+          (await findButtonOrLink(modal, MODAL_LABELS.submit, 500)) ||
+          (await findButtonOrLink(modal, MODAL_LABELS.continue, 400)) ||
+          (await findButtonOrLink(modal, MODAL_LABELS.next, 300)) ||
+          (await findButtonOrLink(page, MODAL_LABELS.submit, 400)) ||
+          (await eaAdvance.first().isVisible({ timeout: 400 }).catch(() => false));
+
+        if (languageOnlyStreak >= 2 && !restartedFromStale) {
+          restartedFromStale = true;
+          const reopen = await discardStaleDraftAndReopen(page, job);
+          if (reopen === "applied") {
+            record.status = "submitted";
+            record.reason = "Application submitted / Applied tras descartar borrador";
+            markEnviadaIfAllowed(job.jobId, record.reason);
+            setApplicationStatus(
+              { id: job.jobId, title: job.title, company: job.company },
+              "applied"
+            );
+            exportQueueToExcel();
+            return record;
+          }
+          if (reopen === "reopened") {
+            modal = (await resolveApplyScope(page, 12000)) ?? page;
+            steps = 0;
+            languageOnlyStreak = 0;
+            continue;
+          }
+          console.log("   ✗ No pude reabrir tras shell idioma — sigo intentando footer EA");
+        }
+
+        // En shell idioma: solo clickear controles Easy Apply reales (no primary genérico)
+        if (!hasEasyApplyAdvance && languageOnlyStreak >= 2 && restartedFromStale) {
+          // ya reiniciamos y seguimos en idioma → cortar
+          record.status = "draft_saved";
+          record.reason =
+            "Borrador LinkedIn solo-idioma tras reopen — completar manual o otra estrategia";
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-language-shell.png`) })
+            .catch(() => {});
+          return record;
+        }
+      } else {
+        languageOnlyStreak = 0;
       }
 
       const openTextareas = await page
@@ -367,8 +467,14 @@ async function tryEasyApply(
 
       if (submitBtn) {
         const submitted =
-          (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-          (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+          (await submitBtn
+            .click({ timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false)) ||
+          (await submitBtn
+            .click({ force: true, timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false));
         if (!submitted) {
           record.status = "blocked";
           record.reason = "Submit visible pero click falló (overlay)";
@@ -387,9 +493,20 @@ async function tryEasyApply(
         : await findButtonOrLink(modal, MODAL_LABELS.review, 800);
       const advanceBtn = nextEl ?? reviewEl;
       if (advanceBtn) {
-        await advanceBtn.click({ timeout: 4000 }).catch(async () => {
-          await advanceBtn.click({ force: true, timeout: 4000 });
-        });
+        const advanced =
+          (await advanceBtn
+            .click({ timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false)) ||
+          (await advanceBtn
+            .click({ force: true, timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false));
+        if (!advanced) {
+          record.status = "blocked";
+          record.reason = "Next/Review visible pero click falló";
+          return record;
+        }
         await sleep(2000);
 
         // Tras Next: error mandatorio → recover typeahead (3×) o cerrar
@@ -421,12 +538,25 @@ async function tryEasyApply(
         continue;
       }
 
+      // Footer a veces vive fuera del scope del modal → probar page también.
+      // En shell solo-idioma NO clickear primary genérico (no avanza y quema pasos).
+      if (isLanguageOnlyShell(inventory)) {
+        continue;
+      }
+
       const nextBtn = cssPrimaryActions(modal);
-      if (await nextBtn.isVisible({ timeout: 800 }).catch(() => false)) {
+      const nextBtnPage = cssPrimaryActions(page);
+      const primary =
+        (await nextBtn.isVisible({ timeout: 600 }).catch(() => false))
+          ? nextBtn
+          : (await nextBtnPage.isVisible({ timeout: 600 }).catch(() => false))
+            ? nextBtnPage
+            : null;
+      if (primary) {
         await page.keyboard.press("Escape").catch(() => {});
         const ok =
-          (await nextBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-          (await nextBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+          (await primary.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+          (await primary.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
         if (ok) {
           await sleep(1500);
           if (await hasMandatoryFieldError(page)) {

@@ -389,20 +389,33 @@ async function clickLocationSuggestion(page: Page): Promise<string | null> {
   return text || "Liniers";
 }
 
+/** Mensajes de error reales (NO el asterisco "required" del label genérico). */
 const MANDATORY_FIELD_RE =
-  /please enter|is required|required|mandatory|obligatorio|enter a valid|make a selection|seleccion(a|á)|please make a selection|completar|campo obligatorio/i;
+  /please enter a valid|please enter|is required\.|this field is required|mandatory field|campo obligatorio|enter a valid|please make a selection|hac[eé] una selecci[oó]n/i;
 
-/** ¿Hay mensaje de campo mandatorio / error de typeahead en el modal? */
+/** ¿Hay error mandatorio real en typeahead Location (vacío / inválido / feedback)? */
 export async function hasMandatoryFieldError(page: Page): Promise<boolean> {
-  const root = scopeRoot(page);
-  const blob = ((await root.innerText().catch(() => "")) ?? "").slice(0, 4000);
-  if (MANDATORY_FIELD_RE.test(blob)) return true;
+  const loc = await findLocationInput(page);
+  if (loc) {
+    const val = ((await loc.inputValue().catch(() => "")) ?? "").trim();
+    const err = await fieldError(loc);
+    if (err && MANDATORY_FIELD_RE.test(err)) return true;
+    // Location visible pero GEO incompleto → hay que recover
+    if (!locationValueOk(val)) {
+      const label = await fieldLabel(loc);
+      const starred = /\*/.test(label);
+      const ariaReq = (await loc.getAttribute("aria-required").catch(() => "")) === "true";
+      if (starred || ariaReq || !val) return true;
+    }
+  }
+
   const blocking = await hasBlockingEmptyFields(page);
   return blocking.some(
     (f) =>
-      f.errorText ||
-      PSEUDO_ANSWERS.locationCity.fieldMatch.test(f.label) ||
-      PSEUDO_ANSWERS.locationCity.hintMatch.test(f.label)
+      Boolean(f.errorText && MANDATORY_FIELD_RE.test(f.errorText)) ||
+      ((PSEUDO_ANSWERS.locationCity.fieldMatch.test(f.label) ||
+        PSEUDO_ANSWERS.locationCity.hintMatch.test(f.label)) &&
+        !locationValueOk(f.value))
   );
 }
 
@@ -518,8 +531,11 @@ export async function recoverMandatoryTypeaheadOrClose(
 
   console.log("   ⚠ Campo mandatorio / typeahead — recover (máx. 3 intentos)…");
   const ok = await fillLocationLiniers(page);
-  if (ok && !(await hasMandatoryFieldError(page))) {
-    console.log("   ✓ Recover typeahead OK");
+  // Si Location ya tiene GEO válido, no cerrar por ruido de otros labels ("required" en UI).
+  const loc = await findLocationInput(page);
+  const locVal = loc ? ((await loc.inputValue().catch(() => "")) ?? "").trim() : "";
+  if (ok || locationValueOk(locVal)) {
+    console.log("   ✓ Recover typeahead OK (Location válido)");
     return "ok";
   }
 

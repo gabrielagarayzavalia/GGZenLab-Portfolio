@@ -144,11 +144,20 @@ export async function clickButtonOrLink(
   if (page) await dismissModalOverlays(page);
 
   await el.scrollIntoViewIfNeeded().catch(() => {});
-  if (await el.click({ timeout: 4000 }).then(() => true).catch(() => false)) {
+  // noWaitAfter: LinkedIn a veces dispara navegación parcial y el click “ok” termina en timeout.
+  if (
+    await el
+      .click({ timeout: 4000, noWaitAfter: true })
+      .then(() => true)
+      .catch(() => false)
+  ) {
     return true;
   }
   // Typeahead u overlay intercepta → force
-  return el.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false);
+  return el
+    .click({ force: true, timeout: 4000, noWaitAfter: true })
+    .then(() => true)
+    .catch(() => false);
 }
 
 /**
@@ -158,6 +167,11 @@ export function cssPrimaryActions(scope: Scope): Locator {
   return scope
     .locator(
       [
+        "button[data-easy-apply-next-button]",
+        "button[data-live-test-easy-apply-next-button]",
+        "button[data-live-test-easy-apply-submit-button]",
+        ".jobs-easy-apply-footer button.artdeco-button--primary",
+        "footer button.artdeco-button--primary",
         "button[aria-label*='Continue']",
         "button[aria-label*='Continuar']",
         "button[aria-label*='Next']",
@@ -175,4 +189,12 @@ export function cssPrimaryActions(scope: Scope): Locator {
       ].join(", ")
     )
     .first();
+}
+
+/** Shell atascado: solo selector de idioma (borrador LinkedIn sin form real). */
+export function isLanguageOnlyShell(
+  fields: { label: string }[]
+): boolean {
+  if (fields.length === 0) return false;
+  return fields.every((f) => /select language|seleccionar idioma|\bidioma\b/i.test(f.label));
 }

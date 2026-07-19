@@ -30,6 +30,11 @@ import {
   resolveApplyScope,
 } from "./apply/modal-controls.js";
 import {
+  fillPseudoAnswers,
+  handleSaveDiscardModal,
+} from "./apply/fill-answers.js";
+import { finishProductiveRun } from "./apply/post-run.js";
+import {
   canonicalJobUrl,
   ensureQueueFromMatched,
   jobIdFromUrl,
@@ -43,6 +48,95 @@ import { setApplicationStatus } from "./application-status.js";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Tras Submit: Done + Excel enviada. */
+async function completeSubmitAndDone(
+  page: import("playwright").Page,
+  job: ApplyJob,
+  record: ApplicationRecord
+): Promise<ApplicationRecord> {
+  await page
+    .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
+    .catch(() => {});
+
+  let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
+  if (clickedDone) await sleep(1500);
+
+  const confirmed =
+    clickedDone ||
+    (await detectAlreadyApplied(page)) ||
+    (await page
+      .getByText(/Application sent|Application submitted|Solicitud enviada/i)
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false));
+
+  if (confirmed) {
+    record.status = "submitted";
+    record.reason = clickedDone
+      ? "Easy Apply enviada (Submit + Done)"
+      : "Easy Apply enviada (Submit; Done no visible)";
+    markEnviadaIfAllowed(job.jobId, record.reason);
+    setApplicationStatus(
+      { id: job.jobId, title: job.title, company: job.company },
+      "applied"
+    );
+    await page
+      .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
+      .catch(() => {});
+    return record;
+  }
+
+  record.status = "blocked";
+  record.reason = "Submit sin Done/confirmación — verificar en LinkedIn";
+  return record;
+}
+
+/** Productivo: Save/Discard → Save → buscar Submit → Done. */
+async function afterSaveContinueToSubmit(
+  page: import("playwright").Page,
+  modal: import("playwright").Page | import("playwright").Locator,
+  job: ApplyJob,
+  record: ApplicationRecord
+): Promise<ApplicationRecord | "continue"> {
+  await fillPseudoAnswers(page);
+  await sleep(800);
+
+  // Next / Review hasta Submit
+  for (let i = 0; i < 6; i++) {
+    const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1200);
+    if (submitBtn) {
+      const submitted =
+        (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+        (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+      if (!submitted) {
+        record.status = "blocked";
+        record.reason = "Tras Save: Submit visible pero click falló";
+        return record;
+      }
+      await sleep(2500);
+      return completeSubmitAndDone(page, job, record);
+    }
+
+    const advanced =
+      (await clickButtonOrLink(modal, MODAL_LABELS.review, 700, page)) ||
+      (await clickButtonOrLink(modal, MODAL_LABELS.continue, 700, page)) ||
+      (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page));
+    if (!advanced) break;
+    await sleep(1500);
+
+    const sd = await handleSaveDiscardModal(page, "productive");
+    if (sd === "saved") {
+      await sleep(1000);
+      continue;
+    }
+  }
+
+  record.status = "draft_saved";
+  record.reason = "Save/Discard → Save; no se encontró Submit — borrador en LinkedIn";
+  updateQueueRow(job.jobId, { status: "pendiente", reason: record.reason });
+  return record;
 }
 
 function loadMatchedJobs(): ApplyJob[] {
@@ -200,13 +294,11 @@ async function tryEasyApply(
         }
       }
 
+      await fillPseudoAnswers(page);
+
       const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1500);
 
       if (submitBtn) {
-        await page
-          .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
-          .catch(() => {});
-        await page.keyboard.press("Escape").catch(() => {});
         const submitted =
           (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
           (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
@@ -216,47 +308,29 @@ async function tryEasyApply(
           return record;
         }
         await sleep(2500);
-
-        // Productivo: tras Submit hay que clickear Done (button o link).
-        let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
-        if (clickedDone) await sleep(1500);
-
-        const confirmed =
-          clickedDone ||
-          (await detectAlreadyApplied(page)) ||
-          (await page
-            .getByText(/Application sent|Application submitted|Solicitud enviada/i)
-            .first()
-            .isVisible({ timeout: 3000 })
-            .catch(() => false));
-
-        if (confirmed) {
-          record.status = "submitted";
-          record.reason = clickedDone
-            ? "Easy Apply enviada (Submit + Done)"
-            : "Easy Apply enviada (Submit; Done no visible)";
-          markEnviadaIfAllowed(job.jobId, record.reason);
-          setApplicationStatus(
-            { id: job.jobId, title: job.title, company: job.company },
-            "applied"
-          );
-          await page
-            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
-            .catch(() => {});
-          return record;
-        }
-
-        record.status = "blocked";
-        record.reason = "Submit sin Done/confirmación — verificar en LinkedIn";
-        return record;
+        return completeSubmitAndDone(page, job, record);
       }
 
-      if (
-        (await clickButtonOrLink(modal, MODAL_LABELS.review, 800, page)) ||
-        (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800, page)) ||
-        (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page))
-      ) {
-        await sleep(1500);
+      // Orden: Next mientras exista; si no → Review
+      const nextEl =
+        (await findButtonOrLink(modal, MODAL_LABELS.continue, 700)) ||
+        (await findButtonOrLink(modal, MODAL_LABELS.next, 400));
+      const reviewEl = nextEl
+        ? null
+        : await findButtonOrLink(modal, MODAL_LABELS.review, 800);
+      const advanceBtn = nextEl ?? reviewEl;
+      if (advanceBtn) {
+        await advanceBtn.click({ timeout: 4000 }).catch(async () => {
+          await advanceBtn.click({ force: true, timeout: 4000 });
+        });
+        await sleep(2000);
+
+        const sd = await handleSaveDiscardModal(page, "productive");
+        if (sd === "saved") {
+          const afterSave = await afterSaveContinueToSubmit(page, modal, job, record);
+          if (afterSave !== "continue") return afterSave;
+          continue;
+        }
         continue;
       }
 
@@ -339,6 +413,9 @@ async function main() {
   const submitted = applications.filter((a) => a.status === "submitted").length;
   console.log(`\n✅ Enviadas: ${submitted}/${toApply.length}`);
 
+  // Actualizar Excel, mail de pendientes y abrir Excel para revisión manual
+  finishProductiveRun();
+
   const blocked = applications.filter(
     (a) => a.status === "blocked" || a.status === "draft_saved" || a.status === "manual_pending"
   );
@@ -355,7 +432,7 @@ async function main() {
           reason: a.reason,
         };
       }),
-      { openIde: true }
+      { openIde: false }
     );
   }
 }

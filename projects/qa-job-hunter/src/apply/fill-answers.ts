@@ -523,30 +523,64 @@ export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[
   });
 }
 
-/** Si aparece Save/Discard (por haber clickeado Next con incompletos), descartar. */
-export async function dismissSaveOrDiscard(page: Page): Promise<boolean> {
-  const dialog = page.getByRole("dialog").filter({
-    hasText: /save|discard|guardar|descartar|unsaved|sin guardar/i,
+export type ApplyRunMode = "dry_run" | "productive";
+export type SaveDiscardResult = "absent" | "discarded" | "saved";
+
+function saveDiscardDialog(page: Page): Locator {
+  return page.getByRole("dialog").filter({
+    hasText: /save this application|save or discard|guardar|descartar|unsaved|sin guardar/i,
   });
-  if (!(await dialog.first().isVisible({ timeout: 800 }).catch(() => false))) {
-    // A veces es un artdeco modal sin role=dialog claro
-    const discard = page.getByRole("button", { name: /Discard|Descartar/i }).first();
-    if (!(await discard.isVisible({ timeout: 400 }).catch(() => false))) return false;
-    await discard.click({ timeout: 3000 }).catch(() => {});
-    console.log("   ↳ Modal Save/Discard → Discard");
-    await sleep(500);
+}
+
+export async function isSaveDiscardVisible(page: Page): Promise<boolean> {
+  if (await saveDiscardDialog(page).first().isVisible({ timeout: 600 }).catch(() => false)) {
     return true;
   }
-  const discard = dialog.getByRole("button", { name: /Discard|Descartar/i }).first();
-  if (await discard.isVisible({ timeout: 800 }).catch(() => false)) {
-    await discard.click({ timeout: 3000 }).catch(() => {});
-    console.log("   ↳ Modal Save/Discard → Discard");
-    await sleep(500);
-    return true;
+  const discard = page.getByRole("button", { name: /Discard|Descartar/i }).first();
+  const save = page.getByRole("button", { name: /^Save$|Save for later|Guardar/i }).first();
+  return (
+    (await discard.isVisible({ timeout: 300 }).catch(() => false)) &&
+    (await save.isVisible({ timeout: 300 }).catch(() => false))
+  );
+}
+
+/**
+ * Modal "Save this application?":
+ * - dry_run → Discard (cerrar sin guardar ni enviar)
+ * - productive → Save (borrador) y el caller sigue a Submit/Done
+ */
+export async function handleSaveDiscardModal(
+  page: Page,
+  mode: ApplyRunMode
+): Promise<SaveDiscardResult> {
+  if (!(await isSaveDiscardVisible(page))) return "absent";
+
+  const dialog = saveDiscardDialog(page).first();
+  const scope = (await dialog.isVisible({ timeout: 400 }).catch(() => false)) ? dialog : page;
+
+  if (mode === "dry_run") {
+    const discard = scope.getByRole("button", { name: /Discard|Descartar/i }).first();
+    await discard.click({ timeout: 4000 }).catch(async () => {
+      await page.getByRole("button", { name: /Discard|Descartar/i }).first().click({ force: true });
+    });
+    console.log("   ↳ [dry-run] Save/Discard → Discard (salir sin guardar ni enviar)");
+    await sleep(600);
+    return "discarded";
   }
-  await page.keyboard.press("Escape").catch(() => {});
-  await sleep(300);
-  return true;
+
+  const save = scope.getByRole("button", { name: /^Save$|Save for later|Guardar/i }).first();
+  await save.click({ timeout: 4000 }).catch(async () => {
+    await page.getByRole("button", { name: /^Save$/i }).first().click({ force: true });
+  });
+  console.log("   ↳ [productivo] Save/Discard → Save (seguir hacia Submit)");
+  await sleep(1000);
+  return "saved";
+}
+
+/** @deprecated prefer handleSaveDiscardModal — mantiene Discard por compat. */
+export async function dismissSaveOrDiscard(page: Page): Promise<boolean> {
+  const r = await handleSaveDiscardModal(page, "dry_run");
+  return r !== "absent";
 }
 
 export async function isNextDisabled(page: Page): Promise<boolean> {

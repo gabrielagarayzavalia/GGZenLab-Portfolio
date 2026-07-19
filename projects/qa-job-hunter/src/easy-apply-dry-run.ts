@@ -24,8 +24,8 @@ import {
 } from "./apply/detect-apply.js";
 import {
   captureRequiredFields,
-  dismissSaveOrDiscard,
   fillPseudoAnswers,
+  handleSaveDiscardModal,
   hasBlockingEmptyFields,
   isNextDisabled,
   logCapturedFields,
@@ -83,6 +83,19 @@ export class DryRunDebugStopError extends Error {
   ) {
     super(`STOP/DEBUG: ${detail}. jobId=${jobId} url=${url}`);
     this.name = "DryRunDebugStopError";
+  }
+}
+
+/** Modo prueba: Save/Discard → Discard y salir sin guardar ni enviar. */
+export class DryRunDiscardExitError extends Error {
+  constructor(
+    public readonly jobId: string,
+    public readonly url: string
+  ) {
+    super(
+      `STOP dry-run: Save/Discard → Discard (sin guardar ni enviar). jobId=${jobId}`
+    );
+    this.name = "DryRunDiscardExitError";
   }
 }
 
@@ -203,7 +216,7 @@ async function stopForRequiredFields(
 async function tryAdvanceNext(
   page: Page,
   scope: Page | Locator
-): Promise<"advanced" | "blocked" | "no_next" | "stuck"> {
+): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit"> {
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review
   await fillPseudoAnswers(page);
 
@@ -254,18 +267,10 @@ async function tryAdvanceNext(
 
   await sleep(2500);
 
-  // Save/Discard: no es fin del flujo — Discard y seguir si quedó Submit/Review.
-  if (await dismissSaveOrDiscard(page)) {
-    await sleep(800);
-    if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
-      console.log("   Submit visible tras Discard Save — dry-run OK");
-      return "advanced"; // el loop verá Submit
-    }
-    if (await findButtonOrLink(scope, MODAL_LABELS.review, 600)) {
-      console.log("   Review sigue visible tras Discard — reintentar en próximo ciclo");
-      return "advanced";
-    }
-    return "blocked";
+  // Dry-run: Save/Discard → Discard y SALIR (no guardar, no enviar).
+  const saveDiscard = await handleSaveDiscardModal(page, "dry_run");
+  if (saveDiscard === "discarded") {
+    return "discarded_exit";
   }
 
   if (await isNextDisabled(page)) return "blocked";
@@ -322,6 +327,16 @@ async function dryRunThroughModal(
 
     const step = await tryAdvanceNext(page, scope);
     if (step === "advanced") continue;
+
+    if (step === "discarded_exit") {
+      await saveDebugScreenshot(page, jobId, "discard-exit");
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        easyApply: "yes",
+        reason: "Dry-run: Save/Discard → Discard; salió sin guardar ni enviar",
+      });
+      throw new DryRunDiscardExitError(jobId, jobUrl);
+    }
 
     // Primer fallo → dump + screenshot + parar (no segundo intento)
     console.error(`   ✗ Fallo en paso ${i + 1}: ${step} — STOP para debug`);
@@ -502,6 +517,11 @@ async function main() {
           console.error(`\n🛑 ${err.message}`);
           await closeSession("campos obligatorios — debug (no se sigue al siguiente)");
           process.exit(3);
+        }
+        if (err instanceof DryRunDiscardExitError) {
+          console.error(`\n🛑 ${err.message}`);
+          await closeSession("dry-run Discard — sin guardar ni enviar");
+          process.exit(5);
         }
         if (err instanceof DryRunDebugStopError) {
           console.error(`\n🛑 ${err.message}`);

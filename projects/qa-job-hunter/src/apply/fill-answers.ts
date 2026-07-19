@@ -1299,8 +1299,9 @@ export async function fillHowDidYouHear(page: Page): Promise<boolean> {
 }
 
 const COVER_AS_RESUME_RE = /intro-GGZ|intro\s*letter|cover\s*letter|introduction\s*letter/i;
-/** Link LinkedIn: "Show 3 more resumes" / "Show 12 more resumes". */
-const SHOW_MORE_RESUMES_RE = /show\s+\d+\s+more\s+resumes?/i;
+/** Link LinkedIn EN/ES: "Show 3 more resumes" / "Mostrar N currículums más". */
+const SHOW_MORE_RESUMES_RE =
+  /show\s+\d+\s+more\s+resumes?|mostrar\s+\d+\s+(curr[ií]culums?|cvs?|resumes?)\s+m[aá]s|ver\s+\d+\s+m[aá]s/i;
 
 async function selectedResumeLabel(root: Locator): Promise<string> {
   return root
@@ -1312,8 +1313,12 @@ async function selectedResumeLabel(root: Locator): Promise<string> {
           const aria = n.getAttribute("aria-label") ?? "";
           const lab = id
             ? document.querySelector(`label[for="${id}"]`)?.textContent
-            : n.closest("label")?.textContent;
-          return `${aria} ${(lab ?? "").trim()}`.trim();
+            : null;
+          const wrap =
+            n.closest(
+              "label, [class*='document'], [class*='resume'], [class*='JobsDocument'], li, div"
+            )?.textContent ?? "";
+          return `${aria} ${(lab ?? "").trim()} ${wrap}`.replace(/\s+/g, " ").trim();
         })
         .filter(Boolean)
         .join(" | ")
@@ -1322,30 +1327,36 @@ async function selectedResumeLabel(root: Locator): Promise<string> {
 }
 
 async function clickShowMoreResumes(root: Locator): Promise<boolean> {
-  // Exacto: "Show <n> more resumes" (button, link o texto clickable)
   const showMore = root
     .locator("button, a, span[role='button'], div[role='button']")
     .filter({ hasText: SHOW_MORE_RESUMES_RE })
     .first();
-  if (!(await showMore.isVisible({ timeout: 1500 }).catch(() => false))) {
-    // Fallback amplio
-    const alt = root.getByText(SHOW_MORE_RESUMES_RE).first();
-    if (!(await alt.isVisible({ timeout: 800 }).catch(() => false))) return false;
-    const text = ((await alt.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-    console.log(`   ↳ Resume: click "${text}" para desplegar CVs`);
-    await alt.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
-      alt.click({ force: true, timeout: 3000 })
-    );
-    await sleep(1000);
-    return true;
+  let target = showMore;
+  if (!(await target.isVisible({ timeout: 1200 }).catch(() => false))) {
+    target = root.getByText(SHOW_MORE_RESUMES_RE).first();
+    if (!(await target.isVisible({ timeout: 800 }).catch(() => false))) return false;
   }
-  const text = ((await showMore.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+  const text = ((await target.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
   console.log(`   ↳ Resume: click "${text}" para desplegar CVs`);
-  await showMore.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
-    showMore.click({ force: true, timeout: 3000 })
+  await target.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
+    target.click({ force: true, timeout: 3000 })
   );
   await sleep(1000);
   return true;
+}
+
+/** Texto asociado a un radio (card LinkedIn / label). */
+async function radioCardText(radio: Locator): Promise<string> {
+  const aria = ((await radio.getAttribute("aria-label")) ?? "").trim();
+  const near = await radio
+    .evaluate((n) => {
+      const wrap = n.closest(
+        "label, [class*='document'], [class*='resume'], [class*='JobsDocument'], li, fieldset, div"
+      );
+      return (wrap?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+    })
+    .catch(() => "");
+  return `${aria} ${near}`.replace(/\s+/g, " ").trim();
 }
 
 async function clickResumeRadioMatching(
@@ -1353,57 +1364,51 @@ async function clickResumeRadioMatching(
   wantRe: RegExp,
   kind: string
 ): Promise<boolean> {
-  // Preferir label con "Select resume …" + nombre de archivo
-  const candidates = root.locator("label").filter({ hasText: /\.pdf/i });
-  const cn = await candidates.count().catch(() => 0);
-  for (let i = 0; i < cn; i++) {
-    const lab = candidates.nth(i);
-    const text = ((await lab.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-    const aria =
-      ((await lab.locator("input[type='radio']").first().getAttribute("aria-label").catch(() => "")) ??
-        "") +
-      " " +
-      text;
-    if (COVER_AS_RESUME_RE.test(aria)) continue;
-    if (!wantRe.test(aria)) continue;
-    const radio = lab.locator("input[type='radio']").first();
-    if (await radio.count().catch(() => 0)) {
-      await radio.scrollIntoViewIfNeeded().catch(() => {});
-      await radio.check({ force: true }).catch(async () => {
-        await lab.click({ force: true, timeout: 4000 });
-      });
-    } else {
-      await lab.scrollIntoViewIfNeeded().catch(() => {});
-      await lab.click({ force: true, timeout: 4000 }).catch(() => {});
-    }
-    console.log(`   ↳ Resume: click radio ${kind} → ${text.slice(0, 80)}`);
-    await sleep(500);
-    return true;
-  }
-
-  // Radios con aria-label "Select resume FILENAME"
-  const byAria = root.locator(`input[type='radio'][aria-label*='resume' i], input[type='radio'][aria-label*='Resume']`);
-  const rn = await byAria.count().catch(() => 0);
+  // Radios del modal: elegir por texto de la card (UI LinkedIn rediseñada)
+  const radios = root.locator("input[type='radio']");
+  const rn = await radios.count().catch(() => 0);
   for (let i = 0; i < rn; i++) {
-    const radio = byAria.nth(i);
-    const aria = ((await radio.getAttribute("aria-label")) ?? "").trim();
-    if (COVER_AS_RESUME_RE.test(aria)) continue;
-    if (!wantRe.test(aria)) continue;
+    const radio = radios.nth(i);
+    if (!(await radio.isVisible().catch(() => false))) continue;
+    const blob = await radioCardText(radio);
+    if (!/\.pdf/i.test(blob) && !/resume|curr[ií]culum|cv\b/i.test(blob)) continue;
+    if (COVER_AS_RESUME_RE.test(blob)) continue;
+    if (!wantRe.test(blob)) continue;
     await radio.scrollIntoViewIfNeeded().catch(() => {});
     await radio.check({ force: true }).catch(async () => {
       await radio.click({ force: true, timeout: 4000 });
     });
-    console.log(`   ↳ Resume: click aria ${kind} → ${aria.slice(0, 80)}`);
+    console.log(`   ↳ Resume: click radio ${kind} → ${blob.slice(0, 90)}`);
     await sleep(500);
     return true;
   }
+
+  // Click en filename visible → radio en el ancestor
+  const nameHit = root.getByText(wantRe).first();
+  if (await nameHit.isVisible({ timeout: 1000 }).catch(() => false)) {
+    const text = ((await nameHit.innerText().catch(() => "")) ?? "").trim();
+    if (!COVER_AS_RESUME_RE.test(text)) {
+      await nameHit.click({ force: true, timeout: 4000 }).catch(() => {});
+      const parentRadio = nameHit
+        .locator("xpath=ancestor::*[.//input[@type='radio']][1]//input[@type='radio']")
+        .first();
+      if (await parentRadio.count().catch(() => 0)) {
+        await parentRadio.check({ force: true }).catch(() =>
+          parentRadio.click({ force: true })
+        );
+      }
+      console.log(`   ↳ Resume: click texto ${kind} → ${text.slice(0, 80)}`);
+      await sleep(500);
+      return true;
+    }
+  }
+
   return false;
 }
 
 /**
  * Selecciona CV Analyst vs Automation.
- * Si el default es la cover letter (intro-GGZ) o el CV incorrecto →
- * click "Show N more resumes" y elegir el radio correcto.
+ * NUNCA dejar intro-GGZ / cover como resume.
  */
 export async function selectResumeForRole(
   page: Page,
@@ -1414,14 +1419,22 @@ export async function selectResumeForRole(
   const wantRe = kind === "automation" ? RESUME_FILE_MATCH.automation : RESUME_FILE_MATCH.analyst;
   const root = scopeRoot(page);
 
-  const pdfLabels = root.locator("label, span").filter({ hasText: /\.pdf/i });
-  const pdfCount = await pdfLabels.count().catch(() => 0);
+  const pdfVisible = await root
+    .getByText(/\.pdf/i)
+    .first()
+    .isVisible({ timeout: 800 })
+    .catch(() => false);
   const showLinkVisible = await root
     .getByText(SHOW_MORE_RESUMES_RE)
     .first()
     .isVisible({ timeout: 800 })
     .catch(() => false);
-  if (pdfCount === 0 && !showLinkVisible) return false;
+  const curriculumStep = await root
+    .getByText(/curr[ií]culum|resume|be sure to include an updated resume/i)
+    .first()
+    .isVisible({ timeout: 600 })
+    .catch(() => false);
+  if (!pdfVisible && !showLinkVisible && !curriculumStep) return false;
 
   const selectedBlob = await selectedResumeLabel(root);
   const coverSelected = COVER_AS_RESUME_RE.test(selectedBlob);
@@ -1432,9 +1445,9 @@ export async function selectResumeForRole(
     return true;
   }
 
-  if (coverSelected) {
+  if (coverSelected || /intro-GGZ/i.test(selectedBlob)) {
     console.log(
-      `   ↳ Resume: ⚠ default es cover letter ("${selectedBlob.slice(0, 50)}") — hay que cambiar`
+      `   ↳ Resume: ⚠ default es cover letter ("${selectedBlob.slice(0, 60)}") — cambiar a ${kind}`
     );
   } else if (selectedBlob) {
     console.log(
@@ -1442,20 +1455,27 @@ export async function selectResumeForRole(
     );
   }
 
-  // Siempre desplegar si el CV correcto puede estar oculto
-  await clickShowMoreResumes(root);
-
-  // Intento 1 tras expandir
+  // CV ya visible (Stefanini: Automation al lado de intro-GGZ) → click antes de Show more
   if (await clickResumeRadioMatching(root, wantRe, kind)) {
     const after = await selectedResumeLabel(root);
     if (wantRe.test(after) && !COVER_AS_RESUME_RE.test(after)) return true;
   }
 
-  // Re-expandir por si el primer click no abrió
   await clickShowMoreResumes(root);
   if (await clickResumeRadioMatching(root, wantRe, kind)) {
     const after = await selectedResumeLabel(root);
     if (wantRe.test(after) && !COVER_AS_RESUME_RE.test(after)) return true;
+  }
+
+  await clickShowMoreResumes(root);
+  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+    const after = await selectedResumeLabel(root);
+    if (wantRe.test(after) && !COVER_AS_RESUME_RE.test(after)) return true;
+  }
+
+  if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(root))) {
+    console.log("   ↳ Resume: ✗ sigue seleccionado intro-GGZ / cover — no avanzar");
+    return false;
   }
 
   console.log(`   ↳ Resume: no encontré CV ${kind} tras "Show N more resumes"`);

@@ -36,6 +36,7 @@ import {
   saveRequiredFieldsDump,
   uploadCoverLetterPdf,
   fillApplicationSummary,
+  selectResumeForRole,
 } from "./apply/fill-answers.js";
 import {
   clickButtonOrLink,
@@ -174,7 +175,10 @@ async function maybeFillOptionalTexts(
   jobTitle = "",
   company = ""
 ): Promise<void> {
+  // CV antes que cover upload (nunca dejar intro-GGZ como resume)
+  await selectResumeForRole(page, jobTitle, company);
   await uploadCoverLetterPdf(page);
+  await selectResumeForRole(page, jobTitle, company);
   await fillApplicationSummary(page, jobTitle, company);
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")

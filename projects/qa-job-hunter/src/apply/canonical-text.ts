@@ -7,8 +7,9 @@ export const RESUME_LABEL_HINT =
 
 /** Nombre de archivo (regex) del CV según rol. */
 export const RESUME_FILE_MATCH = {
-  analyst: /QA_Analyst|QA Analyst|Analyst\.pdf/i,
-  automation: /QA_Automation|QA Automation|Automation\.pdf/i,
+  analyst: /QA_Analyst|QA[\s_-]*Analyst|Analyst\.pdf/i,
+  /** Incluye CV_Gabriela_Garay_Zavalia_QA_Automation.pdf */
+  automation: /QA_Automation|QA[\s_-]*Automation|Zavalia_QA_Automation|Automation\.pdf/i,
 } as const;
 
 /** Cover letter: archivo a subir (upload). Override con COVER_LETTER_PDF. */

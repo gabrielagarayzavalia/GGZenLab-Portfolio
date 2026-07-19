@@ -24,6 +24,7 @@ import {
 } from "./apply/detect-apply.js";
 import {
   captureRequiredFields,
+  fillExpectedCompensation,
   fillPseudoAnswers,
   handleSaveDiscardModal,
   hasBlockingEmptyFields,
@@ -259,9 +260,15 @@ async function tryAdvanceNext(
   await scrollEasyApplyFormToEnd(page);
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review
   await fillPseudoAnswers(page, { jobTitle, company });
+  // Remuneración a menudo bajo "top choice": segundo pase dedicado
+  await fillExpectedCompensation(page);
 
   // 2) Si hay obligatorios vacíos → NO click (evita Save or Discard)
-  const blocking = await hasBlockingEmptyFields(page);
+  let blocking = await hasBlockingEmptyFields(page);
+  if (blocking.some((f) => /remuneraci|salary|compensation|sueldo|pretendid/i.test(f.label))) {
+    await fillExpectedCompensation(page);
+    blocking = await hasBlockingEmptyFields(page);
+  }
   if (blocking.length > 0) {
     console.log(
       `   ⛔ Next/Review bloqueado: ${blocking.length} campo(s) sin rellenar (no click)`
@@ -314,8 +321,17 @@ async function tryAdvanceNext(
   }
 
   if (await isNextDisabled(page)) return "blocked";
-  const fields = await captureRequiredFields(page);
-  const hasErrors = fields.some((f) => f.errorText);
+  let fields = await captureRequiredFields(page);
+  let hasErrors = fields.some((f) => f.errorText);
+  if (
+    (hasErrors || (await hasBlockingEmptyFields(page)).length > 0) &&
+    page.url() === beforeUrl
+  ) {
+    // Tras Next/Review LinkedIn revela remuneración debajo del fold
+    await fillExpectedCompensation(page);
+    fields = await captureRequiredFields(page);
+    hasErrors = fields.some((f) => f.errorText);
+  }
   if (hasErrors && page.url() === beforeUrl) return "blocked";
   if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
 

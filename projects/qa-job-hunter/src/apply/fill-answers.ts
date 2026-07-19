@@ -921,10 +921,135 @@ function resolveCompensationValue(blob: string): { value: string; currency: "USD
   return { value: arsValue, currency: "ARS" };
 }
 
+/** Rellena remuneración usando ids/labels ya capturados (blocking dump). */
+async function fillCompensationFromCaptured(
+  page: Page,
+  fields: CapturedField[]
+): Promise<boolean> {
+  const { fieldMatch } = PSEUDO_ANSWERS.expectedCompensation;
+  let any = false;
+  for (const f of fields) {
+    const blob = `${f.label} ${f.ariaLabel} ${f.id}`;
+    if (!fieldMatch.test(blob) && !/remuneraci|salary|compensation|sueldo|pretendid/i.test(blob)) {
+      continue;
+    }
+    if (!f.id && !f.label) continue;
+    const el = f.id
+      ? page.locator(`[id="${f.id}"]`).first()
+      : page.getByLabel(f.label.replace(/\s*\*\s*$/, "").trim()).first();
+    if (!(await el.count().catch(() => 0))) continue;
+    const { value, currency } = resolveCompensationValue(blob);
+    const raw = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(raw)) {
+      console.log(`   ↳ Remuneración: dejo prefill ("${raw.slice(0, 40)}")`);
+      any = true;
+      continue;
+    }
+    await el.scrollIntoViewIfNeeded().catch(() => {});
+    let ok = await fillInputWithWaits(page, el, value, {
+      logName: `Remuneración (${currency})`,
+      maxAttempts: 2,
+      expectTypeahead: false,
+    });
+    if (!ok) {
+      ok = await fillCompensationViaDom(page, value, f.id);
+    }
+    if (ok) {
+      console.log(`   ↳ Remuneración pretendida (${currency}, captured-id): ${value}`);
+      any = true;
+    }
+  }
+  return any;
+}
+
+/** Set value en input (light + open shadow), para numeric LinkedIn. */
+async function fillCompensationViaDom(
+  page: Page,
+  value: string,
+  preferId?: string
+): Promise<boolean> {
+  const filledId = await page.evaluate(
+    ({ value: v, preferId: pid }) => {
+      const setVal = (input: HTMLInputElement) => {
+        const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        proto?.set?.call(input, v);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+      };
+      const matchBlob = (input: HTMLInputElement) => {
+        const wrap =
+          input.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? input.parentElement;
+        const blob = `${wrap?.textContent ?? ""} ${input.id} ${input.getAttribute("aria-label") ?? ""}`;
+        return /remuneraci|salary|compensation|sueldo|pretendid|numeric/i.test(blob);
+      };
+      const walk = (root: Document | ShadowRoot | Element): string | null => {
+        if (pid) {
+          const byId =
+            (root as Document | ShadowRoot).getElementById?.(pid) ??
+            (root as Element).querySelector?.(`[id="${pid}"]`);
+          if (byId instanceof HTMLInputElement) {
+            setVal(byId);
+            return byId.id || pid;
+          }
+        }
+        const inputs = Array.from(
+          (root as Document | ShadowRoot | Element).querySelectorAll?.("input") ?? []
+        ) as HTMLInputElement[];
+        for (const input of inputs) {
+          if (input.type === "hidden" || input.type === "checkbox" || input.type === "radio") continue;
+          const id = input.id || "";
+          // LinkedIn salary numeric: …easyApplyFormElement-…-numeric
+          if (/easyApplyFormElement/i.test(id) && /numeric/i.test(id)) {
+            setVal(input);
+            return id;
+          }
+          if (!matchBlob(input)) continue;
+          if (
+            !/remuneraci|salary|compensation|pretendid/i.test(
+              `${id} ${input.getAttribute("aria-label") ?? ""} ${(input.closest("div, fieldset, li")?.textContent ?? "").slice(0, 200)}`
+            )
+          ) {
+            continue;
+          }
+          setVal(input);
+          return id || "anon";
+        }
+        const all = Array.from(
+          (root as Document | ShadowRoot | Element).querySelectorAll?.("*") ?? []
+        );
+        for (const el of all) {
+          if (el.shadowRoot) {
+            const hit = walk(el.shadowRoot);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      };
+      const modal =
+        document.querySelector(".jobs-easy-apply-modal") ??
+        document.querySelector("[role='dialog']");
+      return (modal ? walk(modal) : null) ?? walk(document);
+    },
+    { value, preferId: preferId ?? "" }
+  );
+  if (filledId) {
+    await sleep(300);
+    return true;
+  }
+  return false;
+}
+
 /** Remuneración pretendida: 2750 USD o 3.500.000 ARS según el campo. */
 export async function fillExpectedCompensation(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
   const { fieldMatch } = PSEUDO_ANSWERS.expectedCompensation;
+
+  // Si el inventario/blocking ya vio el campo, rellenar por id (más fiable).
+  const already = await captureRequiredFields(page);
+  if (await fillCompensationFromCaptured(page, already)) return true;
 
   // Campo a menudo bajo el fold (ej. tras "top choice") — scrollear todos los scrollables del modal
   await root
@@ -948,6 +1073,10 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     })
     .catch(() => {});
   await sleep(400);
+
+  // Reintento post-scroll (LinkedIn virtualiza preguntas adicionales)
+  const afterScroll = await captureRequiredFields(page);
+  if (await fillCompensationFromCaptured(page, afterScroll)) return true;
 
   const tryFillEl = async (el: Locator, blob: string, via: string): Promise<boolean> => {
     const { value, currency } = resolveCompensationValue(blob);
@@ -1056,7 +1185,77 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     if (await tryFillEl(loc, blob, via)) return true;
   }
 
-  console.log("   ↳ Remuneración: no se encontró input en el modal");
+  // Revelar pregunta bajo el fold (PageDown) y set via DOM
+  const revealed = await revealCompensationQuestion(page);
+  if (revealed) {
+    const { arsValue } = PSEUDO_ANSWERS.expectedCompensation;
+    const blob = "remuneración bruta pretendida";
+    const { value, currency } = resolveCompensationValue(blob);
+    if (await fillCompensationViaDom(page, value)) {
+      console.log(`   ↳ Remuneración pretendida (${currency}, dom): ${value}`);
+      return true;
+    }
+    const again = await captureRequiredFields(page);
+    if (await fillCompensationFromCaptured(page, again)) return true;
+    void arsValue;
+  }
+
+  const hasQuestion = await page
+    .getByText(/remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)/i)
+    .first()
+    .isVisible({ timeout: 300 })
+    .catch(() => false);
+  if (hasQuestion) {
+    console.log("   ↳ Remuneración: pregunta visible pero no se pudo rellenar el input");
+  }
+  return false;
+}
+
+/** PageDown en el modal hasta ver la pregunta de remuneración (o agotar intentos). */
+async function revealCompensationQuestion(page: Page): Promise<boolean> {
+  const q = page.getByText(
+    /remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)|desired\s*salary/i
+  ).first();
+  if (await q.isVisible({ timeout: 400 }).catch(() => false)) {
+    await q.scrollIntoViewIfNeeded().catch(() => {});
+    return true;
+  }
+
+  const modal = page.locator(".jobs-easy-apply-modal").first();
+  if (!(await modal.isVisible({ timeout: 500 }).catch(() => false))) return false;
+
+  for (let i = 0; i < 8; i++) {
+    await modal
+      .evaluate((node) => {
+        const isScrollable = (el: Element) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          const oy = style.overflowY;
+          return (
+            (oy === "auto" || oy === "scroll" || oy === "overlay") &&
+            el.scrollHeight > el.clientHeight + 8
+          );
+        };
+        const walk = (el: Element) => {
+          if (isScrollable(el)) {
+            (el as HTMLElement).scrollTop = Math.min(
+              (el as HTMLElement).scrollTop + 420,
+              (el as HTMLElement).scrollHeight
+            );
+          }
+          for (const child of Array.from(el.children)) walk(child);
+        };
+        walk(node);
+      })
+      .catch(() => {});
+    await modal.click({ position: { x: 24, y: 24 }, timeout: 500 }).catch(() => {});
+    await page.keyboard.press("PageDown").catch(() => {});
+    await sleep(280);
+    if (await q.isVisible({ timeout: 350 }).catch(() => false)) {
+      await q.scrollIntoViewIfNeeded().catch(() => {});
+      return true;
+    }
+  }
   return false;
 }
 

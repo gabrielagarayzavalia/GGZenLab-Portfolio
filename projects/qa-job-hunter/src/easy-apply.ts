@@ -47,6 +47,7 @@ import {
   hasPrefillValue,
   uploadCoverLetterPdf,
   fillApplicationSummary,
+  selectResumeForRole,
 } from "./apply/fill-answers.js";
 import {
   COVER_LETTER_DEFAULT,
@@ -417,8 +418,10 @@ async function tryEasyApply(
         return record;
       }
 
-      // Cover letter = PDF upload; summary = texto según Analyst/Automation
+      // CV correcto primero; cover letter solo en su input; summary según rol
+      await selectResumeForRole(page, job.title, job.company);
       await uploadCoverLetterPdf(page);
+      await selectResumeForRole(page, job.title, job.company);
       await fillApplicationSummary(page, job.title, job.company);
 
       if (openTextareas > 0) {

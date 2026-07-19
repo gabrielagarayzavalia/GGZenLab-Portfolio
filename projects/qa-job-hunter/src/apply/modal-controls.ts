@@ -75,16 +75,16 @@ export async function resolveApplyScope(
   return null;
 }
 
-/** Cierra typeahead/autocomplete que tapa Next/Submit en el modal. */
+/** Cierra typeahead solo si está abierto. NO Escape a ciegas (rompe Location GEO). */
 export async function dismissModalOverlays(page: Page): Promise<void> {
+  const hit = page
+    .locator(
+      "[data-test-single-typeahead-entity-form-search-result], .basic-typeahead__selectable, [role='listbox'] [role='option']"
+    )
+    .first();
+  if (!(await hit.isVisible({ timeout: 250 }).catch(() => false))) return;
   await page.keyboard.press("Escape").catch(() => {});
-  await new Promise((r) => setTimeout(r, 300));
-  // Click fuera del typeahead si sigue abierto
-  const hit = page.locator("[data-test-single-typeahead-entity-form-search-result]").first();
-  if (await hit.isVisible({ timeout: 200 }).catch(() => false)) {
-    await page.keyboard.press("Escape").catch(() => {});
-    await new Promise((r) => setTimeout(r, 200));
-  }
+  await new Promise((r) => setTimeout(r, 250));
 }
 
 /** Primer control visible: data-* LinkedIn, button, o link. */

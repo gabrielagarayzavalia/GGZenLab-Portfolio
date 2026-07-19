@@ -37,7 +37,8 @@ export const PSEUDO_ANSWERS = {
     validValueExtra: /Comuna\s*9|,/i,
   },
   country: {
-    fieldMatch: /^country$|country\*|pa[ií]s/i,
+    /** Solo Country del form (Greenhouse). NO "Phone country code". */
+    fieldMatch: /^(country|pa[ií]s)\s*\*?$/i,
     selectText: /Argentina/i,
   },
   linkedinProfile: {
@@ -356,8 +357,10 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
   for (let i = 0; i < sn; i++) {
     const el = selects.nth(i);
     if (!(await el.isVisible().catch(() => false))) continue;
-    const label = await fieldLabel(el);
-    if (!fieldMatch.test(label) && !/country/i.test(label)) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    // Evitar "Phone country code"
+    if (/phone|tel[eé]fono|c[oó]digo/i.test(label)) continue;
+    if (!fieldMatch.test(label) && !/^(country|pa[ií]s)\b/i.test(label)) continue;
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
     if (val && !EMPTY_SELECT_RE.test(val) && selectText.test(val)) return true;
     const opt = el.locator("option").filter({ hasText: selectText }).first();
@@ -384,9 +387,15 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
   // Dropdown custom (button + listbox)
   const combos = root.getByRole("combobox").or(root.locator("button").filter({ hasText: EMPTY_SELECT_RE }));
   // Prefer label Country*
-  const countryBtn = root
-    .locator("label, span, div")
-    .filter({ hasText: /^Country/i })
+  const countryLabel = root
+    .locator("label")
+    .filter({ hasText: /^(Country|Pa[ií]s)\s*\*?$/i })
+    .first();
+  if (!(await countryLabel.isVisible({ timeout: 600 }).catch(() => false))) {
+    void combos;
+    return false;
+  }
+  const countryBtn = countryLabel
     .locator("xpath=ancestor::*[self::div or self::li or self::fieldset][1]")
     .locator("select, button, [role='combobox']")
     .first();
@@ -493,7 +502,9 @@ export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[
     const starred = /\*/.test(label);
     const emptySelect =
       !f.value || EMPTY_SELECT_RE.test(f.value) || f.value === "0";
-    const isCountry = PSEUDO_ANSWERS.country.fieldMatch.test(label) || /country/i.test(label);
+    const isCountry =
+      PSEUDO_ANSWERS.country.fieldMatch.test(label) ||
+      (/^(country|pa[ií]s)\b/i.test(label) && !/phone|tel/i.test(label));
     if (f.errorText || PLEASE_SELECT_RE.test(f.errorText)) return true;
     if ((f.required || starred || isCountry) && emptySelect) return true;
     if (hasPlease && isCountry && emptySelect) return true;

@@ -35,6 +35,7 @@ import {
 import {
   clickButtonOrLink,
   cssPrimaryActions,
+  dismissModalOverlays,
   findButtonOrLink,
   MODAL_LABELS,
   resolveApplyScope,
@@ -222,27 +223,31 @@ async function tryAdvanceNext(
 
   const beforeFp = await stepFingerprint(page);
   const beforeUrl = page.url();
-  const advanced =
-    (await clickButtonOrLink(scope, MODAL_LABELS.review, 600, page)) ||
-    (await clickButtonOrLink(scope, MODAL_LABELS.continue, 800, page)) ||
-    (await clickButtonOrLink(scope, MODAL_LABELS.next, 500, page));
 
-  if (!advanced) {
+  // Preferir Next del modal (data-*); Review solo si no hay Next.
+  const nextEl = await findButtonOrLink(scope, MODAL_LABELS.continue, 800);
+  const reviewEl = nextEl
+    ? null
+    : await findButtonOrLink(scope, MODAL_LABELS.review, 500);
+  const target = nextEl ?? reviewEl;
+  if (!target) {
     const cssNext = cssPrimaryActions(scope);
-    if (await cssNext.isVisible({ timeout: 400 }).catch(() => false)) {
-      if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
-      await page.keyboard.press("Escape").catch(() => {});
-      await sleep(200);
-      const ok =
-        (await cssNext.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-        (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
-      if (!ok) return "blocked";
-    } else {
-      return "no_next";
-    }
+    if (!(await cssNext.isVisible({ timeout: 400 }).catch(() => false))) return "no_next";
+    if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
+    const ok =
+      (await cssNext.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+      (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+    if (!ok) return "blocked";
+  } else {
+    await dismissModalOverlays(page);
+    await target.scrollIntoViewIfNeeded().catch(() => {});
+    const ok =
+      (await target.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+      (await target.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+    if (!ok) return "blocked";
   }
 
-  await sleep(1200);
+  await sleep(2500);
 
   if (await dismissSaveOrDiscard(page)) return "blocked";
 
@@ -255,8 +260,11 @@ async function tryAdvanceNext(
   const afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
     console.log("   ⛔ Next/Review clickeado pero el paso no cambió");
+    console.log(`   fp before: ${beforeFp.slice(0, 120)}`);
+    console.log(`   fp after:  ${afterFp.slice(0, 120)}`);
     return "stuck";
   }
+  console.log(`   ✓ Paso avanzó (${beforeFp.slice(0, 40)}… → ${afterFp.slice(0, 40)}…)`);
   return "advanced";
 }
 

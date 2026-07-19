@@ -58,7 +58,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
 - **Cover letter:** upload `intro-GGZ.pdf` (`COVER_LETTER_PDF` / path en `canonical-text.ts`).
 - **Summary:** borrar default y pegar texto **QA Analyst** o **QA Automation** según el título del aviso (`resolveApplicationSummary`).
-- **CV:** si el radio default no matchea el rol → **See more / Show more** y elegir `QA_Analyst` vs `QA_Automation`.
+- **CV:** si el default es la cover (`intro-GGZ`) o el CV incorrecto → click **`Show N more resumes`**, luego radio `QA_Analyst` / `QA_Automation`. Nunca subir la cover letter al input de resume.
 - **Country** = Argentina; **City** = Ciudad Autonoma de Buenos Aires.
 - **Preferred location for work** = `Argentina, Autonomous City of Buenos Aires`.
 - **Where did you learn about…** = LinkedIn (select o typeahead + click).

@@ -616,18 +616,8 @@ async function clickLocationSuggestion(page: Page): Promise<string | null> {
   }
 
   const text = ((await target.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-  await target.scrollIntoViewIfNeeded().catch(() => {});
   // El click en el <li>/hit es lo que valida el GEO; tipear solo no alcanza.
-  const clicked =
-    (await target
-      .click({ timeout: 4000, noWaitAfter: true })
-      .then(() => true)
-      .catch(() => false)) ||
-    (await target
-      .click({ force: true, timeout: 4000, noWaitAfter: true })
-      .then(() => true)
-      .catch(() => false));
-  if (!clicked) return null;
+  if (!(await clickSafeInEasyApply(target, { timeoutMs: 4000 }))) return null;
   await sleep(700);
   return text || "Liniers";
 }

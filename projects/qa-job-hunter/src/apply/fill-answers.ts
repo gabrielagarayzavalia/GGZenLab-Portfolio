@@ -63,7 +63,7 @@ export const PSEUDO_ANSWERS = {
   /** Remuneración pretendida bruta (mensual). */
   expectedCompensation: {
     fieldMatch:
-      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)/i,
+      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s+\w+){0,3}\s*pretendida|remuneraci[oó]n\s*bruta|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)/i,
     usdMatch: /\b(usd|u\$s|us\$|d[oó]lar(es)?|dollars?)\b|\$\s*usd/i,
     arsMatch: /\b(ars|peso(s)?(\s*argentinos?)?|\$\s*ar|arg(?:entina)?)\b/i,
     usdValue: "2750",

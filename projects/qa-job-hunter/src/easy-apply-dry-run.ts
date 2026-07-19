@@ -430,6 +430,15 @@ async function dryRunThroughModal(
 
   // Un solo intento por paso; si falla → STOP (sin reintentos ni siguiente job).
   for (let i = 0; i < 10; i++) {
+    // Submit primero: tras Review no tocar Follow/CV (evita side-effects y evaluate).
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 800))
+    ) {
+      console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
+      return "ok";
+    }
+
     await scrollEasyApplyFormToEnd(page);
     const inventory = await inventoryEasyApplyFields(page);
     saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
@@ -447,10 +456,10 @@ async function dryRunThroughModal(
     if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
     await scrollEasyApplyFormToEnd(page);
 
-    // Scope + page: tras Review el Submit a veces vive fuera del locator scope viejo
+    // Re-check post-fill (por si Submit apareció al completar el paso)
     if (
-      (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) ||
-      (await findButtonOrLink(page, MODAL_LABELS.submit, 800))
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
     ) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return "ok";

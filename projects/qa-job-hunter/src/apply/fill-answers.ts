@@ -962,79 +962,80 @@ async function fillCompensationFromCaptured(
   return any;
 }
 
-/** Set value en input (light + open shadow), para numeric LinkedIn. */
+/**
+ * Set value en input (light + open shadow), para numeric LinkedIn.
+ * evaluate como STRING: tsx inyecta __name en funciones y rompe page.evaluate.
+ */
 async function fillCompensationViaDom(
   page: Page,
   value: string,
   preferId?: string
 ): Promise<boolean> {
-  const filledId = await page.evaluate(
-    ({ value: v, preferId: pid }) => {
-      const setVal = (input: HTMLInputElement) => {
-        const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
-        proto?.set?.call(input, v);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
-      };
-      const matchBlob = (input: HTMLInputElement) => {
-        const wrap =
-          input.closest(
-            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
-          ) ?? input.parentElement;
-        const blob = `${wrap?.textContent ?? ""} ${input.id} ${input.getAttribute("aria-label") ?? ""}`;
-        return /remuneraci|salary|compensation|sueldo|pretendid|numeric/i.test(blob);
-      };
-      const walk = (root: Document | ShadowRoot | Element): string | null => {
-        if (pid) {
-          const byId =
-            (root as Document | ShadowRoot).getElementById?.(pid) ??
-            (root as Element).querySelector?.(`[id="${pid}"]`);
-          if (byId instanceof HTMLInputElement) {
-            setVal(byId);
-            return byId.id || pid;
+  const payload = JSON.stringify({ value, preferId: preferId ?? "" });
+  const filledId = (await page
+    .evaluate(
+      `((args) => {
+        const v = args.value;
+        const pid = args.preferId;
+        const setVal = (input) => {
+          const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+          if (proto && proto.set) proto.set.call(input, v);
+          else input.value = v;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+        };
+        const matchBlob = (input) => {
+          const wrap =
+            input.closest(
+              ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+            ) || input.parentElement;
+          const blob = ((wrap && wrap.textContent) || "") + " " + input.id + " " + (input.getAttribute("aria-label") || "");
+          return /remuneraci|salary|compensation|sueldo|pretendid|numeric/i.test(blob);
+        };
+        const walk = (root) => {
+          if (pid) {
+            const byId =
+              (root.getElementById && root.getElementById(pid)) ||
+              (root.querySelector && root.querySelector('[id="' + pid + '"]'));
+            if (byId && byId.tagName === "INPUT") {
+              setVal(byId);
+              return byId.id || pid;
+            }
           }
-        }
-        const inputs = Array.from(
-          (root as Document | ShadowRoot | Element).querySelectorAll?.("input") ?? []
-        ) as HTMLInputElement[];
-        for (const input of inputs) {
-          if (input.type === "hidden" || input.type === "checkbox" || input.type === "radio") continue;
-          const id = input.id || "";
-          // LinkedIn salary numeric: …easyApplyFormElement-…-numeric
-          if (/easyApplyFormElement/i.test(id) && /numeric/i.test(id)) {
+          const inputs = Array.from((root.querySelectorAll && root.querySelectorAll("input")) || []);
+          for (const input of inputs) {
+            if (input.type === "hidden" || input.type === "checkbox" || input.type === "radio") continue;
+            const id = input.id || "";
+            if (/easyApplyFormElement/i.test(id) && /numeric/i.test(id)) {
+              setVal(input);
+              return id;
+            }
+            if (!matchBlob(input)) continue;
+            const near = ((input.closest("div, fieldset, li") && input.closest("div, fieldset, li").textContent) || "").slice(0, 200);
+            if (!/remuneraci|salary|compensation|pretendid/i.test(id + " " + (input.getAttribute("aria-label") || "") + " " + near)) {
+              continue;
+            }
             setVal(input);
-            return id;
+            return id || "anon";
           }
-          if (!matchBlob(input)) continue;
-          if (
-            !/remuneraci|salary|compensation|pretendid/i.test(
-              `${id} ${input.getAttribute("aria-label") ?? ""} ${(input.closest("div, fieldset, li")?.textContent ?? "").slice(0, 200)}`
-            )
-          ) {
-            continue;
+          const all = Array.from((root.querySelectorAll && root.querySelectorAll("*")) || []);
+          for (const el of all) {
+            if (el.shadowRoot) {
+              const hit = walk(el.shadowRoot);
+              if (hit) return hit;
+            }
           }
-          setVal(input);
-          return id || "anon";
-        }
-        const all = Array.from(
-          (root as Document | ShadowRoot | Element).querySelectorAll?.("*") ?? []
-        );
-        for (const el of all) {
-          if (el.shadowRoot) {
-            const hit = walk(el.shadowRoot);
-            if (hit) return hit;
-          }
-        }
-        return null;
-      };
-      const modal =
-        document.querySelector(".jobs-easy-apply-modal") ??
-        document.querySelector("[role='dialog']");
-      return (modal ? walk(modal) : null) ?? walk(document);
-    },
-    { value, preferId: preferId ?? "" }
-  );
+          return null;
+        };
+        const modal =
+          document.querySelector(".jobs-easy-apply-modal") ||
+          document.querySelector("[role='dialog']");
+        return (modal ? walk(modal) : null) || walk(document);
+      })(${payload})`
+    )
+    .catch(() => null)) as string | null;
+
   if (filledId) {
     await sleep(300);
     return true;

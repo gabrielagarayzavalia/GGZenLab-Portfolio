@@ -40,6 +40,11 @@ async function scrapeLinkedInJobs(): Promise<void> {
   const browser = await chromium.launch({
     headless: false, // Visible para detectar problemas
     slowMo: 300,
+    args: [
+      "--disable-extensions",
+      "--disable-translate",
+      "--disable-features=Translate,TranslateUI,TranslateNewUX",
+    ],
   });
 
   const context = await browser.newContext({

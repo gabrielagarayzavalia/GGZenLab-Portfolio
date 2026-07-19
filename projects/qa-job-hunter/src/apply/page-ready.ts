@@ -7,8 +7,40 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Args de Chromium para ventana maximizada (usar con viewport: null en el context). */
-export const MAXIMIZED_LAUNCH_ARGS = ["--start-maximized"] as const;
+/**
+ * Args de Chromium para ventana maximizada (usar con viewport: null en el context).
+ * Sin extensiones ni UI de traductor (Chrome Translate no se usa en Easy Apply).
+ */
+export const MAXIMIZED_LAUNCH_ARGS = [
+  "--start-maximized",
+  "--disable-extensions",
+  "--disable-translate",
+  "--disable-features=Translate,TranslateUI,TranslateNewUX",
+] as const;
+
+/** Cierra bubble/banner de traductor si igual aparece (Chrome o extensión). */
+export async function dismissTranslatorUi(page: Page): Promise<void> {
+  const closers = [
+    page.getByRole("button", { name: /close|cerrar|no thanks|no, gracias|never translate|nunca traducir/i }),
+    page.locator(
+      [
+        '[aria-label*="Close" i][aria-label*="Translate" i]',
+        '[aria-label*="Cerrar" i][aria-label*="Traduc" i]',
+        "#translate-button + button",
+        ".translate-infobar button[aria-label*='Close' i]",
+        "div[role='dialog'] button[aria-label*='Close' i]",
+      ].join(", ")
+    ),
+  ];
+  for (const loc of closers) {
+    const btn = loc.first();
+    if (await btn.isVisible({ timeout: 400 }).catch(() => false)) {
+      await btn.click({ force: true, timeout: 1500 }).catch(() => {});
+      await sleep(200);
+      return;
+    }
+  }
+}
 
 /** Context sin viewport fijo para respetar --start-maximized. */
 export function maximizedContextOptions(
@@ -62,6 +94,7 @@ export async function waitForJobPageReady(page: Page): Promise<void> {
     .waitFor({ state: "visible", timeout: 12000 })
     .catch(() => {});
 
+  await dismissTranslatorUi(page);
   await sleep(600);
 }
 
@@ -151,5 +184,9 @@ export async function prepareApplyBrowserPage(
 ): Promise<Page> {
   const page = await context.newPage();
   await maximizeWindow(page);
+  await dismissTranslatorUi(page);
+  page.on("load", () => {
+    void dismissTranslatorUi(page);
+  });
   return page;
 }

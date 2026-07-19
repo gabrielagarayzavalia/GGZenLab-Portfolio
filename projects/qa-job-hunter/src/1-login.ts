@@ -19,6 +19,11 @@ async function loginLinkedIn() {
   const browser = await chromium.launch({
     headless: false,
     slowMo: 400,
+    args: [
+      "--disable-extensions",
+      "--disable-translate",
+      "--disable-features=Translate,TranslateUI,TranslateNewUX",
+    ],
   });
 
   const context = await browser.newContext({

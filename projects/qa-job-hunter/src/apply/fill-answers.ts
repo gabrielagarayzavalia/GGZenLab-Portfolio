@@ -912,6 +912,20 @@ function resolveCompensationValue(blob: string): { value: string; currency: "USD
 export async function fillExpectedCompensation(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
   const { fieldMatch } = PSEUDO_ANSWERS.expectedCompensation;
+
+  // Campo a menudo bajo el fold (ej. tras "top choice")
+  await root
+    .evaluate((node) => {
+      const scrollables = node.querySelectorAll(
+        ".jobs-easy-apply-content, .overflow-y-auto, [class*='scroll']"
+      );
+      for (const s of Array.from(scrollables)) {
+        (s as HTMLElement).scrollTop = (s as HTMLElement).scrollHeight;
+      }
+    })
+    .catch(() => {});
+  await sleep(300);
+
   const controls = root.locator(
     "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
   );
@@ -920,7 +934,9 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
 
   for (let i = 0; i < n; i++) {
     const el = controls.nth(i);
-    if (!(await el.isVisible().catch(() => false))) continue;
+    await el.scrollIntoViewIfNeeded().catch(() => {});
+    // attached basta: LinkedIn a veces marca isVisible=false fuera del viewport
+    if (!(await el.count().catch(() => 0))) continue;
     const label = await fieldLabel(el);
     const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
     const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
@@ -954,6 +970,27 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
       filled = true;
     } else {
       console.log(`   ↳ Remuneración (${currency}): falló tras waits/reintentos`);
+    }
+  }
+
+  // Fallback: label ES visible "remuneración…pretendida"
+  if (!filled) {
+    const byLabel = root
+      .getByLabel(/remuneraci[oó]n|sueldo|salary|compensation/i)
+      .first();
+    if (await byLabel.count().catch(() => 0)) {
+      await byLabel.scrollIntoViewIfNeeded().catch(() => {});
+      const blob = ((await byLabel.getAttribute("aria-label")) ?? "") + " remuneración";
+      const { value, currency } = resolveCompensationValue(blob);
+      const ok = await fillInputWithWaits(page, byLabel, value, {
+        logName: `Remuneración (${currency})`,
+        maxAttempts: 2,
+        expectTypeahead: false,
+      });
+      if (ok) {
+        console.log(`   ↳ Remuneración pretendida (${currency}, byLabel): ${value}`);
+        filled = true;
+      }
     }
   }
 

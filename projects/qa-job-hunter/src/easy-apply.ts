@@ -26,19 +26,40 @@ import {
   clickButtonOrLink,
   cssPrimaryActions,
   findButtonOrLink,
+  isLanguageOnlyShell,
   MODAL_LABELS,
   resolveApplyScope,
 } from "./apply/modal-controls.js";
 import {
   fillPseudoAnswers,
   handleSaveDiscardModal,
+  inventoryEasyApplyFields,
+  logFieldInventory,
+  saveEasyApplyFieldInventory,
+  saveRequiredFieldsDump,
+  logCapturedFields,
+  hasBlockingEmptyFields,
+  hasMandatoryFieldError,
+  recoverMandatoryTypeaheadOrClose,
 } from "./apply/fill-answers.js";
-import { finishProductiveRun } from "./apply/post-run.js";
+import {
+  MAXIMIZED_LAUNCH_ARGS,
+  maximizeWindow,
+  maximizedContextOptions,
+  prepareApplyBrowserPage,
+  scrollEasyApplyFormToEnd,
+  waitForEasyApplyModalReady,
+  waitForJobPageReady,
+} from "./apply/page-ready.js";
+import { exportQueueToExcel, finishProductiveRun } from "./apply/post-run.js";
 import {
   canonicalJobUrl,
   ensureQueueFromMatched,
+  isFinalStatus,
   jobIdFromUrl,
+  loadQueue,
   markEnviadaIfAllowed,
+  toApplyJob,
   updateQueueRow,
 } from "./apply/apply-queue.js";
 import { handleFailures } from "./apply/failure-handler.js";
@@ -50,7 +71,10 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Tras Submit: Done + Excel enviada. */
+/**
+ * Tras Submit exitoso: Excel/cola → enviada siempre (Done es opcional).
+ * Caso 1: sin botón Done sigue contando como enviada.
+ */
 async function completeSubmitAndDone(
   page: import("playwright").Page,
   job: ApplyJob,
@@ -60,10 +84,19 @@ async function completeSubmitAndDone(
     .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
     .catch(() => {});
 
-  let clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
+  // Submit ya clickeado → marcar enviada de inmediato (no depender de Done).
+  record.status = "submitted";
+  record.reason = "Easy Apply enviada (Submit; sincronizando Done…)";
+  markEnviadaIfAllowed(job.jobId, record.reason);
+  setApplicationStatus(
+    { id: job.jobId, title: job.title, company: job.company },
+    "applied"
+  );
+
+  const clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
   if (clickedDone) await sleep(1500);
 
-  const confirmed =
+  const uiConfirmed =
     clickedDone ||
     (await detectAlreadyApplied(page)) ||
     (await page
@@ -72,24 +105,20 @@ async function completeSubmitAndDone(
       .isVisible({ timeout: 3000 })
       .catch(() => false));
 
-  if (confirmed) {
-    record.status = "submitted";
-    record.reason = clickedDone
-      ? "Easy Apply enviada (Submit + Done)"
-      : "Easy Apply enviada (Submit; Done no visible)";
-    markEnviadaIfAllowed(job.jobId, record.reason);
-    setApplicationStatus(
-      { id: job.jobId, title: job.title, company: job.company },
-      "applied"
-    );
-    await page
-      .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
-      .catch(() => {});
-    return record;
-  }
+  record.reason = clickedDone
+    ? "Easy Apply enviada (Submit + Done)"
+    : uiConfirmed
+      ? "Easy Apply enviada (Submit; Done no visible)"
+      : "Easy Apply enviada (Submit; Done no visible — Excel enviada)";
+  markEnviadaIfAllowed(job.jobId, record.reason);
 
-  record.status = "blocked";
-  record.reason = "Submit sin Done/confirmación — verificar en LinkedIn";
+  await page
+    .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
+    .catch(() => {});
+
+  // Intento inmediato a Excel (si el archivo está abierto, finishProductiveRun reintenta).
+  exportQueueToExcel();
+
   return record;
 }
 
@@ -108,8 +137,14 @@ async function afterSaveContinueToSubmit(
     const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1200);
     if (submitBtn) {
       const submitted =
-        (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-        (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+        (await submitBtn
+          .click({ timeout: 4000, noWaitAfter: true })
+          .then(() => true)
+          .catch(() => false)) ||
+        (await submitBtn
+          .click({ force: true, timeout: 4000, noWaitAfter: true })
+          .then(() => true)
+          .catch(() => false));
       if (!submitted) {
         record.status = "blocked";
         record.reason = "Tras Save: Submit visible pero click falló";
@@ -167,6 +202,44 @@ function loadMatchedJobs(): ApplyJob[] {
     .filter((m) => /^\d+$/.test(m.jobId));
 }
 
+/** Descarta borrador atascado (solo idioma) y reabre Easy Apply una vez. */
+async function discardStaleDraftAndReopen(
+  page: import("playwright").Page,
+  job: ApplyJob
+): Promise<"reopened" | "applied" | "failed"> {
+  console.log("   ↻ Shell solo-idioma / borrador — Descarto y reabro Easy Apply…");
+
+  await handleSaveDiscardModal(page, "dry_run");
+  const discardApp = page
+    .getByRole("button", {
+      name: /Discard application|Delete draft|Discard|Descartar solicitud|Descartar/i,
+    })
+    .first();
+  if (await discardApp.isVisible({ timeout: 1200 }).catch(() => false)) {
+    await discardApp.click({ timeout: 4000 }).catch(() =>
+      discardApp.click({ force: true, timeout: 4000 })
+    );
+    await sleep(800);
+    await handleSaveDiscardModal(page, "dry_run");
+  }
+  await clickButtonOrLink(page, MODAL_LABELS.dismiss, 800, page);
+  await page.keyboard.press("Escape").catch(() => {});
+  await sleep(600);
+
+  await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+  await waitForJobPageReady(page);
+
+  if (!(await findEasyApplyControl(page, 8000))) {
+    const signal = await detectPageApplySignal(page);
+    if (signal === "applied") return "applied";
+    return "failed";
+  }
+
+  const clicked = await clickEasyApply(page);
+  if (!clicked || !(await waitForEasyApplyModalReady(page))) return "failed";
+  return "reopened";
+}
+
 async function tryEasyApply(
   page: import("playwright").Page,
   job: ApplyJob
@@ -182,7 +255,7 @@ async function tryEasyApply(
 
   try {
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await sleep(2500);
+    await waitForJobPageReady(page);
 
     // Easy Apply visible manda; applied/closed solo si NO hay link Easy Apply.
     if (!(await findEasyApplyControl(page, 10000))) {
@@ -196,6 +269,7 @@ async function tryEasyApply(
             { id: job.jobId, title: job.title, company: job.company },
             "applied"
           );
+          exportQueueToExcel();
         }
         return record;
       }
@@ -226,9 +300,13 @@ async function tryEasyApply(
       record.reason = "Easy Apply visible pero click falló";
       return record;
     }
-    await sleep(2000);
+    if (!(await waitForEasyApplyModalReady(page))) {
+      record.status = "blocked";
+      record.reason = "Modal Easy Apply no abrió / no terminó de cargar";
+      return record;
+    }
 
-    const modal = await resolveApplyScope(page, 12000);
+    let modal = await resolveApplyScope(page, 12000);
     if (!modal) {
       record.status = "blocked";
       record.reason = "Modal Easy Apply no abrió";
@@ -237,24 +315,90 @@ async function tryEasyApply(
 
     let steps = 0;
     const maxSteps = 8;
+    let restartedFromStale = false;
+    let languageOnlyStreak = 0;
 
     while (steps < maxSteps) {
       steps++;
 
+      // Scroll hasta el final del form para revelar campos fuera de viewport
+      await scrollEasyApplyFormToEnd(page);
+      const inventory = await inventoryEasyApplyFields(page);
+      const inventoryPath = saveEasyApplyFieldInventory(job.jobId, job.url, steps, inventory);
+      logFieldInventory(inventory);
+      if (inventory.length > 0) {
+        console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
+      }
+
+      // Borrador atascado: solo "Select language" → descartar y reabrir (1 vez).
+      // No usar artdeco-primary genérico: LinkedIn siempre tiene uno y bloqueaba el restart.
+      if (isLanguageOnlyShell(inventory)) {
+        languageOnlyStreak++;
+        const eaAdvance = page.locator(
+          "button[data-easy-apply-next-button], button[data-live-test-easy-apply-next-button], button[data-live-test-easy-apply-submit-button]"
+        );
+        const hasEasyApplyAdvance =
+          (await findButtonOrLink(modal, MODAL_LABELS.submit, 500)) ||
+          (await findButtonOrLink(modal, MODAL_LABELS.continue, 400)) ||
+          (await findButtonOrLink(modal, MODAL_LABELS.next, 300)) ||
+          (await findButtonOrLink(page, MODAL_LABELS.submit, 400)) ||
+          (await eaAdvance.first().isVisible({ timeout: 400 }).catch(() => false));
+
+        if (languageOnlyStreak >= 2 && !restartedFromStale) {
+          restartedFromStale = true;
+          const reopen = await discardStaleDraftAndReopen(page, job);
+          if (reopen === "applied") {
+            record.status = "submitted";
+            record.reason = "Application submitted / Applied tras descartar borrador";
+            markEnviadaIfAllowed(job.jobId, record.reason);
+            setApplicationStatus(
+              { id: job.jobId, title: job.title, company: job.company },
+              "applied"
+            );
+            exportQueueToExcel();
+            return record;
+          }
+          if (reopen === "reopened") {
+            modal = (await resolveApplyScope(page, 12000)) ?? page;
+            steps = 0;
+            languageOnlyStreak = 0;
+            continue;
+          }
+          console.log("   ✗ No pude reabrir tras shell idioma — sigo intentando footer EA");
+        }
+
+        // En shell idioma: solo clickear controles Easy Apply reales (no primary genérico)
+        if (!hasEasyApplyAdvance && languageOnlyStreak >= 2 && restartedFromStale) {
+          // ya reiniciamos y seguimos en idioma → cortar
+          record.status = "draft_saved";
+          record.reason =
+            "Borrador LinkedIn solo-idioma tras reopen — completar manual o otra estrategia";
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-language-shell.png`) })
+            .catch(() => {});
+          return record;
+        }
+      } else {
+        languageOnlyStreak = 0;
+      }
+
       const openTextareas = await page
-        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea, textarea")
-        .count();
-      const requiredEmpty = await page
-        .locator(".jobs-easy-apply-modal input[required]:not([value]), [role='dialog'] input[required]")
+        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea")
         .count();
 
-      const bodyText = await page
-        .locator(".jobs-easy-apply-modal, [role='dialog'], main")
+      // Solo texto del MODAL (nunca main): "Test Automation" / JD no deben disparar assessment.
+      const modalText = await page
+        .locator(".jobs-easy-apply-modal, [role='dialog']")
         .first()
         .innerText()
         .catch(() => "");
 
-      if (/assessment|evaluaci[oó]n|quiz|test/i.test(bodyText)) {
+      // NO usar /\btest\b/: matchea "Test Automation" del perfil y bloquea en falso.
+      if (
+        /skills assessment|online assessment|coding assessment|assessment required|completar (la |una )?evaluaci[oó]n|\bquiz\b|honeypot|workday assessment/i.test(
+          modalText
+        )
+      ) {
         record.status = "blocked";
         record.reason = "Requiere assessment — completar manualmente";
         await page
@@ -295,13 +439,42 @@ async function tryEasyApply(
       }
 
       await fillPseudoAnswers(page);
+      // Re-scroll tras rellenar (dropdowns / campos nuevos)
+      await scrollEasyApplyFormToEnd(page);
+
+      // Antes de avanzar: si hay mandatorio/typeahead roto → 3 reintentos o cerrar
+      if (await hasMandatoryFieldError(page)) {
+        const recover = await recoverMandatoryTypeaheadOrClose(page);
+        if (recover === "failed_close") {
+          record.status = "blocked";
+          record.reason =
+            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+          updateQueueRow(job.jobId, {
+            status: "pendiente",
+            easyApply: "yes",
+            reason: record.reason,
+          });
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
+            .catch(() => {});
+          return record;
+        }
+        await fillPseudoAnswers(page);
+        await scrollEasyApplyFormToEnd(page);
+      }
 
       const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1500);
 
       if (submitBtn) {
         const submitted =
-          (await submitBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-          (await submitBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+          (await submitBtn
+            .click({ timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false)) ||
+          (await submitBtn
+            .click({ force: true, timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false));
         if (!submitted) {
           record.status = "blocked";
           record.reason = "Submit visible pero click falló (overlay)";
@@ -320,10 +493,41 @@ async function tryEasyApply(
         : await findButtonOrLink(modal, MODAL_LABELS.review, 800);
       const advanceBtn = nextEl ?? reviewEl;
       if (advanceBtn) {
-        await advanceBtn.click({ timeout: 4000 }).catch(async () => {
-          await advanceBtn.click({ force: true, timeout: 4000 });
-        });
+        const advanced =
+          (await advanceBtn
+            .click({ timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false)) ||
+          (await advanceBtn
+            .click({ force: true, timeout: 4000, noWaitAfter: true })
+            .then(() => true)
+            .catch(() => false));
+        if (!advanced) {
+          record.status = "blocked";
+          record.reason = "Next/Review visible pero click falló";
+          return record;
+        }
         await sleep(2000);
+
+        // Tras Next: error mandatorio → recover typeahead (3×) o cerrar
+        if (await hasMandatoryFieldError(page)) {
+          const recover = await recoverMandatoryTypeaheadOrClose(page);
+          if (recover === "failed_close") {
+            record.status = "blocked";
+            record.reason =
+              "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+            updateQueueRow(job.jobId, {
+              status: "pendiente",
+              easyApply: "yes",
+              reason: record.reason,
+            });
+            await page
+              .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
+              .catch(() => {});
+            return record;
+          }
+          continue;
+        }
 
         const sd = await handleSaveDiscardModal(page, "productive");
         if (sd === "saved") {
@@ -334,22 +538,66 @@ async function tryEasyApply(
         continue;
       }
 
+      // Footer a veces vive fuera del scope del modal → probar page también.
+      // En shell solo-idioma NO clickear primary genérico (no avanza y quema pasos).
+      if (isLanguageOnlyShell(inventory)) {
+        continue;
+      }
+
       const nextBtn = cssPrimaryActions(modal);
-      if (await nextBtn.isVisible({ timeout: 800 }).catch(() => false)) {
+      const nextBtnPage = cssPrimaryActions(page);
+      const primary =
+        (await nextBtn.isVisible({ timeout: 600 }).catch(() => false))
+          ? nextBtn
+          : (await nextBtnPage.isVisible({ timeout: 600 }).catch(() => false))
+            ? nextBtnPage
+            : null;
+      if (primary) {
         await page.keyboard.press("Escape").catch(() => {});
         const ok =
-          (await nextBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-          (await nextBtn.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+          (await primary.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+          (await primary.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
         if (ok) {
           await sleep(1500);
+          if (await hasMandatoryFieldError(page)) {
+            const recover = await recoverMandatoryTypeaheadOrClose(page);
+            if (recover === "failed_close") {
+              record.status = "blocked";
+              record.reason =
+                "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+              updateQueueRow(job.jobId, {
+                status: "pendiente",
+                easyApply: "yes",
+                reason: record.reason,
+              });
+              return record;
+            }
+          }
           continue;
         }
       }
 
-      if (requiredEmpty > 0) {
-        record.status = "blocked";
-        record.reason = "Campos obligatorios sin completar — completar manual";
-        return record;
+      const blocking = await hasBlockingEmptyFields(page);
+      if (blocking.length > 0) {
+        const recover = await recoverMandatoryTypeaheadOrClose(page);
+        if (recover === "failed_close") {
+          record.status = "blocked";
+          record.reason =
+            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
+          updateQueueRow(job.jobId, {
+            status: "pendiente",
+            easyApply: "yes",
+            reason: record.reason,
+          });
+          const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
+          logCapturedFields(blocking);
+          record.reason += ` — ver ${path.basename(dump)}`;
+          await page
+            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-required.png`) })
+            .catch(() => {});
+          return record;
+        }
+        continue;
       }
 
       break;
@@ -368,22 +616,53 @@ async function tryEasyApply(
   return record;
 }
 
+/** Prioriza cola Excel pendiente; fallback matchedJobs. APPLY_MAX limita la corrida. */
+function loadJobsForProductiveRun(): ApplyJob[] {
+  ensureQueueFromMatched();
+  const fromQueue = loadQueue()
+    .filter(
+      (r) =>
+        r.status === "pendiente" &&
+        !isFinalStatus(r.status) &&
+        r.easyApply !== "no" &&
+        /^\d+$/.test(r.jobId)
+    )
+    .sort((a, b) => b.matchPercent - a.matchPercent)
+    .map(toApplyJob);
+
+  const base = fromQueue.length > 0 ? fromQueue : loadMatchedJobs();
+  const max = Number(process.env.APPLY_MAX ?? "0");
+  if (max > 0) return base.slice(0, max);
+  return base;
+}
+
 async function main() {
   ensureDirs();
-  ensureQueueFromMatched();
 
-  const toApply = loadMatchedJobs();
-  console.log(`🚀 Easy Apply en ${toApply.length} avisos calificados (>= ${MIN_MATCH}%)\n`);
+  const toApply = loadJobsForProductiveRun();
+  const maxLabel = process.env.APPLY_MAX ? ` (APPLY_MAX=${process.env.APPLY_MAX})` : "";
+  console.log(`🚀 Easy Apply PRODUCTIVO — ${toApply.length} aviso(s)${maxLabel}\n`);
+  console.log("   ⚠️  Envía postulaciones reales (Submit + Done).");
 
   if (toApply.length === 0) {
-    console.log("No hay avisos calificados para aplicar. Nada que hacer.");
+    console.log("No hay avisos pendientes para aplicar. Nada que hacer.");
     return;
   }
 
+  for (const j of toApply) {
+    console.log(`   · [${j.matchPercent}%] ${j.company} — ${j.title}`);
+  }
+  console.log("");
+
   const sessionPath = resolveSessionPath();
-  const browser = await chromium.launch({ headless: false, slowMo: 250 });
-  const context = await browser.newContext({ storageState: sessionPath, locale: "en-US" });
-  const page = await context.newPage();
+  const browser = await chromium.launch({
+    headless: false,
+    slowMo: 250,
+    args: [...MAXIMIZED_LAUNCH_ARGS],
+  });
+  const context = await browser.newContext(maximizedContextOptions(sessionPath));
+  const page = await prepareApplyBrowserPage(context);
+  await maximizeWindow(page);
 
   const applications: ApplicationRecord[] = [];
 

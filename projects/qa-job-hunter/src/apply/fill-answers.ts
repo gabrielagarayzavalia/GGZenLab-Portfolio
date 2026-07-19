@@ -18,6 +18,10 @@ export interface CapturedField {
   ariaLabel: string;
   placeholder: string;
   errorText: string;
+  /** true si no es required (para inventario multi-escenario). */
+  optional?: boolean;
+  /** radio / checkbox / text / select / combobox / textarea / unknown */
+  scenarioKind?: string;
 }
 
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
@@ -116,8 +120,22 @@ async function fieldError(el: Locator): Promise<string> {
     .catch(() => "");
 }
 
-/** Lista campos visibles (prioriza required / con error / vacíos). */
-export async function captureRequiredFields(page: Page): Promise<CapturedField[]> {
+function scenarioKindFor(tag: string, inputType: string): string {
+  if (inputType === "radio") return "radio";
+  if (inputType === "checkbox") return "checkbox";
+  if (tag === "select" || inputType === "select-one") return "select";
+  if (tag === "textarea") return "textarea";
+  if (inputType === "tel" || inputType === "email" || inputType === "url" || inputType === "text") {
+    return inputType === "text" ? "text" : inputType;
+  }
+  if (tag === "input" || inputType === "combobox") return "combobox_or_text";
+  return "unknown";
+}
+
+async function collectVisibleFields(
+  page: Page,
+  opts: { onlyBlockingCandidates: boolean }
+): Promise<CapturedField[]> {
   const root = scopeRoot(page);
   if (!(await root.isVisible({ timeout: 2000 }).catch(() => false))) return [];
 
@@ -131,7 +149,7 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
     const el = controls.nth(i);
     if (!(await el.isVisible().catch(() => false))) continue;
 
-    const tag = await el.evaluate((n) => n.tagName.toLowerCase()).catch(() => "");
+    const tag = await el.evaluate((node) => node.tagName.toLowerCase()).catch(() => "");
     const inputType = ((await el.getAttribute("type")) ?? tag).toLowerCase();
     const name = (await el.getAttribute("name").catch(() => "")) ?? "";
     const id = (await el.getAttribute("id").catch(() => "")) ?? "";
@@ -145,10 +163,14 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
         : ((await el.inputValue().catch(() => "")) ?? (await el.innerText().catch(() => ""))).trim();
     const label = await fieldLabel(el);
     const errorText = await fieldError(el);
-    const required = ariaRequired || htmlRequired || Boolean(errorText) || !value;
+    const starred = /\*/.test(label) || /\*/.test(ariaLabel);
+    const required = ariaRequired || htmlRequired || starred || Boolean(errorText);
+    const optional = !required;
 
-    // Solo nos interesan obligatorios, con error, o vacíos relevantes
-    if (!ariaRequired && !htmlRequired && !errorText && value) continue;
+    // Modo legacy: solo obligatorios / error / vacíos relevantes
+    if (opts.onlyBlockingCandidates) {
+      if (!ariaRequired && !htmlRequired && !errorText && !starred && value) continue;
+    }
 
     out.push({
       label: label || ariaLabel || placeholder || name || id || `(unnamed ${tag})`,
@@ -157,6 +179,8 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
       name,
       id,
       required: required || Boolean(errorText),
+      optional,
+      scenarioKind: scenarioKindFor(tag, inputType),
       value,
       ariaLabel,
       placeholder,
@@ -180,6 +204,8 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
       name: "",
       id: "",
       required: true,
+      optional: false,
+      scenarioKind: "error",
       value: "",
       ariaLabel: "",
       placeholder: "",
@@ -188,6 +214,73 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
   }
 
   return out;
+}
+
+/** Lista campos visibles (prioriza required / con error / vacíos). */
+export async function captureRequiredFields(page: Page): Promise<CapturedField[]> {
+  return collectVisibleFields(page, { onlyBlockingCandidates: true });
+}
+
+/**
+ * Inventario completo del paso actual (required + optional) tras scrolldown.
+ * Sirve para cubrir escenarios Easy Apply distintos (no siempre mismos campos).
+ */
+export async function inventoryEasyApplyFields(page: Page): Promise<CapturedField[]> {
+  return collectVisibleFields(page, { onlyBlockingCandidates: false });
+}
+
+/** Persiste inventario multi-escenario para ampliar PSEUDO_ANSWERS / apply-answers.json. */
+export function saveEasyApplyFieldInventory(
+  jobId: string,
+  url: string,
+  step: number,
+  fields: CapturedField[]
+): string {
+  ensureDirs();
+  const required = fields.filter((f) => f.required);
+  const optional = fields.filter((f) => f.optional);
+  const byKind: Record<string, number> = {};
+  for (const f of fields) {
+    const k = f.scenarioKind ?? "unknown";
+    byKind[k] = (byKind[k] ?? 0) + 1;
+  }
+  const payload = {
+    at: new Date().toISOString(),
+    jobId,
+    url,
+    step,
+    counts: { total: fields.length, required: required.length, optional: optional.length, byKind },
+    fields,
+    improvementHint: {
+      addKnownAnswersIn: ["src/apply/fill-answers.ts → PSEUDO_ANSWERS", "src/apply/apply-answers.example.json"],
+      note:
+        "Cada aviso Easy Apply puede traer un subconjunto distinto de campos/preguntas. " +
+        "Usá este dump para agregar matchers (label regex → valor) sin asumir un formulario fijo.",
+      uncoveredRequired: required
+        .filter((f) => !f.value || EMPTY_SELECT_RE.test(f.value))
+        .map((f) => ({ label: f.label, kind: f.scenarioKind, errorText: f.errorText })),
+    },
+  };
+  const file = path.join(APPLY_DIR, `field-inventory-${jobId}-step${step}.json`);
+  const latest = path.join(APPLY_DIR, "field-inventory-latest.json");
+  fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf-8");
+  fs.writeFileSync(latest, JSON.stringify(payload, null, 2), "utf-8");
+  return file;
+}
+
+export function logFieldInventory(fields: CapturedField[]): void {
+  const req = fields.filter((f) => f.required);
+  const opt = fields.filter((f) => f.optional);
+  console.log(`   📋 Inventario campos: ${fields.length} (req=${req.length}, opc=${opt.length})`);
+  for (const f of fields.slice(0, 12)) {
+    const flag = f.required ? "REQ" : "opc";
+    console.log(
+      `      [${flag}] ${f.label}` +
+        (f.value ? ` = ${f.value.slice(0, 40)}` : " (vacío)") +
+        ` · ${f.scenarioKind ?? f.tag}`
+    );
+  }
+  if (fields.length > 12) console.log(`      … +${fields.length - 12} más (ver field-inventory-*.json)`);
 }
 
 export function saveRequiredFieldsDump(
@@ -296,7 +389,111 @@ async function clickLocationSuggestion(page: Page): Promise<string | null> {
   return text || "Liniers";
 }
 
-/** Location (city): tipear Liniers y CLICK en dropdown (Liniers, Comuna 9, …). */
+/** Mensajes de error reales (NO el asterisco "required" del label genérico). */
+const MANDATORY_FIELD_RE =
+  /please enter a valid|please enter|is required\.|this field is required|mandatory field|campo obligatorio|enter a valid|please make a selection|hac[eé] una selecci[oó]n/i;
+
+/** ¿Hay error mandatorio real en typeahead Location (vacío / inválido / feedback)? */
+export async function hasMandatoryFieldError(page: Page): Promise<boolean> {
+  const loc = await findLocationInput(page);
+  if (loc) {
+    const val = ((await loc.inputValue().catch(() => "")) ?? "").trim();
+    const err = await fieldError(loc);
+    if (err && MANDATORY_FIELD_RE.test(err)) return true;
+    // Location visible pero GEO incompleto → hay que recover
+    if (!locationValueOk(val)) {
+      const label = await fieldLabel(loc);
+      const starred = /\*/.test(label);
+      const ariaReq = (await loc.getAttribute("aria-required").catch(() => "")) === "true";
+      if (starred || ariaReq || !val) return true;
+    }
+  }
+
+  const blocking = await hasBlockingEmptyFields(page);
+  return blocking.some(
+    (f) =>
+      Boolean(f.errorText && MANDATORY_FIELD_RE.test(f.errorText)) ||
+      ((PSEUDO_ANSWERS.locationCity.fieldMatch.test(f.label) ||
+        PSEUDO_ANSWERS.locationCity.hintMatch.test(f.label)) &&
+        !locationValueOk(f.value))
+  );
+}
+
+/**
+ * Click en el campo + reescribir hasta que aparezca el dropdown.
+ * 3 intentos; si falla → false (caller cierra y prueba otra estrategia).
+ */
+async function typeaheadWithDropdownRetries(
+  page: Page,
+  input: Locator,
+  typeText: string,
+  labelForLog: string,
+  valueOk: (val: string) => boolean,
+  maxAttempts = 3
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(
+        `   ↳ ${labelForLog}: click + tipear "${typeText}" hasta dropdown (intento ${attempt}/${maxAttempts})`
+      );
+      await input.scrollIntoViewIfNeeded().catch(() => {});
+      await input.click({ timeout: 4000 });
+      await sleep(200);
+      // Seleccionar todo y borrar (más fiable que fill("") en typeahead LinkedIn)
+      await input.press("Control+a").catch(() => {});
+      await input.press("Backspace").catch(() => {});
+      await input.fill("").catch(() => {});
+      await sleep(250);
+      await input.pressSequentially(typeText, { delay: 100 });
+      await sleep(1600);
+
+      const dropdownVisible = await typeaheadHits(page)
+        .first()
+        .isVisible({ timeout: 3500 })
+        .catch(() => false);
+
+      if (!dropdownVisible) {
+        console.log(`   ↳ ${labelForLog}: dropdown no apareció — reintento`);
+        // Forzar foco de nuevo
+        await input.click({ force: true, timeout: 2000 }).catch(() => {});
+        continue;
+      }
+
+      const picked = await clickLocationSuggestion(page);
+      if (!picked) {
+        await page.keyboard.press("ArrowDown").catch(() => {});
+        await sleep(200);
+        await page.keyboard.press("Enter").catch(() => {});
+        await sleep(700);
+      } else {
+        console.log(`   ↳ ${labelForLog}: click en "${picked.slice(0, 90)}"`);
+      }
+
+      const after = ((await input.inputValue().catch(() => "")) ?? "").trim();
+      if (valueOk(after)) {
+        console.log(`   ↳ ${labelForLog}: valor OK → ${after.slice(0, 90)}`);
+        return true;
+      }
+
+      // Error mandatorio tras elegir mal / no elegir
+      if (await hasMandatoryFieldError(page)) {
+        console.log(
+          `   ↳ ${labelForLog}: sigue error mandatorio ("${after.slice(0, 50)}") — reintento`
+        );
+      } else {
+        console.log(
+          `   ↳ ${labelForLog}: valor aún inválido ("${after.slice(0, 60)}") — reintento`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`   ↳ ${labelForLog}: error intento ${attempt}: ${msg.slice(0, 120)}`);
+    }
+  }
+  return false;
+}
+
+/** Location (city): tipear Liniers y CLICK en dropdown (Liniers, Comuna 9, …). Hasta 3 intentos. */
 export async function fillLocationLiniers(page: Page): Promise<boolean> {
   const input = await findLocationInput(page);
   if (!input) return false;
@@ -313,37 +510,56 @@ export async function fillLocationLiniers(page: Page): Promise<boolean> {
     return true;
   }
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    console.log(
-      `   ↳ Location: tipeando "${typeText}" y click en dropdown (intento ${attempt})`
-    );
-    await input.click({ timeout: 3000 }).catch(() => {});
-    await input.fill("");
-    await sleep(200);
-    await input.pressSequentially(typeText, { delay: 90 });
-    await sleep(1400);
+  return typeaheadWithDropdownRetries(page, input, typeText, "Location", locationValueOk, 3);
+}
 
-    const picked = await clickLocationSuggestion(page);
-    if (!picked) {
-      // Último recurso: bajar + Enter sobre la primera opción del listbox
-      await page.keyboard.press("ArrowDown").catch(() => {});
-      await sleep(200);
-      await page.keyboard.press("Enter").catch(() => {});
-      await sleep(700);
-    } else {
-      console.log(`   ↳ Location: click en "${picked.slice(0, 90)}"`);
-    }
+export type MandatoryRecoverResult = "ok" | "failed_close";
 
-    const after = ((await input.inputValue().catch(() => "")) ?? "").trim();
-    if (locationValueOk(after)) {
-      console.log(`   ↳ Location: valor OK → ${after.slice(0, 90)}`);
-      return true;
-    }
-    console.log(
-      `   ↳ Location: valor aún inválido ("${after.slice(0, 60)}") — hace falta click en Comuna 9`
+/**
+ * Si hay error de campo mandatorio (p.ej. Location sin dropdown):
+ * reintenta typeahead 3 veces; si falla, cierra el modal para otra estrategia.
+ */
+export async function recoverMandatoryTypeaheadOrClose(
+  page: Page
+): Promise<MandatoryRecoverResult> {
+  const needs =
+    (await hasMandatoryFieldError(page)) ||
+    (await hasBlockingEmptyFields(page)).some((f) =>
+      PSEUDO_ANSWERS.locationCity.fieldMatch.test(f.label)
     );
+  if (!needs) return "ok";
+
+  console.log("   ⚠ Campo mandatorio / typeahead — recover (máx. 3 intentos)…");
+  const ok = await fillLocationLiniers(page);
+  // Si Location ya tiene GEO válido, no cerrar por ruido de otros labels ("required" en UI).
+  const loc = await findLocationInput(page);
+  const locVal = loc ? ((await loc.inputValue().catch(() => "")) ?? "").trim() : "";
+  if (ok || locationValueOk(locVal)) {
+    console.log("   ✓ Recover typeahead OK (Location válido)");
+    return "ok";
   }
-  return false;
+
+  // Tras 3 intentos: cerrar modal y dejar para otra estrategia
+  console.log(
+    "   ✗ Typeahead mandatorio falló tras 3 intentos — cierro modal (otra estrategia después)"
+  );
+  const dismiss = page
+    .locator(
+      "button[aria-label='Dismiss'], button[aria-label='Cerrar'], button[aria-label*='Dismiss'], a[aria-label='Dismiss']"
+    )
+    .first();
+  if (await dismiss.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await dismiss.click({ timeout: 4000 }).catch(() =>
+      dismiss.click({ force: true, timeout: 4000 })
+    );
+  } else {
+    await page.keyboard.press("Escape").catch(() => {});
+    await sleep(400);
+    // Save/Discard → Discard para no dejar basura inconsistente
+    await handleSaveDiscardModal(page, "dry_run");
+  }
+  await sleep(600);
+  return "failed_close";
 }
 
 /** Select Country → Argentina (Greenhouse Additional Questions). */

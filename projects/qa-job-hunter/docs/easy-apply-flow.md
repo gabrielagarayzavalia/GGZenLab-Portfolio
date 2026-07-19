@@ -59,7 +59,8 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**
   - **Dry-run (prueba):** → **Discard** y **salir** (cerrar sin guardar ni enviar).
-  - **Productivo:** → **Save** → buscar **Submit** → click → **Done** → Excel `enviada` → siguiente puesto. Al terminar la cola: export Excel + mail de pendientes + abrir Excel.
+  - **Productivo:** → **Save** → buscar **Submit** → click → Excel `enviada` **aunque no haya Done** → intentar Done si aparece → siguiente puesto. Al terminar la cola: **export Excel + abrir Excel** (sin mailto / sin abrir Gmail; reintenta si Excel está abierto).
+  - **Typeahead mandatorio** (Location, etc.): si falla validación → click en el campo + reescribir hasta ver dropdown, **hasta 3 veces**; si sigue fallando → cerrar modal y dejar para otra estrategia.
 - **Sin reintentos:** si falla el primer intento de un paso → **STOP** y debug (exit 3/4); no seguir al siguiente aviso.
 - **Capturas de error (dry-run):** `output/apply/screenshots/<jobId>-dryrun-<tag>.png` (+ dump JSON en `output/apply/required-fields-*.json`).
 - **Fingerprint de paso:** solo modal Easy Apply (nunca `<main>` del aviso); si no, Next válido se marca `stuck` en falso.
@@ -67,6 +68,16 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Idioma base LinkedIn: **inglés**.
 
 Env dry-run: `DRY_RUN_MAX=10`, `DRY_RUN_ALL=1`.
+
+### 2.2b Robustez de UI (maximize / wait / scroll)
+
+Antes de clicks Easy Apply:
+
+1. **Ventana maximizada** (`--start-maximized` + CDP) — evita misses por viewport chico.
+2. **Espera de página/modal listos** (`waitForJobPageReady` / `waitForEasyApplyModalReady`) — shell LinkedIn + red quieta + loader oculto.
+3. **Scroll del form al final** en cada paso del modal — revela campos fuera de pantalla; vuelca inventario required+optional a `output/apply/field-inventory-*.json` para ampliar `PSEUDO_ANSWERS` (cada aviso puede traer preguntas distintas).
+
+Assessment falso: la detección **solo** mira texto del modal (nunca `main`/JD/perfil).
 
 ### 2.3 Preguntas Sí/No
 Aparecen de forma variable. Heurística: defaults + patrones en `apply-answers.example.json`; preguntas desconocidas → registrar en `output/apply/apply-answers.json` (gitignore) para reutilizar (motor completo = B17-2 / B17-4).
@@ -209,3 +220,42 @@ Ejemplo alineado a la grabación (dry-run):
 - [ ] Caso “simple” puro (1 paso, sin preguntas) — grabar cuando aparezca
 - [ ] Caso `preguntas` dedicado (varios tipos de control) — grabar aparte
 - [ ] Motor de aprendizaje yes/no completo (B17-2 / B17-4)
+
+---
+
+## 9. Campaña completa (orden canónico)
+
+Easy Apply es **un sub-agente** del flujo de campaña. El orden correcto (**reconcile al final**):
+
+```mermaid
+flowchart TD
+  startNode[Inicio_campania] --> fetch[Agente_GmailFetch]
+  fetch --> pipeline[Agente_Pipeline_match_Excel]
+  pipeline --> easy[Agente_EasyApply_LinkedIn]
+  easy --> excelManual[Abrir_Excel_postulacion_manual]
+  excelManual --> userEdit[Usuario_actualiza_Excel]
+  userEdit --> reconcile[Agente_GmailReconcile]
+  reconcile --> endNode[Fin_labels_y_Excel]
+```
+
+| Paso | Agente | Comando |
+|------|--------|---------|
+| 1 | Gmail fetch | `npm run agent:gmail-fetch` (vía applied-list) |
+| 2 | Pipeline match → Excel | `npm run agent:pipeline` |
+| 3 | Easy Apply (Playwright) | `npm run easy-apply` |
+| 4 | Excel bridge + manual | abre `Empleos_Tracker.xlsx` — vos postulás/actualizás |
+| 5 | Gmail reconcile | `npm run agent:gmail-reconcile` — **reorganiza labels**, no abre Gmail UI |
+
+Orquestador:
+
+```bash
+# Desde projects/qa-job-hunter
+npm run campaign
+npm run campaign -- --from=apply --apply-max=2
+npm run campaign -- --skip-apply --from=excel
+```
+
+- Env: `APPLIED_LIST_ROOT` → path a `qa-job-applied-list`; `APPLY_MAX` / `--apply-max`.
+- Cierre productivo: **solo** export + abrir Excel (`src/apply/post-run.ts`). Sin mailto.
+- Detalle de sub-agentes: [`agents/README.md`](../agents/README.md).
+- Doc dedicada: [`docs/campaign-flow.md`](./campaign-flow.md).

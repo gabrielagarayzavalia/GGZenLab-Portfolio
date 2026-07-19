@@ -1,10 +1,9 @@
-// Cierre de corrida productiva: export Excel, abrir tracker, mail de pendientes.
+// Cierre de corrida productiva: export Excel y abrir tracker (sin mailto / sin abrir Gmail).
 
 import { execFileSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { APPLY_QUEUE_PATH, loadQueue } from "./apply-queue.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SYNC_SCRIPT = path.join(ROOT, "scripts", "sync-empleos-tracker.py");
@@ -19,28 +18,49 @@ export function resolveTrackerXlsx(): string {
   return process.env.EMPLEOS_TRACKER_XLSX ?? DEFAULT_XLSX;
 }
 
-/** Exporta cola → Empleos_Tracker.xlsx */
-export function exportQueueToExcel(): boolean {
+function sleepSync(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* Excel a veces suelta el lock en 1–2s */
+  }
+}
+
+/** Exporta cola → Empleos_Tracker.xlsx (reintenta si el archivo está bloqueado). */
+export function exportQueueToExcel(maxAttempts = 3): boolean {
   const xlsx = resolveTrackerXlsx();
   if (!fs.existsSync(SYNC_SCRIPT)) {
     console.error(`   ✗ No está ${SYNC_SCRIPT}`);
     return false;
   }
-  try {
-    console.log(`\n📤 Exportando cola → Excel…`);
-    execFileSync("python", [SYNC_SCRIPT, "export", xlsx], {
-      cwd: ROOT,
-      stdio: "inherit",
-      shell: false,
-    });
-    return true;
-  } catch (err) {
-    console.error("   ✗ Export Excel falló:", err);
-    return false;
+  console.log(`\n📤 Exportando cola → Excel…`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      execFileSync("python", [SYNC_SCRIPT, "export", xlsx], {
+        cwd: ROOT,
+        stdio: "inherit",
+        shell: false,
+      });
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const locked = /Permission denied|EPERM|EBUSY|being used by another/i.test(msg);
+      console.error(
+        `   ✗ Export Excel falló (intento ${attempt}/${maxAttempts})${
+          locked ? " — cerrá Empleos_Tracker.xlsx si está abierto" : ""
+        }`
+      );
+      if (attempt < maxAttempts) sleepSync(2000);
+      else {
+        console.error(
+          "   ✗ Export sin éxito. La cola CSV ya tiene enviada; re-exportá al cerrar Excel."
+        );
+      }
+    }
   }
+  return false;
 }
 
-/** Abre el Excel del tracker para revisión manual. */
+/** Abre el Excel del tracker para revisión / postulación manual. */
 export function openTrackerExcel(): void {
   const xlsx = resolveTrackerXlsx();
   if (!fs.existsSync(xlsx)) {
@@ -55,54 +75,10 @@ export function openTrackerExcel(): void {
   }
 }
 
-function pendingManualLines(): string[] {
-  const rows = loadQueue().filter((r) => r.status === "pendiente");
-  return rows.map(
-    (r) =>
-      `- [${r.matchPercent}%] ${r.company} — ${r.title}\n  ${r.url}\n  razón: ${r.reason || "pendiente"}`
-  );
-}
-
-/**
- * Abre el cliente de mail con resumen de pendientes (mailto).
- * Destino: APPLY_REPORT_EMAIL o LI_EMAIL o vacío (el usuario completa).
- */
-export function openPendingMailDraft(): void {
-  const lines = pendingManualLines();
-  const to =
-    process.env.APPLY_REPORT_EMAIL ??
-    process.env.LI_EMAIL ??
-    "";
-  const subject = encodeURIComponent(
-    `[QA Job Hunter] Pendientes Easy Apply (${lines.length}) — revisión manual`
-  );
-  const body = encodeURIComponent(
-    [
-      "Hola,",
-      "",
-      "Corrida Easy Apply finalizada. Quedan pendientes para postulación manual:",
-      "",
-      ...(lines.length ? lines : ["(ninguno pendiente en la cola)"]),
-      "",
-      `Cola: ${APPLY_QUEUE_PATH}`,
-      `Excel: ${resolveTrackerXlsx()}`,
-      "",
-      "— qa-job-hunter",
-    ].join("\n")
-  );
-  const mailto = `mailto:${encodeURIComponent(to)}?subject=${subject}&body=${body}`;
-  console.log(`\n✉️  Abriendo borrador de mail (${lines.length} pendiente(s))…`);
-  if (process.platform === "win32") {
-    spawn("cmd", ["/c", "start", "", mailto], { detached: true, stdio: "ignore" }).unref();
-  } else {
-    spawn("xdg-open", [mailto], { detached: true, stdio: "ignore" }).unref();
-  }
-}
-
-/** Fin de corrida productiva: export + mail + abrir Excel. */
+/** Fin de corrida productiva: export + abrir Excel (reconcile Gmail es otro paso). */
 export function finishProductiveRun(): void {
   exportQueueToExcel();
-  openPendingMailDraft();
   openTrackerExcel();
-  console.log("\n✅ Cierre: Excel actualizado, mail de pendientes y Excel abierto.");
+  console.log("\n✅ Cierre: Excel actualizado y abierto. No se abre Gmail/mailto.");
+  console.log("   Siguiente (campaña): postulación manual en Excel → gmail:reconcile.");
 }

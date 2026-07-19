@@ -59,11 +59,17 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - **Cover letter:** upload `intro-GGZ.pdf` (`COVER_LETTER_PDF` / path en `canonical-text.ts`).
 - **Summary:** borrar default y pegar texto **QA Analyst** o **QA Automation** según el título del aviso (`resolveApplicationSummary`).
 - **CV:** si el default es la cover (`intro-GGZ`) o el CV incorrecto → click **`Show N more resumes`**, luego radio `QA_Analyst` / `QA_Automation`. Nunca subir la cover letter al input de resume.
-- **Country** = Argentina; **City** = Ciudad Autonoma de Buenos Aires.
-- **Preferred location for work** = `Argentina, Autonomous City of Buenos Aires`.
+- **Country** = Argentina; **City (dropdown LinkedIn)** = Liniers, Comuna 9 (CABA no está en lista); **City texto** = `Ciudad Autónoma de Buenos Aires, Argentina`.
+- **(Country, city)** / preferred location = `Argentina, Ciudad Autónoma de Buenos Aires`.
+- **Dónde vivís/trabajar (texto):** EN `Buenos Aires city, Argentina` · ES `Ciudad Autonoma de Buenos Aires, Argentina`.
+- **English proficiency:** texto `Advanced (C1)`; dropdown = closest (Professional/Advanced); prefill se respeta.
 - **Where did you learn about…** = LinkedIn (select o typeahead + click).
 - **Prefill:** si el campo ya trae respuesta, **no pisar** — excepto **summary** (siempre pisar) y cover letter (upload).
-- **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` → **Yes/Sí**; si no → **No**.
+- **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` → **Yes/Sí**; si no → **No** (Deequ/GE → No + pendiente).
+- **Years of experience por skill:** sin mapa → Excel **Pendiente** + Notas, cerrar, siguiente.
+- **Consent checkbox:** click; si no queda marcado → pendiente + siguiente. **Top choice / Follow company:** no tocar (spikes en BACKLOG).
+- **Assessment/honeypot:** pendiente + Notas con **assessment** en negrita; siguiente.
+- **Preguntas nuevas:** se acumulan en Excel columna **Notas** + `output/apply/new-questions-latest.json` al cerrar la corrida.
 - Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**

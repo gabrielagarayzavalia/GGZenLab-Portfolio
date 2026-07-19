@@ -78,20 +78,45 @@ export const PSEUDO_ANSWERS = {
   workOrLiveCityFreeText: {
     fieldMatch:
       /where (would you like to work|do you (live|want to work)|are you (based|located))|work location|based in|d[oó]nde (viv|te gustar[ií]a trabajar|prefer[ií]s trabajar)|ciudad (de residencia|donde)|lugar de (trabajo|residencia)/i,
-    en: "Buenos Aires city",
-    es: "Ciudad Autonoma de Buenos Aires",
+    en: "Buenos Aires city, Argentina",
+    es: "Ciudad Autonoma de Buenos Aires, Argentina",
   },
-  /** Preferred location for work (Country, City) — texto fijo EN. */
+  /** Preferred location / (Country, city) — texto fijo. */
   preferredWorkLocation: {
     fieldMatch:
-      /preferred location for work|preferred (work )?location|location for work\s*\(?\s*country/i,
-    value: "Argentina, Autonomous City of Buenos Aires",
+      /preferred location for work|preferred (work )?location|location for work\s*\(?\s*country|(country\s*,\s*city)|(pa[ií]s\s*,\s*ciudad)/i,
+    /** Formato (Country, city). */
+    countryCityValue: "Argentina, Ciudad Autónoma de Buenos Aires",
+    /** Texto libre ciudad. */
+    cityTextValue: "Ciudad Autónoma de Buenos Aires, Argentina",
+    value: "Argentina, Ciudad Autónoma de Buenos Aires",
   },
   citySelect: {
     fieldMatch: /^(city|ciudad)\s*\*?$/i,
-    /** Preferir CABA; fallback Buenos Aires. */
-    preferredOption: /Ciudad Aut[oó]noma de Buenos Aires|Autonomous City of Buenos Aires/i,
-    optionMatch: /Ciudad Aut[oó]noma de Buenos Aires|Autonomous City of Buenos Aires|Buenos Aires/i,
+    /** En LinkedIn dropdown CABA no existe → Liniers, Comuna 9. */
+    preferredOption: /Liniers|Comuna\s*9/i,
+    optionMatch: /Liniers|Comuna\s*9|Ciudad Aut[oó]noma de Buenos Aires|Autonomous City of Buenos Aires|Buenos Aires/i,
+    typeText: "Liniers",
+  },
+  englishProficiency: {
+    fieldMatch:
+      /english\s*(level|proficiency|skill)|nivel de ingl[eé]s|proficiency in english|idioma:?\s*ingl[eé]s/i,
+    freeText: "Advanced (C1)",
+    selectMatch: /advanced|c1|professional|proficient|fluent|b2|upper.?intermediate/i,
+    preferredSelect: /advanced|c1|professional/i,
+  },
+  consentCheckbox: {
+    fieldMatch:
+      /i consent|consent|select checkbox to proceed|autorizo|acepto (los |las )?(t[eé]rminos|condiciones)|privacy policy|pol[ií]tica de privacidad/i,
+  },
+  /** Años por skill (SQL/Python/…): sin mapa → pendiente (no enviar). */
+  yearsOfExperience: {
+    fieldMatch:
+      /years?\s+of\s+experience\s+(with|in|using)|a[nñ]os?\s+(de\s+)?experiencia\s+(con|en|usando)|how many years\s+(of\s+)?(experience\s+)?(with|in|using)|cu[aá]ntos a[nñ]os\s+(de\s+)?experiencia\s+(con|en)/i,
+  },
+  /** Frameworks DQ: No + dejar pendiente. */
+  dataQualityFrameworks: {
+    fieldMatch: /deequ|great expectations|data quality framework/i,
   },
   howDidYouHear: {
     fieldMatch:
@@ -1070,19 +1095,24 @@ export async function fillWorkOrLiveCityFreeText(page: Page): Promise<boolean> {
   return false;
 }
 
-/** City <select> → Ciudad Autonoma de Buenos Aires (o Buenos Aires) si vacío. */
+/**
+ * City <select> / combobox: CABA suele no existir en LinkedIn → Liniers, Comuna 9.
+ * Texto libre City → Ciudad Autónoma de Buenos Aires, Argentina.
+ */
 export async function fillCitySelect(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
-  const { fieldMatch, optionMatch, preferredOption } = PSEUDO_ANSWERS.citySelect;
+  const { fieldMatch, optionMatch, preferredOption, typeText } = PSEUDO_ANSWERS.citySelect;
+
+  // <select>
   const selects = root.locator("select");
-  const n = await selects.count();
-  for (let i = 0; i < n; i++) {
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
     const el = selects.nth(i);
     if (!(await waitForControlReady(el, 3000))) continue;
     const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
     if (!fieldMatch.test(label)) continue;
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
-    if (hasPrefillValue(val) && /Buenos Aires|Aut[oó]noma/i.test(val)) {
+    if (hasPrefillValue(val) && /Liniers|Comuna\s*9|Buenos Aires|Aut[oó]noma/i.test(val)) {
       console.log(`   ↳ City select: dejo prefill ("${val.slice(0, 50)}")`);
       return true;
     }
@@ -1092,20 +1122,66 @@ export async function fillCitySelect(page: Page): Promise<boolean> {
     const opt = (await preferred.count().catch(() => 0)) ? preferred : fallback;
     if (!(await opt.count().catch(() => 0))) continue;
     const v = await opt.getAttribute("value");
-    const lab = ((await opt.innerText().catch(() => "")) ?? "Ciudad Autonoma de Buenos Aires").trim();
+    const lab = ((await opt.innerText().catch(() => "")) ?? "Liniers, Comuna 9").trim();
     if (v != null) await el.selectOption(v);
     else await el.selectOption({ label: lab }).catch(() => {});
     console.log(`   ↳ City select: ${lab.slice(0, 60)}`);
     await sleep(300);
     return true;
   }
+
+  // Combobox / typeahead City (sin CABA en lista → Liniers)
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio'])"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${label} ${aria}`;
+    if (!fieldMatch.test(label) && !/^(city|ciudad)\b/i.test(blob)) continue;
+    if (PSEUDO_ANSWERS.locationCity.fieldMatch.test(blob)) continue;
+    if (PSEUDO_ANSWERS.preferredWorkLocation.fieldMatch.test(blob)) continue;
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(current) && /Liniers|Buenos Aires|Aut[oó]noma/i.test(current)) {
+      return true;
+    }
+    const role = ((await el.getAttribute("role")) ?? "").toLowerCase();
+    const list = ((await el.getAttribute("aria-autocomplete")) ?? "").toLowerCase();
+    const isTypeahead = role === "combobox" || list === "list" || list === "both";
+    if (isTypeahead) {
+      const ok = await typeaheadWithDropdownRetries(
+        page,
+        el,
+        typeText,
+        "City",
+        (v) => /Liniers/i.test(v),
+        3
+      );
+      if (ok) {
+        console.log("   ↳ City (dropdown): Liniers, Comuna 9");
+        return true;
+      }
+    }
+    // Texto libre
+    const free = PSEUDO_ANSWERS.preferredWorkLocation.cityTextValue;
+    const ok = await fillInputWithWaits(page, el, free, {
+      logName: "City (texto)",
+      maxAttempts: 2,
+      expectTypeahead: false,
+    });
+    if (ok) console.log(`   ↳ City texto: ${free}`);
+    return ok;
+  }
   return false;
 }
 
-/** Preferred location for work → Argentina, Autonomous City of Buenos Aires. */
+/** Preferred location / (Country, city) → Argentina, Ciudad Autónoma de Buenos Aires. */
 export async function fillPreferredWorkLocation(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
-  const { fieldMatch, value } = PSEUDO_ANSWERS.preferredWorkLocation;
+  const { fieldMatch, value, countryCityValue } = PSEUDO_ANSWERS.preferredWorkLocation;
   const controls = root.locator(
     "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
   );
@@ -1122,27 +1198,28 @@ export async function fillPreferredWorkLocation(page: Page): Promise<boolean> {
     if (
       hasPrefillValue(current) &&
       /Argentina/i.test(current) &&
-      /Buenos Aires|Autonomous/i.test(current)
+      /Buenos Aires|Autonomous|Aut[oó]noma/i.test(current)
     ) {
       console.log(`   ↳ Preferred location: dejo prefill`);
       return true;
     }
-    const ok = await fillInputWithWaits(page, el, value, {
+    const target =
+      /\(?\s*country\s*,\s*city|pa[ií]s\s*,\s*ciudad/i.test(blob) ? countryCityValue : value;
+    const ok = await fillInputWithWaits(page, el, target, {
       logName: "Preferred location",
       maxAttempts: 2,
       expectTypeahead: false,
-      valueOk: (v) => /Argentina/i.test(v) && /Buenos Aires|Autonomous/i.test(v),
+      valueOk: (v) => /Argentina/i.test(v) && /Buenos Aires|Autonomous|Aut[oó]noma/i.test(v),
     });
-    // Si abre typeahead, click sugerencia Argentina / Buenos Aires
     if (await waitForTypeaheadList(page, 2000)) {
       const hit = typeaheadHits(page)
-        .filter({ hasText: /Argentina|Buenos Aires|Autonomous/i })
+        .filter({ hasText: /Argentina|Buenos Aires|Autonomous|Aut[oó]noma/i })
         .first();
       if (await hit.isVisible({ timeout: 1500 }).catch(() => false)) {
         await hit.click({ force: true, timeout: 3000, noWaitAfter: true }).catch(() => {});
       }
     }
-    if (ok) console.log(`   ↳ Preferred location: ${value}`);
+    if (ok) console.log(`   ↳ Preferred location: ${target}`);
     return ok;
   }
   return false;
@@ -1614,14 +1691,168 @@ export async function fillApplicationSummary(
   return filled;
 }
 
+/** English proficiency: texto → Advanced (C1); dropdown → closest match. Prefill se respeta. */
+export async function fillEnglishProficiency(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, freeText, selectMatch, preferredSelect } = PSEUDO_ANSWERS.englishProficiency;
+
+  const selects = root.locator("select");
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await waitForControlReady(el, 2500))) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    if (!fieldMatch.test(label)) continue;
+    const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(val) && selectMatch.test(val)) {
+      console.log(`   ↳ English: dejo prefill ("${val.slice(0, 40)}")`);
+      return true;
+    }
+    const preferred = el.locator("option").filter({ hasText: preferredSelect }).first();
+    const fallback = el.locator("option").filter({ hasText: selectMatch }).first();
+    await preferred.waitFor({ state: "attached", timeout: 2000 }).catch(() => {});
+    const opt = (await preferred.count().catch(() => 0)) ? preferred : fallback;
+    if (!(await opt.count().catch(() => 0))) continue;
+    const v = await opt.getAttribute("value");
+    const lab = ((await opt.innerText().catch(() => "")) ?? freeText).trim();
+    if (v != null) await el.selectOption(v);
+    else await el.selectOption({ label: lab }).catch(() => {});
+    console.log(`   ↳ English select: ${lab.slice(0, 50)}`);
+    await sleep(300);
+    return true;
+  }
+
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${label} ${aria}`;
+    if (!fieldMatch.test(blob)) continue;
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(current)) {
+      console.log(`   ↳ English: dejo prefill ("${current.slice(0, 40)}")`);
+      return true;
+    }
+    const ok = await fillInputWithWaits(page, el, freeText, {
+      logName: "English proficiency",
+      maxAttempts: 2,
+      expectTypeahead: false,
+    });
+    if (ok) console.log(`   ↳ English: ${freeText}`);
+    return ok;
+  }
+  return false;
+}
+
+/**
+ * Consent checkbox: click para marcar.
+ * true = marcado OK; false = no había / no quedó marcado (caller → pendiente).
+ */
+export async function fillConsentCheckbox(page: Page): Promise<"ok" | "missing" | "failed"> {
+  const root = scopeRoot(page);
+  const { fieldMatch } = PSEUDO_ANSWERS.consentCheckbox;
+  const blocks = root.locator(
+    "fieldset, .fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], label, li"
+  );
+  const n = await blocks.count().catch(() => 0);
+  let saw = false;
+
+  for (let i = 0; i < Math.min(n, 50); i++) {
+    const block = blocks.nth(i);
+    if (!(await block.isVisible().catch(() => false))) continue;
+    const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (!fieldMatch.test(blob)) continue;
+    // No tocar Follow company / top choice
+    if (/follow (the )?company|top choice|seguir (a la )?empresa/i.test(blob)) continue;
+    saw = true;
+    const box = block.locator("input[type='checkbox']").first();
+    if (!(await box.count().catch(() => 0))) continue;
+    const checked = await box.isChecked().catch(() => false);
+    if (checked) {
+      console.log("   ↳ Consent: ya marcado");
+      return "ok";
+    }
+    await box.check({ force: true }).catch(async () => {
+      await box.click({ force: true, timeout: 2500 });
+    });
+    await sleep(300);
+    const ok = await box.isChecked().catch(() => false);
+    console.log(ok ? "   ↳ Consent: marcado" : "   ↳ Consent: click no dejó marcado");
+    return ok ? "ok" : "failed";
+  }
+  return saw ? "failed" : "missing";
+}
+
+export type SkipPendingReason = {
+  reason: string;
+  /** Texto para Notas Excel (assessment en mayúsculas para bold). */
+  notes: string;
+};
+
+/** Detecta condiciones que dejan la postulación pendiente y pasan al siguiente. */
+export async function detectSkipPending(page: Page): Promise<SkipPendingReason | null> {
+  const root = scopeRoot(page);
+  if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return null;
+
+  const blocks = root.locator(
+    "fieldset, .fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], li.jobs-easy-apply-form-section__grouping"
+  );
+  const n = await blocks.count().catch(() => 0);
+
+  for (let i = 0; i < Math.min(n, 40); i++) {
+    const block = blocks.nth(i);
+    if (!(await block.isVisible().catch(() => false))) continue;
+    const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (blob.length < 8) continue;
+
+    if (PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob)) {
+      // Dejar cantidad default; no enviamos
+      return {
+        reason: "Pregunta years of experience (sin mapa de años) — pendiente",
+        notes:
+          "Pendiente: years of experience (SQL/Python/…) — dejar default; definir mapa de años",
+      };
+    }
+
+    if (PSEUDO_ANSWERS.dataQualityFrameworks.fieldMatch.test(blob)) {
+      // Intentar No
+      const noRadio = block.getByRole("radio", { name: /^No$/i }).or(block.getByText(/^No$/i)).first();
+      if (await noRadio.isVisible({ timeout: 600 }).catch(() => false)) {
+        await noRadio.click({ force: true }).catch(() => {});
+      }
+      return {
+        reason: "Data quality frameworks (Deequ/GE) — No; pendiente manual",
+        notes:
+          "Pendiente: Experience with Deequ / Great Expectations / data quality frameworks → No (confirmar envío manual)",
+      };
+    }
+  }
+  return null;
+}
+
+export type PseudoFillResult = {
+  filled: number;
+  skipPending?: SkipPendingReason;
+  consentFailed?: boolean;
+};
+
 /** Aplica pseudo-respuestas conocidas en el paso actual. */
 export async function fillPseudoAnswers(
   page: Page,
   ctx?: { jobTitle?: string; company?: string }
-): Promise<number> {
+): Promise<PseudoFillResult> {
   const jobTitle = ctx?.jobTitle ?? "";
   const company = ctx?.company ?? "";
   let filled = 0;
+
+  const skipEarly = await detectSkipPending(page);
+  if (skipEarly) return { filled: 0, skipPending: skipEarly };
+
   // CV primero (nunca dejar intro-GGZ / cover como resume)
   if (await selectResumeForRole(page, jobTitle, company)) filled++;
   if (await fillLocationLiniers(page)) filled++;
@@ -1631,7 +1862,22 @@ export async function fillPseudoAnswers(
   if (await fillWorkOrLiveCityFreeText(page)) filled++;
   if (await fillHowDidYouHear(page)) filled++;
   if (await fillStartAvailability(page)) filled++;
+  if (await fillEnglishProficiency(page)) filled++;
   filled += await answerSkillYesNoQuestions(page);
+
+  const consent = await fillConsentCheckbox(page);
+  if (consent === "ok") filled++;
+  if (consent === "failed") {
+    return {
+      filled,
+      consentFailed: true,
+      skipPending: {
+        reason: "Consent checkbox no quedó marcado — pendiente",
+        notes: "Pendiente: I consent / checkbox to proceed — no se marcó solo; revisar manual",
+      },
+    };
+  }
+
   // Cover letter solo en input de cover (no el de resume)
   if (await uploadCoverLetterPdf(page)) filled++;
   // Re-chequear CV por si un upload contaminó la lista
@@ -1658,8 +1904,11 @@ export async function fillPseudoAnswers(
     filled++;
   }
   if (await fillExpectedCompensation(page)) filled++;
+
+  const skipLate = await detectSkipPending(page);
   await dismissModalOverlays(page);
-  return filled;
+  if (skipLate) return { filled, skipPending: skipLate };
+  return { filled };
 }
 
 /**

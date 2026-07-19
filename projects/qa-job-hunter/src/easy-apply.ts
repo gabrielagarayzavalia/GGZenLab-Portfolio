@@ -73,10 +73,64 @@ import {
   toApplyJob,
   updateQueueRow,
 } from "./apply/apply-queue.js";
+import {
+  collectUnknownQuestions,
+  logRunUnknownQuestions,
+  recordJobUnknownQuestions,
+  resetRunUnknownQuestions,
+  saveRunUnknownQuestionsReport,
+} from "./apply/unknown-questions.js";
 import { handleFailures } from "./apply/failure-handler.js";
 import type { ApplicationRecord, ApplyJob } from "./apply/types.js";
 import type { AnalysisResult, JobMatch } from "./types.js";
 import { setApplicationStatus } from "./application-status.js";
+
+async function dismissEasyApplyModal(page: import("playwright").Page): Promise<void> {
+  const dismiss = page
+    .locator(
+      "button[aria-label='Dismiss'], button[aria-label='Cerrar'], button[aria-label*='Dismiss'], a[aria-label='Dismiss']"
+    )
+    .first();
+  if (await dismiss.isVisible({ timeout: 1200 }).catch(() => false)) {
+    await dismiss.click({ timeout: 4000 }).catch(() =>
+      dismiss.click({ force: true, timeout: 4000 })
+    );
+  } else {
+    await page.keyboard.press("Escape").catch(() => {});
+  }
+  await sleep(500);
+  await handleSaveDiscardModal(page, "dry_run");
+}
+
+/** Deja pendiente en Excel/cola, cierra modal y sigue al siguiente aviso. */
+async function leavePendingCloseContinue(
+  page: import("playwright").Page,
+  job: ApplyJob,
+  record: ApplicationRecord,
+  reason: string,
+  notes: string
+): Promise<ApplicationRecord> {
+  record.status = "manual_pending";
+  record.reason = reason;
+  const mergedNotes = recordJobUnknownQuestions(
+    job.jobId,
+    job.company,
+    job.title,
+    [],
+    notes ? [notes] : [reason]
+  );
+  updateQueueRow(job.jobId, {
+    status: "pendiente",
+    easyApply: "yes",
+    reason,
+    notes: mergedNotes || notes || reason,
+  });
+  await page
+    .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pending.png`) })
+    .catch(() => {});
+  await dismissEasyApplyModal(page);
+  return record;
+}
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -140,7 +194,16 @@ async function afterSaveContinueToSubmit(
   job: ApplyJob,
   record: ApplicationRecord
 ): Promise<ApplicationRecord | "continue"> {
-  await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
+  const fill = await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
+  if (fill.skipPending) {
+    return leavePendingCloseContinue(
+      page,
+      job,
+      record,
+      fill.skipPending.reason,
+      fill.skipPending.notes
+    );
+  }
   await sleep(800);
 
   // Next / Review hasta Submit
@@ -340,6 +403,17 @@ async function tryEasyApply(
       if (inventory.length > 0) {
         console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
       }
+      const unknowns = collectUnknownQuestions(inventory);
+      if (unknowns.length > 0) {
+        const notes = recordJobUnknownQuestions(
+          job.jobId,
+          job.company,
+          job.title,
+          unknowns
+        );
+        updateQueueRow(job.jobId, { notes });
+        console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+      }
 
       // Borrador atascado: solo "Select language" → descartar y reabrir (1 vez).
       // No usar artdeco-primary genérico: LinkedIn siempre tiene uno y bloqueaba el restart.
@@ -410,12 +484,13 @@ async function tryEasyApply(
           modalText
         )
       ) {
-        record.status = "blocked";
-        record.reason = "Requiere assessment — completar manualmente";
-        await page
-          .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-blocked.png`) })
-          .catch(() => {});
-        return record;
+        return leavePendingCloseContinue(
+          page,
+          job,
+          record,
+          "Requiere assessment / honeypot — pendiente; siguiente aviso",
+          "Tiene assessment / honeypot — completar a mano (no auto)"
+        );
       }
 
       // CV correcto primero; cover letter solo en su input; summary según rol
@@ -479,7 +554,21 @@ async function tryEasyApply(
         }
       }
 
-      await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
+      {
+        const fill = await fillPseudoAnswers(page, {
+          jobTitle: job.title,
+          company: job.company,
+        });
+        if (fill.skipPending) {
+          return leavePendingCloseContinue(
+            page,
+            job,
+            record,
+            fill.skipPending.reason,
+            fill.skipPending.notes
+          );
+        }
+      }
       // Re-scroll tras rellenar (dropdowns / campos nuevos)
       await scrollEasyApplyFormToEnd(page);
 
@@ -500,7 +589,19 @@ async function tryEasyApply(
             .catch(() => {});
           return record;
         }
-        await fillPseudoAnswers(page, { jobTitle: job.title, company: job.company });
+        const fill2 = await fillPseudoAnswers(page, {
+          jobTitle: job.title,
+          company: job.company,
+        });
+        if (fill2.skipPending) {
+          return leavePendingCloseContinue(
+            page,
+            job,
+            record,
+            fill2.skipPending.reason,
+            fill2.skipPending.notes
+          );
+        }
         await scrollEasyApplyFormToEnd(page);
       }
 
@@ -706,6 +807,7 @@ async function main() {
   await maximizeWindow(page);
 
   const applications: ApplicationRecord[] = [];
+  resetRunUnknownQuestions();
 
   for (let i = 0; i < toApply.length; i++) {
     const job = toApply[i];
@@ -733,7 +835,9 @@ async function main() {
   const submitted = applications.filter((a) => a.status === "submitted").length;
   console.log(`\n✅ Enviadas: ${submitted}/${toApply.length}`);
 
-  // Actualizar Excel, mail de pendientes y abrir Excel para revisión manual
+  // Preguntas nuevas → Notas Excel + reporte JSON
+  saveRunUnknownQuestionsReport();
+  logRunUnknownQuestions();
   finishProductiveRun();
 
   const blocked = applications.filter(

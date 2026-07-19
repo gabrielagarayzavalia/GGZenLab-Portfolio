@@ -95,6 +95,11 @@ const SKILL_HINTS: { label: string; patterns: RegExp[]; knownIf: "list" | "autom
       patterns: [/istqb/i],
       knownIf: "list",
     },
+    {
+      label: "data quality frameworks",
+      patterns: [/deequ/i, /great expectations/i, /data quality framework/i],
+      knownIf: "list",
+    },
   ];
 
 const AUTOMATION_TOOLS = ["selenium", "playwright", "cypress", "testng", "junit", "mocha", "jest", "cucumber"];

@@ -88,5 +88,8 @@ export function finishProductiveRun(): void {
   } else {
     console.log("\n✅ Cierre: cola exportada a Excel (sin abrir; OPEN_EXCEL=1 para abrir).");
   }
+  console.log(
+    "   Revisá columna Notas (preguntas nuevas) → decime cómo contestarlas en el chat."
+  );
   console.log("   Siguiente (campaña): postulación manual en Excel → gmail:reconcile.");
 }

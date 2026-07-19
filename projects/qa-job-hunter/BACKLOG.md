@@ -14,6 +14,14 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | P-JH-03 | Dashboard web | Split UI, sort by match %, `npm run dashboard` |
 | P-JH-04 | Match feedback | Reject incorrect match → `match-feedback.json` → prompt learning |
 
+## Spikes / features Easy Apply (ops)
+
+| ID | Priority | Scope |
+|----|----------|--------|
+| **EA-SPIKE-01** | Low | *Mark job as a top choice* — hoy no se toca (opcional LinkedIn). Spike: ¿auto-marcar siempre / nunca / por empresa? |
+| **EA-SPIKE-02** | Low | *Follow company* — hoy no se toca. Spike: política (seguir siempre / nunca / lista blanca). |
+| **EA-SPIKE-03** | Medium | Mapa de **años de experiencia por skill** (SQL, Python, …). Hoy: si aparece la pregunta → pendiente + siguiente. |
+
 ## Backlog — execution order
 
 | Order | ID | Priority | Scope |

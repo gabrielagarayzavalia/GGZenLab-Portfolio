@@ -67,6 +67,14 @@ import {
   type QueueRow,
 } from "./apply/apply-queue.js";
 import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
+import { exportQueueToExcel } from "./apply/post-run.js";
+import {
+  collectUnknownQuestions,
+  logRunUnknownQuestions,
+  recordJobUnknownQuestions,
+  resetRunUnknownQuestions,
+  saveRunUnknownQuestionsReport,
+} from "./apply/unknown-questions.js";
 import { setApplicationStatus } from "./application-status.js";
 
 function sleep(ms: number) {
@@ -354,10 +362,16 @@ async function dryRunThroughModal(
     const inventory = await inventoryEasyApplyFields(page);
     saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
     logFieldInventory(inventory);
+    const unknowns = collectUnknownQuestions(inventory);
+    if (unknowns.length > 0) {
+      const notes = recordJobUnknownQuestions(jobId, company, jobTitle, unknowns);
+      updateQueueRow(jobId, { notes });
+      console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+    }
 
     await maybeFillOptionalTexts(page, jobTitle, company);
     await maybeAnswerYesNo(page);
-    const filled = await fillPseudoAnswers(page, { jobTitle, company });
+    const { filled } = await fillPseudoAnswers(page, { jobTitle, company });
     if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
     await scrollEasyApplyFormToEnd(page);
 
@@ -542,6 +556,7 @@ async function main() {
   let skipNoEa = 0;
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
   const seen = new Set<string>();
+  resetRunUnknownQuestions();
 
   try {
     for (let n = 0; n < maxJobs; n++) {
@@ -600,7 +615,10 @@ async function main() {
   console.log(
     `\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
   );
-  console.log(`Excel: ${APPLY_QUEUE_PATH}`);
+  saveRunUnknownQuestionsReport();
+  logRunUnknownQuestions();
+  exportQueueToExcel();
+  console.log(`Excel: ${APPLY_QUEUE_PATH} (+ Notas con preguntas nuevas)`);
 }
 
 main().catch(async (err) => {

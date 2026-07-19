@@ -85,14 +85,52 @@ export class DryRunDebugStopError extends Error {
   }
 }
 
+/**
+ * Huella del PASO del modal (no del <main> del aviso).
+ * Bug previo: locator "... , main").first() tomaba el job posting → siempre "stuck".
+ */
 async function stepFingerprint(page: Page): Promise<string> {
   const url = page.url();
-  const root = page
-    .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
+  const modal = page
+    .locator(".jobs-easy-apply-modal, [data-test-modal].jobs-easy-apply-modal, div[role='dialog']")
+    .filter({ hasText: /Apply to|Contact info|Resume|Additional Questions|Review/i })
     .first();
-  const text = (await root.innerText().catch(() => "")).slice(0, 400).replace(/\s+/g, " ");
-  const heading = (await root.locator("h2, h3").first().innerText().catch(() => "")).trim();
-  return `${url}|${heading}|${text.slice(0, 120)}`;
+
+  if (!(await modal.isVisible({ timeout: 2000 }).catch(() => false))) {
+    return `${url}|NO_MODAL`;
+  }
+
+  const heading = (
+    await modal
+      .locator("h2, h3, .t-16, [class*='title']")
+      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions/i })
+      .first()
+      .innerText()
+      .catch(() => "")
+  )
+    .trim()
+    .slice(0, 80);
+
+  const progress = (
+    await modal.locator("progress, [role='progressbar']").first().getAttribute("aria-valuenow").catch(() => "")
+  ) ?? "";
+
+  // Footer primary: Next vs Review vs Submit — cambia entre pasos
+  const primary =
+    (
+      await modal
+        .locator(
+          "button[data-easy-apply-next-button], button[data-live-test-easy-apply-submit-button], button.artdeco-button--primary"
+        )
+        .last()
+        .innerText()
+        .catch(() => "")
+    )
+      .trim()
+      .slice(0, 40) || "";
+
+  const bodySlice = (await modal.innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+  return `${url}|h:${heading}|p:${progress}|btn:${primary}|${bodySlice}`;
 }
 
 async function maybeFillOptionalTexts(page: Page): Promise<void> {

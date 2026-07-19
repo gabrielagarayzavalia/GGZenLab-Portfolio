@@ -58,6 +58,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina** (`fill-answers.ts`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save or Discard). Si aparece igual → Discard.
 - **Sin reintentos:** si falla el primer intento de un paso → **STOP** y debug (exit 3/4); no seguir al siguiente aviso.
+- **Capturas de error (dry-run):** `output/apply/screenshots/<jobId>-dryrun-<tag>.png` (+ dump JSON en `output/apply/required-fields-*.json`).
 - Productivo + Easy Apply → Submit → **Done** → **enviada**.
 - Idioma base LinkedIn: **inglés**.
 

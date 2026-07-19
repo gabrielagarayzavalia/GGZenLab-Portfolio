@@ -11,6 +11,7 @@
 // - Next bloqueado por required → captura campos, cierra sesión (exit 3)
 // - Cualquier fallo en un intento Easy Apply → STOP (exit 4); no seguir al siguiente
 
+import path from "path";
 import { chromium, type Browser, type Locator, type Page } from "playwright";
 import {
   APPLICATION_SUMMARY,
@@ -50,7 +51,7 @@ import {
   APPLY_QUEUE_PATH,
   type QueueRow,
 } from "./apply/apply-queue.js";
-import { ensureDirs, resolveSessionPath } from "./apply/paths.js";
+import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
 import { setApplicationStatus } from "./application-status.js";
 
 function sleep(ms: number) {
@@ -121,20 +122,41 @@ async function maybeAnswerYesNo(page: Page): Promise<void> {
   }
 }
 
+/** Capturas de debug del dry-run → output/apply/screenshots/ */
+async function saveDebugScreenshot(
+  page: Page,
+  jobId: string,
+  tag: string
+): Promise<string | undefined> {
+  ensureDirs();
+  const file = path.join(SCREENSHOTS_DIR, `${jobId}-dryrun-${tag}.png`);
+  try {
+    await page.screenshot({ path: file, fullPage: true });
+    console.error(`   📸 Screenshot → ${file}`);
+    return file;
+  } catch (err) {
+    console.error(`   📸 No se pudo guardar screenshot: ${err}`);
+    return undefined;
+  }
+}
+
 async function stopForRequiredFields(
   page: Page,
   jobId: string,
-  url: string
+  url: string,
+  tag = "blocked"
 ): Promise<never> {
+  await saveDebugScreenshot(page, jobId, tag);
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, url, fields);
   logCapturedFields(fields);
   console.error(`   Dump → ${dumpPath}`);
+  console.error(`   Screenshots → ${SCREENSHOTS_DIR}`);
   console.error("   Completá opciones en src/apply/fill-answers.ts (PSEUDO_ANSWERS) y reintentá.");
   updateQueueRow(jobId, {
     status: "pendiente",
     easyApply: "yes",
-    reason: `STOP: required fields (${fields.length}) — ver required-fields-${jobId}.json`,
+    reason: `STOP: required fields (${fields.length}) — ver required-fields-${jobId}.json + screenshot`,
   });
   throw new RequiredFieldsBlockedError(jobId, url, fields, dumpPath);
 }
@@ -232,11 +254,12 @@ async function dryRunThroughModal(
     const step = await tryAdvanceNext(page, scope);
     if (step === "advanced") continue;
 
-    // Primer fallo → dump + parar (no segundo intento)
+    // Primer fallo → dump + screenshot + parar (no segundo intento)
     console.error(`   ✗ Fallo en paso ${i + 1}: ${step} — STOP para debug`);
-    await stopForRequiredFields(page, jobId, jobUrl);
+    await stopForRequiredFields(page, jobId, jobUrl, step);
   }
 
+  await saveDebugScreenshot(page, jobId, "no-submit");
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, jobUrl, fields);
   logCapturedFields(fields);
@@ -313,6 +336,7 @@ async function processJob(
   console.log("   Easy Apply visible — abriendo modal…");
   const clicked = await clickEasyApply(page);
   if (!clicked) {
+    await saveDebugScreenshot(page, row.jobId, "click-failed");
     updateQueueRow(row.jobId, {
       status: "pendiente",
       reason: "STOP: Easy Apply visible pero click falló",
@@ -323,6 +347,7 @@ async function processJob(
 
   const result = await dryRunThroughModal(page, row.jobId, job.url);
   if (result === "no_modal") {
+    await saveDebugScreenshot(page, row.jobId, "no-modal");
     updateQueueRow(row.jobId, {
       status: "pendiente",
       easyApply: "yes",

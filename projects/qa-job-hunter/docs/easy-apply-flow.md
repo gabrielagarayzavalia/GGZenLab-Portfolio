@@ -55,7 +55,22 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Sin Easy Apply (y no closed/applied) → **sigue pendiente** → siguiente.
 - Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
 - Si hay Easy Apply y **no entra al modal** → **STOP** de toda la corrida (exit 2); no seguir al siguiente.
-- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina** (`fill-answers.ts`).
+- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
+- **Cover letter:** upload `intro-GGZ.pdf` (`COVER_LETTER_PDF` / path en `canonical-text.ts`).
+- **Summary:** borrar default y pegar texto **QA Analyst** o **QA Automation** según el título del aviso (`resolveApplicationSummary`).
+- **CV:** si el default es la cover (`intro-GGZ`) o el CV incorrecto → click **`Show N more resumes`**, luego radio `QA_Analyst` / `QA_Automation`. Nunca subir la cover letter al input de resume.
+- **Country** = Argentina; **City (dropdown LinkedIn)** = Liniers, Comuna 9 (CABA no está en lista); **City texto** = `Ciudad Autónoma de Buenos Aires, Argentina`.
+- **(Country, city)** / preferred location = `Argentina, Ciudad Autónoma de Buenos Aires`.
+- **Dónde vivís/trabajar (texto):** EN `Buenos Aires city, Argentina` · ES `Ciudad Autonoma de Buenos Aires, Argentina`.
+- **English proficiency:** texto `Advanced (C1)`; dropdown = closest (Professional/Advanced); prefill se respeta.
+- **Where did you learn about…** = LinkedIn (select o typeahead + click).
+- **Prefill:** si el campo ya trae respuesta, **no pisar** — excepto **summary** (siempre pisar) y cover letter (upload).
+- **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` → **Yes/Sí**; si no → **No** (Deequ/GE → No + pendiente).
+- **Years of experience por skill:** sin mapa → Excel **Pendiente** + Notas, cerrar, siguiente.
+- **Consent checkbox:** click; si no queda marcado → pendiente + siguiente. **Top choice / Follow company:** no tocar (spikes en BACKLOG).
+- **Assessment/honeypot:** pendiente + Notas con **assessment** en negrita; siguiente.
+- **Preguntas nuevas:** se acumulan en Excel columna **Notas** + `output/apply/new-questions-latest.json` al cerrar la corrida.
+- Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**
   - **Dry-run (prueba):** → **Discard** y **salir** (cerrar sin guardar ni enviar).
@@ -76,6 +91,7 @@ Antes de clicks Easy Apply:
 1. **Ventana maximizada** (`--start-maximized` + CDP) — evita misses por viewport chico.
 2. **Espera de página/modal listos** (`waitForJobPageReady` / `waitForEasyApplyModalReady`) — shell LinkedIn + red quieta + loader oculto.
 3. **Scroll del form al final** en cada paso del modal — revela campos fuera de pantalla; vuelca inventario required+optional a `output/apply/field-inventory-*.json` para ampliar `PSEUDO_ANSWERS` (cada aviso puede traer preguntas distintas).
+4. **waitFor en campos que fallan** — igual que Location: `waitFor` visible/enabled antes de tipar; si hay lista predictiva, `waitFor` de opciones (hasta 3 reintentos). Aplica a Location, remuneración, LinkedIn/Portfolio, etc.
 
 Assessment falso: la detección **solo** mira texto del modal (nunca `main`/JD/perfil).
 

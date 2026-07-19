@@ -14,8 +14,8 @@
 import path from "path";
 import { chromium, type Browser, type Locator, type Page } from "playwright";
 import {
-  APPLICATION_SUMMARY,
   COVER_LETTER_DEFAULT,
+  resolveApplicationSummary,
 } from "./apply/canonical-text.js";
 import {
   clickEasyApply,
@@ -24,6 +24,7 @@ import {
 } from "./apply/detect-apply.js";
 import {
   captureRequiredFields,
+  fillExpectedCompensation,
   fillPseudoAnswers,
   handleSaveDiscardModal,
   hasBlockingEmptyFields,
@@ -34,6 +35,9 @@ import {
   RequiredFieldsBlockedError,
   saveEasyApplyFieldInventory,
   saveRequiredFieldsDump,
+  uploadCoverLetterPdf,
+  fillApplicationSummary,
+  selectResumeForRole,
 } from "./apply/fill-answers.js";
 import {
   clickButtonOrLink,
@@ -59,12 +63,21 @@ import {
   markEnviadaIfAllowed,
   nextPending,
   rebuildQueueFromMatched,
+  saveQueue,
   toApplyJob,
   updateQueueRow,
   APPLY_QUEUE_PATH,
   type QueueRow,
 } from "./apply/apply-queue.js";
 import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
+import { exportQueueToExcel } from "./apply/post-run.js";
+import {
+  collectUnknownQuestions,
+  logRunUnknownQuestions,
+  recordJobUnknownQuestions,
+  resetRunUnknownQuestions,
+  saveRunUnknownQuestionsReport,
+} from "./apply/unknown-questions.js";
 import { setApplicationStatus } from "./application-status.js";
 
 function sleep(ms: number) {
@@ -159,31 +172,44 @@ async function stepFingerprint(page: Page): Promise<string> {
   return `${url}|h:${heading}|p:${progress}|btn:${primary}|${bodySlice}`;
 }
 
-async function maybeFillOptionalTexts(page: Page): Promise<void> {
+async function maybeFillOptionalTexts(
+  page: Page,
+  jobTitle = "",
+  company = ""
+): Promise<void> {
+  // CV antes que cover upload (nunca dejar intro-GGZ como resume)
+  await selectResumeForRole(page, jobTitle, company);
+  await uploadCoverLetterPdf(page);
+  await selectResumeForRole(page, jobTitle, company);
+  await fillApplicationSummary(page, jobTitle, company);
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
     .first();
   if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return;
   const areas = root.locator("textarea");
   const n = await areas.count();
+  const summary = resolveApplicationSummary(jobTitle, company);
   for (let i = 0; i < n; i++) {
     const area = areas.nth(i);
     if (!(await area.isVisible().catch(() => false))) continue;
     const current = (await area.inputValue().catch(() => "")).trim();
-    if (current) continue;
     const label = ((await area.getAttribute("aria-label")) ?? "").toLowerCase();
-    const text = /summary|resumen|message|mensaje/i.test(label)
-      ? APPLICATION_SUMMARY
-      : COVER_LETTER_DEFAULT;
-    await area.fill(text);
+    if (/summary|resumen|message|mensaje/i.test(label)) {
+      await area.fill("");
+      await area.fill(summary);
+      continue;
+    }
+    if (/cover\s*letter|carta/i.test(label)) {
+      if (!current) await area.fill(COVER_LETTER_DEFAULT);
+      continue;
+    }
   }
 }
 
 async function maybeAnswerYesNo(page: Page): Promise<void> {
-  const yes = page.getByText(/^Yes$|^Sí$/i).first();
-  if (await yes.isVisible({ timeout: 800 }).catch(() => false)) {
-    await yes.click();
-  }
+  // Skills Sí/No según MY_SKILLS (vía fillPseudoAnswers / answerSkillYesNoQuestions).
+  // No clickear Yes genérico a ciegas: puede marcar mal una skill ausente.
+  void page;
 }
 
 /** Capturas de debug del dry-run → output/apply/screenshots/ */
@@ -227,14 +253,22 @@ async function stopForRequiredFields(
 
 async function tryAdvanceNext(
   page: Page,
-  scope: Page | Locator
+  scope: Page | Locator,
+  jobTitle = "",
+  company = ""
 ): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit"> {
   await scrollEasyApplyFormToEnd(page);
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review
-  await fillPseudoAnswers(page);
+  await fillPseudoAnswers(page, { jobTitle, company });
+  // Remuneración a menudo bajo "top choice": segundo pase dedicado
+  await fillExpectedCompensation(page);
 
   // 2) Si hay obligatorios vacíos → NO click (evita Save or Discard)
-  const blocking = await hasBlockingEmptyFields(page);
+  let blocking = await hasBlockingEmptyFields(page);
+  if (blocking.some((f) => /remuneraci|salary|compensation|sueldo|pretendid/i.test(f.label))) {
+    await fillExpectedCompensation(page);
+    blocking = await hasBlockingEmptyFields(page);
+  }
   if (blocking.length > 0) {
     console.log(
       `   ⛔ Next/Review bloqueado: ${blocking.length} campo(s) sin rellenar (no click)`
@@ -287,19 +321,79 @@ async function tryAdvanceNext(
   }
 
   if (await isNextDisabled(page)) return "blocked";
-  const fields = await captureRequiredFields(page);
-  const hasErrors = fields.some((f) => f.errorText);
+  let fields = await captureRequiredFields(page);
+  let hasErrors = fields.some((f) => f.errorText);
+  if (
+    (hasErrors || (await hasBlockingEmptyFields(page)).length > 0) &&
+    page.url() === beforeUrl
+  ) {
+    // Tras Next/Review LinkedIn revela remuneración debajo del fold
+    await fillExpectedCompensation(page);
+    fields = await captureRequiredFields(page);
+    hasErrors = fields.some((f) => f.errorText);
+  }
   if (hasErrors && page.url() === beforeUrl) return "blocked";
   if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
 
   // Tras Review, Submit puede aparecer sin cambiar mucho el fingerprint
-  if (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) {
+  if (
+    (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+    (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+  ) {
     console.log("   ✓ Llegamos a pantalla con Submit (vía Review)");
     return "advanced";
   }
 
-  const afterFp = await stepFingerprint(page);
+  let afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
+    // Reintento 1×: a veces el form de CV tarda en aceptar el toggle
+    const needResume = page.getByText(
+      /se necesita un curr[ií]culum|resume is required|please select a resume/i
+    );
+    if (await needResume.isVisible({ timeout: 600 }).catch(() => false)) {
+      console.log("   ↳ Next stuck + error currículum — re-fill resume y Next 1×");
+      await selectResumeForRole(page, jobTitle, company);
+      await sleep(800);
+      const next2 =
+        (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
+        (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
+      if (next2) {
+        await next2.click({ force: true, timeout: 4000 }).catch(() => {});
+        await sleep(2000);
+      }
+      afterFp = await stepFingerprint(page);
+      if (afterFp !== beforeFp) {
+        console.log(`   ✓ Paso avanzó tras re-bind CV`);
+        return "advanced";
+      }
+    }
+    // Re-fill + recheck Submit (Review a veces no avanza si faltaba remuneración)
+    await fillPseudoAnswers(page, { jobTitle, company });
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 600)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 500))
+    ) {
+      console.log("   ✓ Submit visible tras re-fill (mismo fingerprint)");
+      return "advanced";
+    }
+    const reviewAgain = await findButtonOrLink(scope, MODAL_LABELS.review, 500);
+    if (reviewAgain && (await hasBlockingEmptyFields(page)).length === 0) {
+      console.log("   ↳ Reintento Review 1× tras re-fill");
+      await reviewAgain.click({ force: true, timeout: 4000 }).catch(() => {});
+      await sleep(2000);
+      if (
+        (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+        (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+      ) {
+        console.log("   ✓ Llegamos a Submit tras reintento Review");
+        return "advanced";
+      }
+      afterFp = await stepFingerprint(page);
+      if (afterFp !== beforeFp) {
+        console.log(`   ✓ Paso avanzó tras reintento Review`);
+        return "advanced";
+      }
+    }
     console.log("   ⛔ Next/Review clickeado pero el paso no cambió");
     console.log(`   fp before: ${beforeFp.slice(0, 120)}`);
     console.log(`   fp after:  ${afterFp.slice(0, 120)}`);
@@ -312,7 +406,9 @@ async function tryAdvanceNext(
 async function dryRunThroughModal(
   page: Page,
   jobId: string,
-  jobUrl: string
+  jobUrl: string,
+  jobTitle = "",
+  company = ""
 ): Promise<"ok" | "no_modal"> {
   if (!(await waitForEasyApplyModalReady(page))) {
     console.error("   ✗ Modal Easy Apply no terminó de cargar");
@@ -334,23 +430,42 @@ async function dryRunThroughModal(
 
   // Un solo intento por paso; si falla → STOP (sin reintentos ni siguiente job).
   for (let i = 0; i < 10; i++) {
-    await scrollEasyApplyFormToEnd(page);
-    const inventory = await inventoryEasyApplyFields(page);
-    saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
-    logFieldInventory(inventory);
-
-    await maybeFillOptionalTexts(page);
-    await maybeAnswerYesNo(page);
-    const filled = await fillPseudoAnswers(page);
-    if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
-    await scrollEasyApplyFormToEnd(page);
-
-    if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
+    // Submit primero: tras Review no tocar Follow/CV (evita side-effects y evaluate).
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 800))
+    ) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return "ok";
     }
 
-    const step = await tryAdvanceNext(page, scope);
+    await scrollEasyApplyFormToEnd(page);
+    const inventory = await inventoryEasyApplyFields(page);
+    saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
+    logFieldInventory(inventory);
+    const unknowns = collectUnknownQuestions(inventory);
+    if (unknowns.length > 0) {
+      const notes = recordJobUnknownQuestions(jobId, company, jobTitle, unknowns);
+      updateQueueRow(jobId, { notes });
+      console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+    }
+
+    await maybeFillOptionalTexts(page, jobTitle, company);
+    await maybeAnswerYesNo(page);
+    const { filled } = await fillPseudoAnswers(page, { jobTitle, company });
+    if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
+    await scrollEasyApplyFormToEnd(page);
+
+    // Re-check post-fill (por si Submit apareció al completar el paso)
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+    ) {
+      console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
+      return "ok";
+    }
+
+    const step = await tryAdvanceNext(page, scope, jobTitle, company);
     if (step === "advanced") continue;
 
     if (step === "discarded_exit") {
@@ -454,7 +569,13 @@ async function processJob(
   }
   await sleep(2000);
 
-  const result = await dryRunThroughModal(page, row.jobId, job.url);
+  const result = await dryRunThroughModal(
+    page,
+    row.jobId,
+    job.url,
+    row.title,
+    row.company
+  );
   if (result === "no_modal") {
     await saveDebugScreenshot(page, row.jobId, "no-modal");
     updateQueueRow(row.jobId, {
@@ -519,11 +640,39 @@ async function main() {
   let cerrada = 0;
   let skipNoEa = 0;
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
+  const forceJobId = (process.env.DRY_RUN_JOB_ID ?? "").trim();
   const seen = new Set<string>();
+  resetRunUnknownQuestions();
 
   try {
     for (let n = 0; n < maxJobs; n++) {
-      const row = nextPending(true, seen);
+      let row: QueueRow | null = null;
+      if (forceJobId && n === 0) {
+        // Forzar un jobId concreto (ej. Stefanini 4439867066)
+        const q = loadQueue();
+        row = q.find((r) => r.jobId === forceJobId) ?? null;
+        if (!row) {
+          row = {
+            jobId: forceJobId,
+            matchPercent: 85,
+            title: process.env.DRY_RUN_JOB_TITLE ?? "QA Automation (forced dry-run)",
+            company: process.env.DRY_RUN_JOB_COMPANY ?? "Forced",
+            url: `https://www.linkedin.com/jobs/view/${forceJobId}/`,
+            easyApply: "yes",
+            status: "pendiente",
+            reason: "DRY_RUN_JOB_ID",
+            notes: "",
+            updatedAt: new Date().toISOString(),
+          };
+          saveQueue([row, ...q.filter((r) => r.jobId !== forceJobId)]);
+        } else if (row.status !== "pendiente") {
+          updateQueueRow(forceJobId, { status: "pendiente", reason: "DRY_RUN_JOB_ID reintento" });
+          row = loadQueue().find((r) => r.jobId === forceJobId) ?? row;
+        }
+        console.log(`   🎯 DRY_RUN_JOB_ID=${forceJobId} → ${row.url}`);
+      } else {
+        row = nextPending(true, seen);
+      }
       if (!row) {
         console.log("\nNo hay más pendiente distinto.");
         break;
@@ -578,7 +727,10 @@ async function main() {
   console.log(
     `\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
   );
-  console.log(`Excel: ${APPLY_QUEUE_PATH}`);
+  saveRunUnknownQuestionsReport();
+  logRunUnknownQuestions();
+  exportQueueToExcel();
+  console.log(`Excel: ${APPLY_QUEUE_PATH} (+ Notas con preguntas nuevas)`);
 }
 
 main().catch(async (err) => {

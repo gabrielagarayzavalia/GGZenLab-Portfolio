@@ -75,10 +75,21 @@ export function openTrackerExcel(): void {
   }
 }
 
-/** Fin de corrida productiva: export + abrir Excel (reconcile Gmail es otro paso). */
+/**
+ * Fin de corrida productiva: export Excel.
+ * Abrir archivo solo con OPEN_EXCEL=1 (default: no abrir).
+ */
 export function finishProductiveRun(): void {
   exportQueueToExcel();
-  openTrackerExcel();
-  console.log("\n✅ Cierre: Excel actualizado y abierto. No se abre Gmail/mailto.");
+  const openExcel = process.env.OPEN_EXCEL === "1" || process.env.OPEN_EXCEL === "true";
+  if (openExcel) {
+    openTrackerExcel();
+    console.log("\n✅ Cierre: Excel exportado y abierto. No se abre Gmail/mailto.");
+  } else {
+    console.log("\n✅ Cierre: cola exportada a Excel (sin abrir; OPEN_EXCEL=1 para abrir).");
+  }
+  console.log(
+    "   Revisá columna Notas (preguntas nuevas) → decime cómo contestarlas en el chat."
+  );
   console.log("   Siguiente (campaña): postulación manual en Excel → gmail:reconcile.");
 }

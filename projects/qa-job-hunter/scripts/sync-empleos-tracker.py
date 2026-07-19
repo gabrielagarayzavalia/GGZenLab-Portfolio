@@ -2,7 +2,7 @@
 """Sync Empleos_Tracker.xlsx <-> output/apply/apply-queue.csv
 
   python scripts/sync-empleos-tracker.py import   # Excel Easy Apply+Pendiente → cola
-  python scripts/sync-empleos-tracker.py export   # cola → Excel Estado
+  python scripts/sync-empleos-tracker.py export   # cola → Excel Estado + Notas
 """
 
 from __future__ import annotations
@@ -15,6 +15,9 @@ from pathlib import Path
 
 try:
     import openpyxl
+    from openpyxl.cell.rich_text import CellRichText, TextBlock
+    from openpyxl.cell.text import InlineFont
+    from openpyxl.styles import Font
 except ImportError:
     print("Instalá openpyxl: pip install openpyxl")
     sys.exit(1)
@@ -24,6 +27,7 @@ QUEUE_PATH = ROOT / "output" / "apply" / "apply-queue.csv"
 DEFAULT_XLSX = Path(r"C:\Users\gabri\OneDrive\Escritorio\Empleos_Tracker.xlsx")
 
 JOB_ID_RE = re.compile(r"(?:currentJobId=|/jobs/view/)(\d+)")
+ASSESSMENT_RE = re.compile(r"(assessment|honeypot)", re.I)
 
 # Cola → Excel
 STATUS_TO_EXCEL = {
@@ -39,7 +43,7 @@ EXCEL_TO_STATUS = {
     "enviada": "enviada",
     "cerrado": "cerrada",
     "descartado": "descartada",
-    "stand-by": "pendiente",  # no final para la cola; no lo pisamos al export si quedó stand-by
+    "stand-by": "pendiente",
     "borrador abierto": "pendiente",
 }
 
@@ -57,6 +61,48 @@ def match_percent(raw) -> int:
         return int(float(s))
     except ValueError:
         return 0
+
+
+def header_map(ws) -> dict[str, int]:
+    """Nombre de columna (lower) → índice 1-based."""
+    out: dict[str, int] = {}
+    for col in range(1, (ws.max_column or 1) + 1):
+        v = ws.cell(1, col).value
+        if v is None:
+            continue
+        out[str(v).strip().lower()] = col
+    return out
+
+
+def ensure_notas_column(ws) -> int:
+    headers = header_map(ws)
+    if "notas" in headers:
+        return headers["notas"]
+    col = (ws.max_column or 0) + 1
+    ws.cell(1, col).value = "Notas"
+    return col
+
+
+def notes_cell_value(text: str):
+    """Si menciona assessment/honeypot, dejar esa palabra en negrita (rich text)."""
+    if not text:
+        return text
+    if not ASSESSMENT_RE.search(text):
+        return text
+    parts: list[TextBlock | str] = []
+    pos = 0
+    for m in ASSESSMENT_RE.finditer(text):
+        if m.start() > pos:
+            parts.append(text[pos : m.start()])
+        parts.append(TextBlock(InlineFont(b=True), m.group(0)))
+        pos = m.end()
+    if pos < len(text):
+        parts.append(text[pos:])
+    try:
+        return CellRichText(*parts)
+    except Exception:
+        # Fallback: celda entera en negrita
+        return text
 
 
 def cmd_import(xlsx: Path) -> None:
@@ -86,6 +132,7 @@ def cmd_import(xlsx: Path) -> None:
                 "easyApply": "yes",
                 "status": "pendiente",
                 "reason": "Importado desde Empleos_Tracker.xlsx",
+                "notes": "",
                 "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
         )
@@ -103,6 +150,7 @@ def cmd_import(xlsx: Path) -> None:
                 "EasyApply",
                 "ApplyStatus",
                 "Reason",
+                "Notes",
                 "UpdatedAt",
             ]
         )
@@ -117,6 +165,7 @@ def cmd_import(xlsx: Path) -> None:
                     r["easyApply"],
                     r["status"],
                     r["reason"],
+                    r["notes"],
                     r["updatedAt"],
                 ]
             )
@@ -144,8 +193,12 @@ def cmd_export(xlsx: Path) -> None:
 
     wb = openpyxl.load_workbook(xlsx)
     ws = wb["Empleos"]
-    # headers row 1
+    notas_col = ensure_notas_column(ws)
+    headers = header_map(ws)
+    proximo_col = headers.get("próximo paso") or headers.get("proximo paso")
+
     updated = 0
+    notes_updated = 0
     skipped_final = 0
     for row_idx in range(2, ws.max_row + 1):
         url = ws.cell(row_idx, 4).value  # LinkedIn
@@ -157,20 +210,44 @@ def cmd_export(xlsx: Path) -> None:
         if current.lower() in ("cerrado", "descartado", "stand-by"):
             skipped_final += 1
             continue
-        status = (queue[jid].get("ApplyStatus") or "pendiente").strip().lower()
+        q = queue[jid]
+        status = (q.get("ApplyStatus") or "pendiente").strip().lower()
         excel_estado = STATUS_TO_EXCEL.get(status)
-        if not excel_estado:
-            continue
-        if current == excel_estado:
-            continue
-        ws.cell(row_idx, 6).value = excel_estado
-        # Fecha Aplicación si enviada
-        if excel_estado == "Enviada" and not ws.cell(row_idx, 7).value:
-            ws.cell(row_idx, 7).value = datetime.now().strftime("%Y-%m-%d")
-        updated += 1
+        if excel_estado and current != excel_estado:
+            ws.cell(row_idx, 6).value = excel_estado
+            if excel_estado == "Enviada" and not ws.cell(row_idx, 7).value:
+                ws.cell(row_idx, 7).value = datetime.now().strftime("%Y-%m-%d")
+            updated += 1
+
+        notes = (q.get("Notes") or q.get("notes") or "").strip()
+        reason = (q.get("Reason") or "").strip()
+        # Si no hay Notes pero Reason habla de preguntas/assessment, volcar Reason
+        if not notes and re.search(
+            r"preguntas nuevas|assessment|honeypot|definir respuesta|a[nñ]os de experiencia|deequ|great expectations",
+            reason,
+            re.I,
+        ):
+            notes = reason
+
+        if notes:
+            cell = ws.cell(row_idx, notas_col)
+            cell.value = notes_cell_value(notes)
+            if ASSESSMENT_RE.search(notes) and not isinstance(cell.value, CellRichText):
+                cell.font = Font(bold=True)
+            notes_updated += 1
+            if proximo_col and "Preguntas nuevas" in notes:
+                prev = (ws.cell(row_idx, proximo_col).value or "").strip()
+                hint = "Definir respuestas (ver Notas) y avisar en chat"
+                if hint.lower() not in prev.lower():
+                    ws.cell(row_idx, proximo_col).value = (
+                        f"{prev} | {hint}" if prev else hint
+                    )
 
     wb.save(xlsx)
-    print(f"Export OK: {updated} filas actualizadas en {xlsx} (omitidas finales/stand-by: {skipped_final})")
+    print(
+        f"Export OK: {updated} estados, {notes_updated} notas en {xlsx} "
+        f"(omitidas finales/stand-by: {skipped_final})"
+    )
 
 
 def main() -> None:

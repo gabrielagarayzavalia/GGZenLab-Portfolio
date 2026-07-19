@@ -20,6 +20,8 @@ export interface QueueRow {
   easyApply: "" | "yes" | "no";
   status: QueueStatus;
   reason: string;
+  /** Preguntas nuevas / assessment / hints para el Excel (columna Notas). */
+  notes: string;
   updatedAt: string;
 }
 
@@ -36,6 +38,7 @@ const HEADERS = [
   "EasyApply",
   "ApplyStatus",
   "Reason",
+  "Notes",
   "UpdatedAt",
 ];
 
@@ -106,6 +109,20 @@ export function loadQueue(): QueueRow[] {
     // dry_ok legacy → pendiente (nunca fue enviada)
     const status =
       rawStatus.trim().toLowerCase() === "dry_ok" ? "pendiente" : normalizeStatus(rawStatus);
+    // Schema nuevo: Reason;Notes;UpdatedAt — legacy: Reason;UpdatedAt
+    const looksLikeIso = (s: string) => /^\d{4}-\d{2}-\d{2}T/.test((s || "").trim());
+    let reason = c[7] ?? "";
+    let notes = "";
+    let updatedAt = c[8] ?? "";
+    if (c.length >= 10 || (c[8] && !looksLikeIso(c[8]) && looksLikeIso(c[9] ?? ""))) {
+      notes = c[8] ?? "";
+      updatedAt = c[9] ?? "";
+    } else if (looksLikeIso(c[8] ?? "")) {
+      updatedAt = c[8] ?? "";
+    } else {
+      notes = c[8] ?? "";
+      updatedAt = c[9] ?? "";
+    }
     return {
       jobId: c[0] ?? "",
       matchPercent: Number(c[1] || 0),
@@ -114,8 +131,9 @@ export function loadQueue(): QueueRow[] {
       url: c[4] ?? "",
       easyApply: (c[5] as QueueRow["easyApply"]) || "",
       status,
-      reason: c[7] ?? "",
-      updatedAt: c[8] ?? "",
+      reason,
+      notes,
+      updatedAt,
     };
   });
 }
@@ -134,6 +152,7 @@ export function saveQueue(rows: QueueRow[]): void {
         r.easyApply,
         r.status,
         escapeCell(r.reason),
+        escapeCell(r.notes ?? ""),
         r.updatedAt,
       ].join(";")
     ),
@@ -172,6 +191,7 @@ export function ensureQueueFromMatched(): QueueRow[] {
       easyApply: "",
       status: "pendiente",
       reason: "",
+      notes: "",
       updatedAt: new Date().toISOString(),
     });
   }
@@ -187,7 +207,7 @@ export function ensureQueueFromMatched(): QueueRow[] {
  */
 export function updateQueueRow(
   jobId: string,
-  patch: Partial<Pick<QueueRow, "easyApply" | "status" | "reason">>
+  patch: Partial<Pick<QueueRow, "easyApply" | "status" | "reason" | "notes">>
 ): QueueRow[] {
   const rows = loadQueue();
   const idx = rows.findIndex((r) => r.jobId === jobId);

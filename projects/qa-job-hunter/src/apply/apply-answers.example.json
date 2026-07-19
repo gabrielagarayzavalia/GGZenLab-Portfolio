@@ -14,7 +14,12 @@
     },
     "country": "Argentina",
     "linkedinProfile": "https://www.linkedin.com/in/gabriela-garayzavalia",
-    "portfolio": "https://gabrielagarayzavalia.github.io/linkedin-bug-report/"
+    "portfolio": "https://gabrielagarayzavalia.github.io/linkedin-bug-report/",
+    "expectedCompensation": {
+      "usdGross": "2750",
+      "arsGross": "3500000",
+      "note": "Si el campo menciona dólares/USD → 2750; pesos/ARS → 3500000; sin moneda → ARS"
+    }
   },
   "yesNoDefaults": {
     "workAuthorization": true,

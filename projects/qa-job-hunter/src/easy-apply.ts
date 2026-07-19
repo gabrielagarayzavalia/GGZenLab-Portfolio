@@ -37,8 +37,11 @@ import { finishProductiveRun } from "./apply/post-run.js";
 import {
   canonicalJobUrl,
   ensureQueueFromMatched,
+  isFinalStatus,
   jobIdFromUrl,
+  loadQueue,
   markEnviadaIfAllowed,
+  toApplyJob,
   updateQueueRow,
 } from "./apply/apply-queue.js";
 import { handleFailures } from "./apply/failure-handler.js";
@@ -368,17 +371,43 @@ async function tryEasyApply(
   return record;
 }
 
+/** Prioriza cola Excel pendiente; fallback matchedJobs. APPLY_MAX limita la corrida. */
+function loadJobsForProductiveRun(): ApplyJob[] {
+  ensureQueueFromMatched();
+  const fromQueue = loadQueue()
+    .filter(
+      (r) =>
+        r.status === "pendiente" &&
+        !isFinalStatus(r.status) &&
+        r.easyApply !== "no" &&
+        /^\d+$/.test(r.jobId)
+    )
+    .sort((a, b) => b.matchPercent - a.matchPercent)
+    .map(toApplyJob);
+
+  const base = fromQueue.length > 0 ? fromQueue : loadMatchedJobs();
+  const max = Number(process.env.APPLY_MAX ?? "0");
+  if (max > 0) return base.slice(0, max);
+  return base;
+}
+
 async function main() {
   ensureDirs();
-  ensureQueueFromMatched();
 
-  const toApply = loadMatchedJobs();
-  console.log(`🚀 Easy Apply en ${toApply.length} avisos calificados (>= ${MIN_MATCH}%)\n`);
+  const toApply = loadJobsForProductiveRun();
+  const maxLabel = process.env.APPLY_MAX ? ` (APPLY_MAX=${process.env.APPLY_MAX})` : "";
+  console.log(`🚀 Easy Apply PRODUCTIVO — ${toApply.length} aviso(s)${maxLabel}\n`);
+  console.log("   ⚠️  Envía postulaciones reales (Submit + Done).");
 
   if (toApply.length === 0) {
-    console.log("No hay avisos calificados para aplicar. Nada que hacer.");
+    console.log("No hay avisos pendientes para aplicar. Nada que hacer.");
     return;
   }
+
+  for (const j of toApply) {
+    console.log(`   · [${j.matchPercent}%] ${j.company} — ${j.title}`);
+  }
+  console.log("");
 
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({ headless: false, slowMo: 250 });

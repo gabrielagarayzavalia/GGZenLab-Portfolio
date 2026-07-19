@@ -27,9 +27,12 @@ import {
   fillPseudoAnswers,
   handleSaveDiscardModal,
   hasBlockingEmptyFields,
+  inventoryEasyApplyFields,
   isNextDisabled,
   logCapturedFields,
+  logFieldInventory,
   RequiredFieldsBlockedError,
+  saveEasyApplyFieldInventory,
   saveRequiredFieldsDump,
 } from "./apply/fill-answers.js";
 import {
@@ -40,6 +43,15 @@ import {
   MODAL_LABELS,
   resolveApplyScope,
 } from "./apply/modal-controls.js";
+import {
+  MAXIMIZED_LAUNCH_ARGS,
+  maximizeWindow,
+  maximizedContextOptions,
+  prepareApplyBrowserPage,
+  scrollEasyApplyFormToEnd,
+  waitForEasyApplyModalReady,
+  waitForJobPageReady,
+} from "./apply/page-ready.js";
 import {
   ensureQueueFromMatched,
   isFinalStatus,
@@ -217,6 +229,7 @@ async function tryAdvanceNext(
   page: Page,
   scope: Page | Locator
 ): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit"> {
+  await scrollEasyApplyFormToEnd(page);
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review
   await fillPseudoAnswers(page);
 
@@ -301,6 +314,12 @@ async function dryRunThroughModal(
   jobId: string,
   jobUrl: string
 ): Promise<"ok" | "no_modal"> {
+  if (!(await waitForEasyApplyModalReady(page))) {
+    console.error("   ✗ Modal Easy Apply no terminó de cargar");
+    console.error(`   URL actual: ${page.url()}`);
+    return "no_modal";
+  }
+
   const scope = await resolveApplyScope(page, 12000);
   if (!scope) {
     console.error("   ✗ Modal/flujo Easy Apply NO visible tras el click");
@@ -315,10 +334,16 @@ async function dryRunThroughModal(
 
   // Un solo intento por paso; si falla → STOP (sin reintentos ni siguiente job).
   for (let i = 0; i < 10; i++) {
+    await scrollEasyApplyFormToEnd(page);
+    const inventory = await inventoryEasyApplyFields(page);
+    saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
+    logFieldInventory(inventory);
+
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
     const filled = await fillPseudoAnswers(page);
     if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
+    await scrollEasyApplyFormToEnd(page);
 
     if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
@@ -369,7 +394,7 @@ async function processJob(
   console.log(`   ${job.url}`);
 
   await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
-  await sleep(2500);
+  await waitForJobPageReady(page);
 
   // Easy Apply visible manda: no marcar enviada/cerrada por texto del feed.
   const hasEasy = await findEasyApplyControl(page, 10000);
@@ -474,13 +499,14 @@ async function main() {
   );
 
   const sessionPath = resolveSessionPath();
-  let browser: Browser | null = await chromium.launch({ headless: false, slowMo: 150 });
-  const context = await browser.newContext({
-    storageState: sessionPath,
-    locale: "en-US",
-    viewport: { width: 1280, height: 900 },
+  let browser: Browser | null = await chromium.launch({
+    headless: false,
+    slowMo: 150,
+    args: [...MAXIMIZED_LAUNCH_ARGS],
   });
-  const page = await context.newPage();
+  const context = await browser.newContext(maximizedContextOptions(sessionPath));
+  const page = await prepareApplyBrowserPage(context);
+  await maximizeWindow(page);
 
   const closeSession = async (why: string) => {
     console.error(`\n🔒 Cerrando sesión Playwright (${why})…`);

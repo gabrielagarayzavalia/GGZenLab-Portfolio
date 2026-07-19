@@ -18,6 +18,10 @@ export interface CapturedField {
   ariaLabel: string;
   placeholder: string;
   errorText: string;
+  /** true si no es required (para inventario multi-escenario). */
+  optional?: boolean;
+  /** radio / checkbox / text / select / combobox / textarea / unknown */
+  scenarioKind?: string;
 }
 
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
@@ -116,8 +120,22 @@ async function fieldError(el: Locator): Promise<string> {
     .catch(() => "");
 }
 
-/** Lista campos visibles (prioriza required / con error / vacíos). */
-export async function captureRequiredFields(page: Page): Promise<CapturedField[]> {
+function scenarioKindFor(tag: string, inputType: string): string {
+  if (inputType === "radio") return "radio";
+  if (inputType === "checkbox") return "checkbox";
+  if (tag === "select" || inputType === "select-one") return "select";
+  if (tag === "textarea") return "textarea";
+  if (inputType === "tel" || inputType === "email" || inputType === "url" || inputType === "text") {
+    return inputType === "text" ? "text" : inputType;
+  }
+  if (tag === "input" || inputType === "combobox") return "combobox_or_text";
+  return "unknown";
+}
+
+async function collectVisibleFields(
+  page: Page,
+  opts: { onlyBlockingCandidates: boolean }
+): Promise<CapturedField[]> {
   const root = scopeRoot(page);
   if (!(await root.isVisible({ timeout: 2000 }).catch(() => false))) return [];
 
@@ -131,7 +149,7 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
     const el = controls.nth(i);
     if (!(await el.isVisible().catch(() => false))) continue;
 
-    const tag = await el.evaluate((n) => n.tagName.toLowerCase()).catch(() => "");
+    const tag = await el.evaluate((node) => node.tagName.toLowerCase()).catch(() => "");
     const inputType = ((await el.getAttribute("type")) ?? tag).toLowerCase();
     const name = (await el.getAttribute("name").catch(() => "")) ?? "";
     const id = (await el.getAttribute("id").catch(() => "")) ?? "";
@@ -145,10 +163,14 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
         : ((await el.inputValue().catch(() => "")) ?? (await el.innerText().catch(() => ""))).trim();
     const label = await fieldLabel(el);
     const errorText = await fieldError(el);
-    const required = ariaRequired || htmlRequired || Boolean(errorText) || !value;
+    const starred = /\*/.test(label) || /\*/.test(ariaLabel);
+    const required = ariaRequired || htmlRequired || starred || Boolean(errorText);
+    const optional = !required;
 
-    // Solo nos interesan obligatorios, con error, o vacíos relevantes
-    if (!ariaRequired && !htmlRequired && !errorText && value) continue;
+    // Modo legacy: solo obligatorios / error / vacíos relevantes
+    if (opts.onlyBlockingCandidates) {
+      if (!ariaRequired && !htmlRequired && !errorText && !starred && value) continue;
+    }
 
     out.push({
       label: label || ariaLabel || placeholder || name || id || `(unnamed ${tag})`,
@@ -157,6 +179,8 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
       name,
       id,
       required: required || Boolean(errorText),
+      optional,
+      scenarioKind: scenarioKindFor(tag, inputType),
       value,
       ariaLabel,
       placeholder,
@@ -180,6 +204,8 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
       name: "",
       id: "",
       required: true,
+      optional: false,
+      scenarioKind: "error",
       value: "",
       ariaLabel: "",
       placeholder: "",
@@ -188,6 +214,73 @@ export async function captureRequiredFields(page: Page): Promise<CapturedField[]
   }
 
   return out;
+}
+
+/** Lista campos visibles (prioriza required / con error / vacíos). */
+export async function captureRequiredFields(page: Page): Promise<CapturedField[]> {
+  return collectVisibleFields(page, { onlyBlockingCandidates: true });
+}
+
+/**
+ * Inventario completo del paso actual (required + optional) tras scrolldown.
+ * Sirve para cubrir escenarios Easy Apply distintos (no siempre mismos campos).
+ */
+export async function inventoryEasyApplyFields(page: Page): Promise<CapturedField[]> {
+  return collectVisibleFields(page, { onlyBlockingCandidates: false });
+}
+
+/** Persiste inventario multi-escenario para ampliar PSEUDO_ANSWERS / apply-answers.json. */
+export function saveEasyApplyFieldInventory(
+  jobId: string,
+  url: string,
+  step: number,
+  fields: CapturedField[]
+): string {
+  ensureDirs();
+  const required = fields.filter((f) => f.required);
+  const optional = fields.filter((f) => f.optional);
+  const byKind: Record<string, number> = {};
+  for (const f of fields) {
+    const k = f.scenarioKind ?? "unknown";
+    byKind[k] = (byKind[k] ?? 0) + 1;
+  }
+  const payload = {
+    at: new Date().toISOString(),
+    jobId,
+    url,
+    step,
+    counts: { total: fields.length, required: required.length, optional: optional.length, byKind },
+    fields,
+    improvementHint: {
+      addKnownAnswersIn: ["src/apply/fill-answers.ts → PSEUDO_ANSWERS", "src/apply/apply-answers.example.json"],
+      note:
+        "Cada aviso Easy Apply puede traer un subconjunto distinto de campos/preguntas. " +
+        "Usá este dump para agregar matchers (label regex → valor) sin asumir un formulario fijo.",
+      uncoveredRequired: required
+        .filter((f) => !f.value || EMPTY_SELECT_RE.test(f.value))
+        .map((f) => ({ label: f.label, kind: f.scenarioKind, errorText: f.errorText })),
+    },
+  };
+  const file = path.join(APPLY_DIR, `field-inventory-${jobId}-step${step}.json`);
+  const latest = path.join(APPLY_DIR, "field-inventory-latest.json");
+  fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf-8");
+  fs.writeFileSync(latest, JSON.stringify(payload, null, 2), "utf-8");
+  return file;
+}
+
+export function logFieldInventory(fields: CapturedField[]): void {
+  const req = fields.filter((f) => f.required);
+  const opt = fields.filter((f) => f.optional);
+  console.log(`   📋 Inventario campos: ${fields.length} (req=${req.length}, opc=${opt.length})`);
+  for (const f of fields.slice(0, 12)) {
+    const flag = f.required ? "REQ" : "opc";
+    console.log(
+      `      [${flag}] ${f.label}` +
+        (f.value ? ` = ${f.value.slice(0, 40)}` : " (vacío)") +
+        ` · ${f.scenarioKind ?? f.tag}`
+    );
+  }
+  if (fields.length > 12) console.log(`      … +${fields.length - 12} más (ver field-inventory-*.json)`);
 }
 
 export function saveRequiredFieldsDump(

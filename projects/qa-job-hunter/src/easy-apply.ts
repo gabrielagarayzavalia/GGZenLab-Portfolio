@@ -32,7 +32,22 @@ import {
 import {
   fillPseudoAnswers,
   handleSaveDiscardModal,
+  inventoryEasyApplyFields,
+  logFieldInventory,
+  saveEasyApplyFieldInventory,
+  saveRequiredFieldsDump,
+  logCapturedFields,
+  hasBlockingEmptyFields,
 } from "./apply/fill-answers.js";
+import {
+  MAXIMIZED_LAUNCH_ARGS,
+  maximizeWindow,
+  maximizedContextOptions,
+  prepareApplyBrowserPage,
+  scrollEasyApplyFormToEnd,
+  waitForEasyApplyModalReady,
+  waitForJobPageReady,
+} from "./apply/page-ready.js";
 import { finishProductiveRun } from "./apply/post-run.js";
 import {
   canonicalJobUrl,
@@ -185,7 +200,7 @@ async function tryEasyApply(
 
   try {
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await sleep(2500);
+    await waitForJobPageReady(page);
 
     // Easy Apply visible manda; applied/closed solo si NO hay link Easy Apply.
     if (!(await findEasyApplyControl(page, 10000))) {
@@ -229,7 +244,11 @@ async function tryEasyApply(
       record.reason = "Easy Apply visible pero click falló";
       return record;
     }
-    await sleep(2000);
+    if (!(await waitForEasyApplyModalReady(page))) {
+      record.status = "blocked";
+      record.reason = "Modal Easy Apply no abrió / no terminó de cargar";
+      return record;
+    }
 
     const modal = await resolveApplyScope(page, 12000);
     if (!modal) {
@@ -244,15 +263,22 @@ async function tryEasyApply(
     while (steps < maxSteps) {
       steps++;
 
+      // Scroll hasta el final del form para revelar campos fuera de viewport
+      await scrollEasyApplyFormToEnd(page);
+      const inventory = await inventoryEasyApplyFields(page);
+      const inventoryPath = saveEasyApplyFieldInventory(job.jobId, job.url, steps, inventory);
+      logFieldInventory(inventory);
+      if (inventory.length > 0) {
+        console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
+      }
+
       const openTextareas = await page
-        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea, textarea")
-        .count();
-      const requiredEmpty = await page
-        .locator(".jobs-easy-apply-modal input[required]:not([value]), [role='dialog'] input[required]")
+        .locator(".jobs-easy-apply-modal textarea, [role='dialog'] textarea")
         .count();
 
-      const bodyText = await page
-        .locator(".jobs-easy-apply-modal, [role='dialog'], main")
+      // Solo texto del MODAL (nunca main): "Test Automation" / JD no deben disparar assessment.
+      const modalText = await page
+        .locator(".jobs-easy-apply-modal, [role='dialog']")
         .first()
         .innerText()
         .catch(() => "");
@@ -260,7 +286,7 @@ async function tryEasyApply(
       // NO usar /\btest\b/: matchea "Test Automation" del perfil y bloquea en falso.
       if (
         /skills assessment|online assessment|coding assessment|assessment required|completar (la |una )?evaluaci[oó]n|\bquiz\b|honeypot|workday assessment/i.test(
-          bodyText
+          modalText
         )
       ) {
         record.status = "blocked";
@@ -303,6 +329,8 @@ async function tryEasyApply(
       }
 
       await fillPseudoAnswers(page);
+      // Re-scroll tras rellenar (dropdowns / campos nuevos)
+      await scrollEasyApplyFormToEnd(page);
 
       const submitBtn = await findButtonOrLink(modal, MODAL_LABELS.submit, 1500);
 
@@ -354,9 +382,15 @@ async function tryEasyApply(
         }
       }
 
-      if (requiredEmpty > 0) {
+      const blocking = await hasBlockingEmptyFields(page);
+      if (blocking.length > 0) {
+        const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
+        logCapturedFields(blocking);
         record.status = "blocked";
-        record.reason = "Campos obligatorios sin completar — completar manual";
+        record.reason = `Campos obligatorios sin completar — ver ${path.basename(dump)}`;
+        await page
+          .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-required.png`) })
+          .catch(() => {});
         return record;
       }
 
@@ -415,9 +449,14 @@ async function main() {
   console.log("");
 
   const sessionPath = resolveSessionPath();
-  const browser = await chromium.launch({ headless: false, slowMo: 250 });
-  const context = await browser.newContext({ storageState: sessionPath, locale: "en-US" });
-  const page = await context.newPage();
+  const browser = await chromium.launch({
+    headless: false,
+    slowMo: 250,
+    args: [...MAXIMIZED_LAUNCH_ARGS],
+  });
+  const context = await browser.newContext(maximizedContextOptions(sessionPath));
+  const page = await prepareApplyBrowserPage(context);
+  await maximizeWindow(page);
 
   const applications: ApplicationRecord[] = [];
 

@@ -68,6 +68,16 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 
 Env dry-run: `DRY_RUN_MAX=10`, `DRY_RUN_ALL=1`.
 
+### 2.2b Robustez de UI (maximize / wait / scroll)
+
+Antes de clicks Easy Apply:
+
+1. **Ventana maximizada** (`--start-maximized` + CDP) — evita misses por viewport chico.
+2. **Espera de página/modal listos** (`waitForJobPageReady` / `waitForEasyApplyModalReady`) — shell LinkedIn + red quieta + loader oculto.
+3. **Scroll del form al final** en cada paso del modal — revela campos fuera de pantalla; vuelca inventario required+optional a `output/apply/field-inventory-*.json` para ampliar `PSEUDO_ANSWERS` (cada aviso puede traer preguntas distintas).
+
+Assessment falso: la detección **solo** mira texto del modal (nunca `main`/JD/perfil).
+
 ### 2.3 Preguntas Sí/No
 Aparecen de forma variable. Heurística: defaults + patrones en `apply-answers.example.json`; preguntas desconocidas → registrar en `output/apply/apply-answers.json` (gitignore) para reutilizar (motor completo = B17-2 / B17-4).
 

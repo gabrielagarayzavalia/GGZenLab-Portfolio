@@ -1618,6 +1618,8 @@ type DocumentCardToggle = {
  * evaluate como string: evita __name de tsx/esbuild en el browser.
  */
 async function listDocumentCardToggles(page: Page): Promise<DocumentCardToggle[]> {
+  // Solo dentro del modal Easy Apply — #interop-outlet del feed queda DETRÁS y
+  // un click force ahí navega/abre links del aviso, no el CV del modal.
   return page.evaluate(`(() => {
     const out = [];
     const seen = new Set();
@@ -1666,35 +1668,52 @@ async function listDocumentCardToggles(page: Page): Promise<DocumentCardToggle[]
         if (node.shadowRoot) walk(node.shadowRoot);
       }
     }
-    const outlet = document.querySelector("#interop-outlet");
+    const modal = document.querySelector(".jobs-easy-apply-modal");
+    if (!modal) return out;
+    walk(modal);
+    const outlet = modal.querySelector("#interop-outlet");
     if (outlet && outlet.shadowRoot) walk(outlet.shadowRoot);
-    walk(document);
     return out;
   })()`) as Promise<DocumentCardToggle[]>;
 }
 
 async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<boolean> {
-  // 1) Playwright (pierce shadow de #interop-outlet) — eventos reales CDP
-  const pierced = page.locator("#interop-outlet").locator(`[id="${toggleId}"]`);
+  const modal = page.locator(".jobs-easy-apply-modal").first();
+  if (!(await modal.isVisible({ timeout: 800 }).catch(() => false))) return false;
+
+  // 1) Solo dentro del modal (nunca #interop-outlet del feed detrás)
+  const pierced = modal.locator("#interop-outlet").locator(`[id="${toggleId}"]`);
   if ((await pierced.count().catch(() => 0)) > 0) {
     await pierced.scrollIntoViewIfNeeded().catch(() => {});
-    await pierced.click({ force: true, timeout: 4000 }).catch(() =>
-      pierced.click({ timeout: 4000 })
-    );
-    await sleep(400);
-    return true;
+    const clicked =
+      (await pierced.click({ timeout: 4000, noWaitAfter: true }).then(() => true).catch(() => false)) ||
+      (await pierced.click({ force: true, timeout: 4000, noWaitAfter: true }).then(() => true).catch(() => false));
+    if (clicked) {
+      await sleep(400);
+      return true;
+    }
   }
-  const any = page.locator(`[id="${toggleId}"]`);
-  if ((await any.count().catch(() => 0)) > 0) {
-    await any.first().click({ force: true, timeout: 4000 }).catch(() => {});
-    await sleep(400);
-    return true;
+  const inModal = modal.locator(`[id="${toggleId}"]`);
+  if ((await inModal.count().catch(() => 0)) > 0) {
+    const clicked =
+      (await inModal.first().click({ timeout: 4000, noWaitAfter: true }).then(() => true).catch(() => false)) ||
+      (await inModal
+        .first()
+        .click({ force: true, timeout: 4000, noWaitAfter: true })
+        .then(() => true)
+        .catch(() => false));
+    if (clicked) {
+      await sleep(400);
+      return true;
+    }
   }
 
-  // 2) Fallback evaluate + pointer events
+  // 2) Fallback evaluate + pointer events — scoped al modal
   return page.evaluate(
     `(() => {
       const id = ${JSON.stringify(toggleId)};
+      const modal = document.querySelector(".jobs-easy-apply-modal");
+      if (!modal) return false;
       function findIn(root) {
         var el = null;
         try { el = root.querySelector("#" + CSS.escape(id)); }
@@ -1708,9 +1727,9 @@ async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<bo
         }
         return null;
       }
-      const outlet = document.querySelector("#interop-outlet");
+      const outlet = modal.querySelector("#interop-outlet");
       let el = outlet && outlet.shadowRoot ? findIn(outlet.shadowRoot) : null;
-      if (!el) el = findIn(document);
+      if (!el) el = findIn(modal);
       if (!el) return false;
       el.scrollIntoView({ block: "center", inline: "nearest" });
       var forId = el.getAttribute("for");
@@ -1719,8 +1738,10 @@ async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<bo
         try {
           input = (outlet && outlet.shadowRoot
             ? outlet.shadowRoot.querySelector("#" + CSS.escape(forId))
-            : null) || document.getElementById(forId);
-        } catch (e2) { input = document.getElementById(forId); }
+            : null) || modal.querySelector("#" + CSS.escape(forId));
+        } catch (e2) {
+          input = modal.querySelector('[id="' + forId + '"]');
+        }
       }
       var target = input || el;
       if (input && (input.checked === true || input.getAttribute("aria-checked") === "true")) {
@@ -1821,9 +1842,11 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
     }
   }
 
+  const modal = page.locator(".jobs-easy-apply-modal").first();
+
   if (!best || bestScore < 70) {
-    // Fallback light DOM: solo "Select resume" (no Download, no Deselect)
-    const selectLabels = page.locator('[aria-label^="Select resume" i]');
+    // Fallback light DOM: solo "Select resume" (no Download, no Deselect) — dentro del modal
+    const selectLabels = modal.locator('[aria-label^="Select resume" i]');
     const n = await selectLabels.count().catch(() => 0);
     let fbBest = -1;
     let fbScore = 0;
@@ -1844,7 +1867,9 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
     if (fbBest >= 0 && fbScore >= 70) {
       const el = selectLabels.nth(fbBest);
       await el.scrollIntoViewIfNeeded().catch(() => {});
-      await el.click({ force: true, timeout: 4000 }).catch(() => {});
+      await el.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
+        el.click({ force: true, timeout: 4000, noWaitAfter: true })
+      );
       console.log(
         `   ↳ Resume: click TOGGLE (aria) ${kind} (score=${fbScore}) → ${fbTitle.slice(0, 90)}`
       );
@@ -1871,37 +1896,37 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
   );
   await sleep(700);
 
-  // Refuerzo: aria Select/Deselect resume <filename> (sin Download)
+  // Refuerzo: aria Select/Deselect resume <filename> (sin Download) — solo modal
   const fileKey = best.title.replace(/\.pdf$/i, "").slice(0, 48);
-  const deselectAria = page.locator(
+  const deselectAria = modal.locator(
     `[aria-label^="Deselect resume"][aria-label*="${fileKey}" i]`
   );
-  const selectAria = page.locator(
+  const selectAria = modal.locator(
     `[aria-label^="Select resume"][aria-label*="${fileKey}" i]`
   );
   if (await selectAria.first().isVisible({ timeout: 800 }).catch(() => false)) {
     await selectAria
       .first()
-      .click({ force: true, timeout: 4000 })
-      .catch(() => {});
+      .click({ timeout: 4000, noWaitAfter: true })
+      .catch(() => selectAria.first().click({ force: true, timeout: 4000, noWaitAfter: true }));
     await sleep(500);
   } else if (await deselectAria.first().isVisible({ timeout: 500 }).catch(() => false)) {
     console.log("   ↳ Resume: form ya en Deselect (seleccionado)");
   }
 
   const pdfToken = best.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
-  const formRadio = page.getByRole("radio", { name: new RegExp(pdfToken, "i") }).first();
+  const formRadio = modal.getByRole("radio", { name: new RegExp(pdfToken, "i") }).first();
   if (await formRadio.count().catch(() => 0)) {
     const checked = await formRadio.isChecked().catch(() => false);
     if (!checked) {
       await formRadio.check({ force: true }).catch(async () => {
-        await formRadio.click({ force: true, timeout: 3000 });
+        await formRadio.click({ timeout: 3000, noWaitAfter: true });
       });
       await sleep(400);
     }
   }
 
-  const needResume = page.getByText(
+  const needResume = modal.getByText(
     /se necesita un curr[ií]culum|resume is required|please select a resume/i
   );
   for (let w = 0; w < 8; w++) {
@@ -1910,15 +1935,14 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
       break;
     }
     console.log("   ↳ Resume: error 'Se necesita un currículum' — re-bind…");
-    // Click Playwright en toggle + Select aria si aparece
     await clickDocumentCardToggle(page, best.id);
     if (await selectAria.first().isVisible({ timeout: 400 }).catch(() => false)) {
-      await selectAria.first().click({ force: true }).catch(() => {});
+      await selectAria.first().click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
     }
-    // A veces el form reacciona al click en el nombre del PDF (no Download)
-    const name = page.getByText(best.title, { exact: true }).first();
+    // NUNCA page.getByText(pdf): el título puede existir en el feed detrás del modal
+    const name = modal.getByText(best.title, { exact: true }).first();
     if (await name.isVisible({ timeout: 400 }).catch(() => false)) {
-      await name.click({ force: true }).catch(() => {});
+      await name.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
     }
     await sleep(800);
   }
@@ -1947,8 +1971,19 @@ export async function selectResumeForRole(
 ): Promise<boolean> {
   const kind = detectApplyRoleKind(jobTitle, company);
   // Solo modal Easy Apply (nunca <main>: evita falsos .pdf del JD)
-  const root = page.locator(".jobs-easy-apply-modal, [role='dialog']").first();
+  const root = page.locator(".jobs-easy-apply-modal").first();
   if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return false;
+
+  // Review/Submit: no hay paso CV — no buscar toggles ni clickear detrás del modal
+  const submitVisible = await root
+    .locator(
+      "button[data-live-test-easy-apply-submit-button], button[data-easy-apply-submit-button]"
+    )
+    .or(root.getByRole("button", { name: /Submit application|^Submit$|Enviar solicitud|^Enviar$/i }))
+    .first()
+    .isVisible({ timeout: 500 })
+    .catch(() => false);
+  if (submitVisible) return false;
 
   const toggles0 = await listDocumentCardToggles(page);
   const pdfVisible = await root
@@ -2414,7 +2449,7 @@ export async function fillPseudoAnswers(
   const skipEarly = await detectSkipPending(page);
   if (skipEarly) return { filled: 0, skipPending: skipEarly };
 
-  // CV primero (nunca dejar intro-GGZ / cover como resume)
+  // CV primero (nunca dejar intro-GGZ / cover como resume) — solo si hay paso currículum
   if (await selectResumeForRole(page, jobTitle, company)) filled++;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
@@ -2441,7 +2476,7 @@ export async function fillPseudoAnswers(
 
   // Cover letter solo en input de cover (no el de resume)
   if (await uploadCoverLetterPdf(page)) filled++;
-  // Re-chequear CV por si un upload contaminó la lista
+  // Re-chequear CV solo si el paso de currículum sigue visible (no en Review/Follow)
   if (await selectResumeForRole(page, jobTitle, company)) filled++;
   if (await fillApplicationSummary(page, jobTitle, company)) filled++;
   if (

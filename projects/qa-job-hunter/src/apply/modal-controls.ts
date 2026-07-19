@@ -6,7 +6,8 @@ import type { Locator, Page } from "playwright";
 type Scope = Page | Locator;
 
 export const MODAL_LABELS = {
-  submit: /Submit application|Enviar solicitud/i,
+  /** UI EN/ES: a veces solo "Submit" / "Enviar" en el footer. */
+  submit: /Submit application|^Submit$|Enviar solicitud|^Enviar$/i,
   /**
    * Aparece cuando ya no hay Next/Continue; antes de Submit.
    * A veces solo "Review", a veces "Review your application".
@@ -24,16 +25,18 @@ export const MODAL_LABELS = {
 
 /** Contenedores conocidos del flujo Easy Apply (modal clásico + SDUI). */
 export function easyApplyModalRoot(page: Page): Locator {
+  // Prioridad explícita: evitar que un `[role=dialog]` del chrome gane con .first().
   return page
-    .locator(
-      [
-        ".jobs-easy-apply-modal",
-        "[data-test-modal]",
-        "[role='dialog']",
-        ".jobs-easy-apply-content",
-        "div[class*='jobs-easy-apply']",
-        "div[class*='EasyApply']",
-      ].join(", ")
+    .locator(".jobs-easy-apply-modal")
+    .or(page.locator("[data-test-modal].jobs-easy-apply-modal"))
+    .or(page.locator(".jobs-easy-apply-content"))
+    .or(page.locator("div[class*='jobs-easy-apply']"))
+    .or(page.locator("div[class*='EasyApply']"))
+    .or(
+      page.locator("[role='dialog']").filter({
+        hasText:
+          /Apply to|Postular|Contact info|Resume|Curr[ií]culum|Additional Questions|Preguntas|Review/i,
+      })
     )
     .first();
 }
@@ -108,13 +111,28 @@ export async function findButtonOrLink(
     }
   }
   if (name === MODAL_LABELS.submit) {
-    const submitData = scope
+    const submitBare = scope
       .locator(
-        "button[data-live-test-easy-apply-submit-button], button[aria-label*='Submit application'], button[aria-label*='Enviar solicitud']"
+        "button[data-live-test-easy-apply-submit-button], button[data-easy-apply-submit-button]"
       )
       .first();
-    if (await submitData.isVisible({ timeout: Math.min(timeoutMs, 600) }).catch(() => false)) {
-      return submitData;
+    if (await submitBare.isVisible({ timeout: Math.min(timeoutMs, 600) }).catch(() => false)) {
+      return submitBare;
+    }
+    const submitAria = scope
+      .locator(
+        "button[aria-label*='Submit application'], button[aria-label*='Enviar solicitud']"
+      )
+      .first();
+    if (await submitAria.isVisible({ timeout: Math.min(timeoutMs, 400) }).catch(() => false)) {
+      return submitAria;
+    }
+    const submitFooter = scope
+      .locator(".jobs-easy-apply-footer button.artdeco-button--primary")
+      .filter({ hasText: /Submit|Enviar/i })
+      .first();
+    if (await submitFooter.isVisible({ timeout: Math.min(timeoutMs, 400) }).catch(() => false)) {
+      return submitFooter;
     }
   }
 

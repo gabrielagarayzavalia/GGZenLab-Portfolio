@@ -320,7 +320,10 @@ async function tryAdvanceNext(
   if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
 
   // Tras Review, Submit puede aparecer sin cambiar mucho el fingerprint
-  if (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) {
+  if (
+    (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+    (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+  ) {
     console.log("   ✓ Llegamos a pantalla con Submit (vía Review)");
     return "advanced";
   }
@@ -345,6 +348,33 @@ async function tryAdvanceNext(
       afterFp = await stepFingerprint(page);
       if (afterFp !== beforeFp) {
         console.log(`   ✓ Paso avanzó tras re-bind CV`);
+        return "advanced";
+      }
+    }
+    // Re-fill + recheck Submit (Review a veces no avanza si faltaba remuneración)
+    await fillPseudoAnswers(page, { jobTitle, company });
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 600)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 500))
+    ) {
+      console.log("   ✓ Submit visible tras re-fill (mismo fingerprint)");
+      return "advanced";
+    }
+    const reviewAgain = await findButtonOrLink(scope, MODAL_LABELS.review, 500);
+    if (reviewAgain && (await hasBlockingEmptyFields(page)).length === 0) {
+      console.log("   ↳ Reintento Review 1× tras re-fill");
+      await reviewAgain.click({ force: true, timeout: 4000 }).catch(() => {});
+      await sleep(2000);
+      if (
+        (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+        (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+      ) {
+        console.log("   ✓ Llegamos a Submit tras reintento Review");
+        return "advanced";
+      }
+      afterFp = await stepFingerprint(page);
+      if (afterFp !== beforeFp) {
+        console.log(`   ✓ Paso avanzó tras reintento Review`);
         return "advanced";
       }
     }
@@ -401,7 +431,11 @@ async function dryRunThroughModal(
     if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
     await scrollEasyApplyFormToEnd(page);
 
-    if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
+    // Scope + page: tras Review el Submit a veces vive fuera del locator scope viejo
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 800))
+    ) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return "ok";
     }

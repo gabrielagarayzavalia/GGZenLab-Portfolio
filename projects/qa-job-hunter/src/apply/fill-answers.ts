@@ -181,10 +181,21 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Contenedor del form Easy Apply.
+ * NUNCA comma+.first() con `[role=dialog]`/`main`: el chrome de LinkedIn
+ * (Select language) gana y el inventario/fill no ve remuneración ni Submit.
+ */
 function scopeRoot(page: Page): Locator {
   return page
-    .locator(
-      ".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, div[class*='jobs-easy-apply'], main"
+    .locator(".jobs-easy-apply-modal")
+    .or(page.locator(".jobs-easy-apply-content"))
+    .or(page.locator("div[class*='jobs-easy-apply']"))
+    .or(
+      page.locator("[role='dialog']").filter({
+        hasText:
+          /Apply to|Postular|Contact info|Resume|Curr[ií]culum|Additional Questions|Preguntas|Review/i,
+      })
     )
     .first();
 }
@@ -973,14 +984,35 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     }
   }
 
-  // Fallback: label ES visible "remuneración…pretendida"
+  // Fallback: label ES/EN (scope o page) + input *-numeric de LinkedIn
   if (!filled) {
-    const byLabel = root
-      .getByLabel(/remuneraci[oó]n|sueldo|salary|compensation/i)
-      .first();
-    if (await byLabel.count().catch(() => 0)) {
+    const candidates = [
+      root.getByLabel(/remuneraci[oó]n|sueldo|salary|compensation|pretendid/i).first(),
+      page.getByLabel(/remuneraci[oó]n bruta pretendida|expected (salary|compensation)/i).first(),
+      root.locator("input[id*='-numeric'], input[id*='numeric']").first(),
+      page.locator(".jobs-easy-apply-modal input[id*='-numeric']").first(),
+    ];
+    for (const byLabel of candidates) {
+      if (!(await byLabel.count().catch(() => 0))) continue;
       await byLabel.scrollIntoViewIfNeeded().catch(() => {});
-      const blob = ((await byLabel.getAttribute("aria-label")) ?? "") + " remuneración";
+      const near = await byLabel
+        .evaluate((node) => {
+          const wrap =
+            node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
+            node.parentElement;
+          return (wrap?.textContent ?? "").trim().slice(0, 300);
+        })
+        .catch(() => "");
+      const blob = `${(await byLabel.getAttribute("aria-label")) ?? ""} ${near} remuneración`;
+      if (!fieldMatch.test(blob) && !/numeric|remuneraci|salary|compensation|sueldo/i.test(blob)) {
+        continue;
+      }
+      const raw = ((await byLabel.inputValue().catch(() => "")) ?? "").trim();
+      if (hasPrefillValue(raw)) {
+        console.log(`   ↳ Remuneración: dejo prefill ("${raw.slice(0, 40)}")`);
+        filled = true;
+        break;
+      }
       const { value, currency } = resolveCompensationValue(blob);
       const ok = await fillInputWithWaits(page, byLabel, value, {
         logName: `Remuneración (${currency})`,
@@ -988,8 +1020,9 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
         expectTypeahead: false,
       });
       if (ok) {
-        console.log(`   ↳ Remuneración pretendida (${currency}, byLabel): ${value}`);
+        console.log(`   ↳ Remuneración pretendida (${currency}, fallback): ${value}`);
         filled = true;
+        break;
       }
     }
   }

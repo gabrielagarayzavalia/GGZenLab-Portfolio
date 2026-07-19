@@ -69,6 +69,7 @@ import {
   isFinalStatus,
   jobIdFromUrl,
   loadQueue,
+  forcePendienteForRetry,
   markEnviadaIfAllowed,
   toApplyJob,
   updateQueueRow,
@@ -137,8 +138,8 @@ function sleep(ms: number) {
 }
 
 /**
- * Tras Submit exitoso: Excel/cola → enviada siempre (Done es opcional).
- * Caso 1: sin botón Done sigue contando como enviada.
+ * Tras click en Submit: Excel → enviada SOLO si hay confirmación (Done / banner / Applied).
+ * Si el Submit falla o no hay evidencia → pendiente + nota (nunca enviada).
  */
 async function completeSubmitAndDone(
   page: import("playwright").Page,
@@ -149,42 +150,55 @@ async function completeSubmitAndDone(
     .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-pre-submit.png`) })
     .catch(() => {});
 
-  // Submit ya clickeado → marcar enviada de inmediato (no depender de Done).
+  const clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
+  if (clickedDone) await sleep(1500);
+
+  const sentBanner = await page
+    .getByText(/Application sent|Application submitted|Solicitud enviada/i)
+    .first()
+    .isVisible({ timeout: 4000 })
+    .catch(() => false);
+  const appliedUi = await detectAlreadyApplied(page);
+
+  const confirmed = Boolean(clickedDone || sentBanner || appliedUi);
+  // Sin Done/banner/Applied: no marcar enviada (aunque el click no haya tirado error)
+  if (!confirmed) {
+    const submitStill = await findButtonOrLink(page, MODAL_LABELS.submit, 600);
+    const note = submitStill
+      ? "Submit sigue visible tras click — sin confirmación; queda pendiente"
+      : "Submit sin confirmación (Done/banner/Applied) — queda pendiente; no marcar enviada";
+    console.log(`   ⚠ ${note}`);
+    return leavePendingCloseContinue(page, job, record, note, note);
+  }
+
   record.status = "submitted";
-  record.reason = "Easy Apply enviada (Submit; sincronizando Done…)";
+  record.reason = clickedDone
+    ? "Easy Apply enviada (Submit + Done)"
+    : sentBanner
+      ? "Easy Apply enviada (Submit; confirmación en UI)"
+      : "Easy Apply enviada (Submit; Applied en UI)";
   markEnviadaIfAllowed(job.jobId, record.reason);
   setApplicationStatus(
     { id: job.jobId, title: job.title, company: job.company },
     "applied"
   );
 
-  const clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
-  if (clickedDone) await sleep(1500);
-
-  const uiConfirmed =
-    clickedDone ||
-    (await detectAlreadyApplied(page)) ||
-    (await page
-      .getByText(/Application sent|Application submitted|Solicitud enviada/i)
-      .first()
-      .isVisible({ timeout: 3000 })
-      .catch(() => false));
-
-  record.reason = clickedDone
-    ? "Easy Apply enviada (Submit + Done)"
-    : uiConfirmed
-      ? "Easy Apply enviada (Submit; Done no visible)"
-      : "Easy Apply enviada (Submit; Done no visible — Excel enviada)";
-  markEnviadaIfAllowed(job.jobId, record.reason);
-
   await page
     .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-submitted.png`) })
     .catch(() => {});
 
-  // Intento inmediato a Excel (si el archivo está abierto, finishProductiveRun reintenta).
   exportQueueToExcel();
-
   return record;
+}
+
+/** Click Submit falló → pendiente + nota (no enviada). */
+async function submitClickFailedPending(
+  page: import("playwright").Page,
+  job: ApplyJob,
+  record: ApplicationRecord,
+  reason: string
+): Promise<ApplicationRecord> {
+  return leavePendingCloseContinue(page, job, record, reason, reason);
 }
 
 /** Productivo: Save/Discard → Save → buscar Submit → Done. */
@@ -220,9 +234,12 @@ async function afterSaveContinueToSubmit(
           .then(() => true)
           .catch(() => false));
       if (!submitted) {
-        record.status = "blocked";
-        record.reason = "Tras Save: Submit visible pero click falló";
-        return record;
+        return submitClickFailedPending(
+          page,
+          job,
+          record,
+          "Tras Save: Submit visible pero click falló — queda pendiente"
+        );
       }
       await sleep(2500);
       return completeSubmitAndDone(page, job, record);
@@ -618,9 +635,12 @@ async function tryEasyApply(
             .then(() => true)
             .catch(() => false));
         if (!submitted) {
-          record.status = "blocked";
-          record.reason = "Submit visible pero click falló (overlay)";
-          return record;
+          return submitClickFailedPending(
+            page,
+            job,
+            record,
+            "Submit visible pero click falló (overlay) — queda pendiente"
+          );
         }
         await sleep(2500);
         return completeSubmitAndDone(page, job, record);
@@ -758,9 +778,33 @@ async function tryEasyApply(
   return record;
 }
 
-/** Prioriza cola Excel pendiente; fallback matchedJobs. APPLY_MAX limita la corrida. */
+/** Prioriza cola Excel pendiente; fallback matchedJobs. APPLY_MAX / APPLY_JOB_ID. */
 function loadJobsForProductiveRun(): ApplyJob[] {
   ensureQueueFromMatched();
+
+  const forceJobId = (process.env.APPLY_JOB_ID ?? "").trim();
+  if (forceJobId && /^\d+$/.test(forceJobId)) {
+    const q = loadQueue();
+    const existing = q.find((r) => r.jobId === forceJobId);
+    const row = forcePendienteForRetry(forceJobId, {
+      title: process.env.APPLY_JOB_TITLE ?? existing?.title ?? "QA Automation Ssr",
+      company: process.env.APPLY_JOB_COMPANY ?? existing?.company ?? "Stefanini LATAM",
+      url: existing?.url ?? `https://www.linkedin.com/jobs/view/${forceJobId}/`,
+      matchPercent: existing?.matchPercent ?? 85,
+      easyApply: "yes",
+      reason: "APPLY_JOB_ID reintento (forzado pendiente)",
+      notes: existing?.notes ?? "",
+    });
+    if (!row) {
+      console.error(
+        `   ✗ APPLY_JOB_ID=${forceJobId} no se puede reintentar (cerrada/descartada)`
+      );
+      return [];
+    }
+    console.log(`   🎯 APPLY_JOB_ID=${forceJobId} → ${row.url}`);
+    return [toApplyJob(row)];
+  }
+
   const fromQueue = loadQueue()
     .filter(
       (r) =>
@@ -782,9 +826,14 @@ async function main() {
   ensureDirs();
 
   const toApply = loadJobsForProductiveRun();
-  const maxLabel = process.env.APPLY_MAX ? ` (APPLY_MAX=${process.env.APPLY_MAX})` : "";
+  const maxLabel = process.env.APPLY_MAX
+    ? ` (APPLY_MAX=${process.env.APPLY_MAX})`
+    : process.env.APPLY_JOB_ID
+      ? ` (APPLY_JOB_ID=${process.env.APPLY_JOB_ID})`
+      : "";
   console.log(`🚀 Easy Apply PRODUCTIVO — ${toApply.length} aviso(s)${maxLabel}\n`);
   console.log("   ⚠️  Envía postulaciones reales (Submit + Done).");
+  console.log("   ⚠️  Excel → enviada solo si Submit se confirma (Done/banner/Applied).");
 
   if (toApply.length === 0) {
     console.log("No hay avisos pendientes para aplicar. Nada que hacer.");

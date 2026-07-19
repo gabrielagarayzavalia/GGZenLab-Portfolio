@@ -233,8 +233,7 @@ async function dryRunThroughModal(
     if (step === "advanced") continue;
 
     // Primer fallo → dump + parar (no segundo intento)
-    console.error(`   � dump + parar (no segundo intento)
-    console.error(`   ✗ Fallo en paso ${i + 1}: ${step}`);
+    console.error(`   ✗ Fallo en paso ${i + 1}: ${step} — STOP para debug`);
     await stopForRequiredFields(page, jobId, jobUrl);
   }
 

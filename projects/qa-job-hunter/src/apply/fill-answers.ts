@@ -53,6 +53,17 @@ export const PSEUDO_ANSWERS = {
     fieldMatch: /portfolio\s*link|portfolio|portafolio|personal\s*website|github\.io/i,
     value: "https://gabrielagarayzavalia.github.io/linkedin-bug-report/",
   },
+  /** Remuneración pretendida bruta (mensual). */
+  expectedCompensation: {
+    fieldMatch:
+      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*salary|gross\s*(salary|pay)/i,
+    usdMatch: /\b(usd|u\$s|us\$|d[oó]lar(es)?|dollars?)\b|\$\s*usd/i,
+    arsMatch: /\b(ars|peso(s)?(\s*argentinos?)?|\$\s*ar|arg(?:entina)?)\b/i,
+    usdValue: "2750",
+    arsValue: "3500000",
+    /** Sin moneda explícita → ARS (contexto AR). */
+    defaultCurrency: "ARS" as const,
+  },
 } as const;
 
 const EMPTY_SELECT_RE = /select an option|seleccion(a|á)|choose|elegí|elegir/i;
@@ -640,6 +651,69 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
   return false;
 }
 
+function resolveCompensationValue(blob: string): { value: string; currency: "USD" | "ARS" } {
+  const { usdMatch, arsMatch, usdValue, arsValue, defaultCurrency } =
+    PSEUDO_ANSWERS.expectedCompensation;
+  const hasUsd = usdMatch.test(blob);
+  const hasArs = arsMatch.test(blob);
+  if (hasUsd && !hasArs) return { value: usdValue, currency: "USD" };
+  if (hasArs && !hasUsd) return { value: arsValue, currency: "ARS" };
+  if (hasUsd && hasArs) {
+    // Preferir la moneda que aparece más cerca de "salary/remuneración" — default USD si ambas
+    return { value: usdValue, currency: "USD" };
+  }
+  return defaultCurrency === "USD"
+    ? { value: usdValue, currency: "USD" }
+    : { value: arsValue, currency: "ARS" };
+}
+
+/** Remuneración pretendida: 2750 USD o 3.500.000 ARS según el campo. */
+export async function fillExpectedCompensation(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch } = PSEUDO_ANSWERS.expectedCompensation;
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
+  );
+  const n = await controls.count();
+  let filled = false;
+
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
+    const name = ((await el.getAttribute("name")) ?? "").trim();
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
+          node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 300);
+      })
+      .catch(() => "");
+    const blob = `${label} ${aria} ${ph} ${name} ${near}`;
+    if (!fieldMatch.test(blob)) continue;
+
+    const { value, currency } = resolveCompensationValue(blob);
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim().replace(/[,\s.]/g, "");
+    const normalizedTarget = value.replace(/[,\s.]/g, "");
+    if (current === normalizedTarget || current === value) {
+      filled = true;
+      continue;
+    }
+
+    await el.click({ timeout: 2000 }).catch(() => {});
+    await el.fill("");
+    await el.fill(value);
+    console.log(`   ↳ Remuneración pretendida (${currency}): ${value}`);
+    await sleep(300);
+    filled = true;
+  }
+
+  return filled;
+}
+
 async function fillTextByFieldMatch(
   page: Page,
   fieldMatch: RegExp,
@@ -696,6 +770,7 @@ export async function fillPseudoAnswers(page: Page): Promise<number> {
   ) {
     filled++;
   }
+  if (await fillExpectedCompensation(page)) filled++;
   await dismissModalOverlays(page);
   return filled;
 }

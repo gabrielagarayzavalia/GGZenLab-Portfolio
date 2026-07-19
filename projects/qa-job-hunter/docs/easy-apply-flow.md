@@ -55,7 +55,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Sin Easy Apply (y no closed/applied) → **sigue pendiente** → siguiente.
 - Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
 - Si hay Easy Apply y **no entra al modal** → **STOP** de toda la corrida (exit 2); no seguir al siguiente.
-- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina** (`fill-answers.ts`).
+- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración pretendida bruta → **2750** (USD/dólares) o **3500000** (pesos/ARS) (`fill-answers.ts`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**
   - **Dry-run (prueba):** → **Discard** y **salir** (cerrar sin guardar ni enviar).

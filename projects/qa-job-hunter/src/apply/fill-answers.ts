@@ -12,6 +12,8 @@ import {
   resolveApplicationSummary,
   resolveCoverLetterPdfPath,
   RESUME_FILE_MATCH,
+  scoreResumeForRole,
+  type ApplyRoleKind,
 } from "./canonical-text.js";
 
 export interface CapturedField {
@@ -1359,35 +1361,57 @@ async function radioCardText(radio: Locator): Promise<string> {
   return `${aria} ${near}`.replace(/\s+/g, " ").trim();
 }
 
-async function clickResumeRadioMatching(
+/** Elige el radio con mejor score para el rol (nunca cover/intro-GGZ). */
+async function clickBestResumeRadio(
   root: Locator,
-  wantRe: RegExp,
-  kind: string
+  kind: ApplyRoleKind
 ): Promise<boolean> {
-  // Radios del modal: elegir por texto de la card (UI LinkedIn rediseñada)
   const radios = root.locator("input[type='radio']");
   const rn = await radios.count().catch(() => 0);
+  let bestIdx = -1;
+  let bestScore = 0;
+  let bestBlob = "";
+
   for (let i = 0; i < rn; i++) {
     const radio = radios.nth(i);
     if (!(await radio.isVisible().catch(() => false))) continue;
     const blob = await radioCardText(radio);
     if (!/\.pdf/i.test(blob) && !/resume|curr[ií]culum|cv\b/i.test(blob)) continue;
     if (COVER_AS_RESUME_RE.test(blob)) continue;
-    if (!wantRe.test(blob)) continue;
-    await radio.scrollIntoViewIfNeeded().catch(() => {});
-    await radio.check({ force: true }).catch(async () => {
-      await radio.click({ force: true, timeout: 4000 });
-    });
-    console.log(`   ↳ Resume: click radio ${kind} → ${blob.slice(0, 90)}`);
-    await sleep(500);
-    return true;
+    const score = scoreResumeForRole(blob, kind);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+      bestBlob = blob;
+    }
   }
 
-  // Click en filename visible → radio en el ancestor
+  if (bestIdx < 0 || bestScore < 30) return false;
+
+  const radio = radios.nth(bestIdx);
+  await radio.scrollIntoViewIfNeeded().catch(() => {});
+  await radio.check({ force: true }).catch(async () => {
+    await radio.click({ force: true, timeout: 4000 });
+  });
+  console.log(
+    `   ↳ Resume: mejor match ${kind} (score=${bestScore}) → ${bestBlob.slice(0, 90)}`
+  );
+  await sleep(500);
+  return true;
+}
+
+async function clickResumeRadioMatching(
+  root: Locator,
+  wantRe: RegExp,
+  kind: ApplyRoleKind
+): Promise<boolean> {
+  // Preferir scoring (mejor concordancia entre varios CVs)
+  if (await clickBestResumeRadio(root, kind)) return true;
+
   const nameHit = root.getByText(wantRe).first();
   if (await nameHit.isVisible({ timeout: 1000 }).catch(() => false)) {
     const text = ((await nameHit.innerText().catch(() => "")) ?? "").trim();
-    if (!COVER_AS_RESUME_RE.test(text)) {
+    if (!COVER_AS_RESUME_RE.test(text) && scoreResumeForRole(text, kind) >= 30) {
       await nameHit.click({ force: true, timeout: 4000 }).catch(() => {});
       const parentRadio = nameHit
         .locator("xpath=ancestor::*[.//input[@type='radio']][1]//input[@type='radio']")
@@ -1438,7 +1462,8 @@ export async function selectResumeForRole(
 
   const selectedBlob = await selectedResumeLabel(root);
   const coverSelected = COVER_AS_RESUME_RE.test(selectedBlob);
-  const alreadyOk = wantRe.test(selectedBlob) && !coverSelected;
+  const alreadyOk =
+    scoreResumeForRole(selectedBlob, kind) >= 70 && !coverSelected;
 
   if (alreadyOk) {
     console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — no es cover letter`);
@@ -1455,22 +1480,37 @@ export async function selectResumeForRole(
     );
   }
 
-  // CV ya visible (Stefanini: Automation al lado de intro-GGZ) → click antes de Show more
-  if (await clickResumeRadioMatching(root, wantRe, kind)) {
+  const resumeOk = async () => {
     const after = await selectedResumeLabel(root);
-    if (wantRe.test(after) && !COVER_AS_RESUME_RE.test(after)) return true;
-  }
+    return (
+      scoreResumeForRole(after, kind) >= 70 && !COVER_AS_RESUME_RE.test(after)
+    );
+  };
 
-  await clickShowMoreResumes(root);
-  if (await clickResumeRadioMatching(root, wantRe, kind)) {
-    const after = await selectedResumeLabel(root);
-    if (wantRe.test(after) && !COVER_AS_RESUME_RE.test(after)) return true;
-  }
-
-  await clickShowMoreResumes(root);
-  if (await clickResumeRadioMatching(root, wantRe, kind)) {
-    const after = await selectedResumeLabel(root);
-    if (wantRe.test(after) && !COVER_AS_RESUME_RE.test(after)) return true;
+  // Analyst: el CV suele estar oculto → Siempre "Show N more" primero, luego mejor match
+  if (kind === "analyst") {
+    console.log("   ↳ Resume: puesto Analyst → Show more + mejor CV Analyst");
+    await clickShowMoreResumes(root);
+    if (await clickResumeRadioMatching(root, wantRe, kind)) {
+      if (await resumeOk()) return true;
+    }
+    await clickShowMoreResumes(root);
+    if (await clickResumeRadioMatching(root, wantRe, kind)) {
+      if (await resumeOk()) return true;
+    }
+  } else {
+    // Automation: si ya está visible, click; si no, Show more
+    if (await clickResumeRadioMatching(root, wantRe, kind)) {
+      if (await resumeOk()) return true;
+    }
+    await clickShowMoreResumes(root);
+    if (await clickResumeRadioMatching(root, wantRe, kind)) {
+      if (await resumeOk()) return true;
+    }
+    await clickShowMoreResumes(root);
+    if (await clickResumeRadioMatching(root, wantRe, kind)) {
+      if (await resumeOk()) return true;
+    }
   }
 
   if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(root))) {

@@ -5,12 +5,35 @@
 export const RESUME_LABEL_HINT =
   "Show more / See more si hace falta; radio QA_Analyst vs QA_Automation según el puesto.";
 
+export type ApplyRoleKind = "analyst" | "automation";
+
 /** Nombre de archivo (regex) del CV según rol. */
 export const RESUME_FILE_MATCH = {
-  analyst: /QA_Analyst|QA[\s_-]*Analyst|Analyst\.pdf/i,
+  analyst: /QA_Analyst|QA[\s_-]*Analyst|Zavalia_QA_Analyst/i,
   /** Incluye CV_Gabriela_Garay_Zavalia_QA_Automation.pdf */
   automation: /QA_Automation|QA[\s_-]*Automation|Zavalia_QA_Automation|Automation\.pdf/i,
 } as const;
+
+/** Score 0–100: qué tan bien matchea un filename/card al rol. */
+export function scoreResumeForRole(blob: string, kind: ApplyRoleKind): number {
+  const t = blob.replace(/\s+/g, " ");
+  if (/intro-GGZ|intro\s*letter|cover\s*letter/i.test(t)) return 0;
+  if (kind === "automation") {
+    if (/QA_Automation/i.test(t)) return 100;
+    if (/QA[\s_-]*Automation/i.test(t)) return 90;
+    if (/Zavalia_QA_Automation|Automation\.pdf/i.test(t)) return 80;
+    if (/automation/i.test(t) && /\.pdf/i.test(t)) return 50;
+    return 0;
+  }
+  // analyst: excluir Automation salvo que también diga Analyst
+  if (/Automation/i.test(t) && !/Analyst/i.test(t)) return 0;
+  if (/QA_Analyst/i.test(t)) return 100;
+  if (/QA[\s_-]*Analyst/i.test(t)) return 90;
+  if (/Zavalia_QA_Analyst/i.test(t)) return 85;
+  if (/\bAnalyst\b/i.test(t) && /\.pdf/i.test(t)) return 70;
+  if (/QA|Quality/i.test(t) && /\.pdf/i.test(t) && !/Automation/i.test(t)) return 30;
+  return 0;
+}
 
 /** Cover letter: archivo a subir (upload). Override con COVER_LETTER_PDF. */
 export const COVER_LETTER_PDF_DEFAULT =
@@ -51,8 +74,6 @@ export const APPLICATION_SUMMARY_AUTOMATION =
 
 /** @deprecated usar resolveApplicationSummary(title) */
 export const APPLICATION_SUMMARY = APPLICATION_SUMMARY_ANALYST;
-
-export type ApplyRoleKind = "analyst" | "automation";
 
 /** Detecta si el aviso es Automation-first o Analyst. */
 export function detectApplyRoleKind(title: string, company = ""): ApplyRoleKind {

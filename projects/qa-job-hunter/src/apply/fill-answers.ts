@@ -34,6 +34,14 @@ export const PSEUDO_ANSWERS = {
     fieldMatch: /^country$|country\*|pa[ií]s/i,
     selectText: /Argentina/i,
   },
+  linkedinProfile: {
+    fieldMatch: /linkedin\s*profile|perfil\s*de\s*linkedin|linkedin\s*url/i,
+    value: "https://www.linkedin.com/in/gabriela-garayzavalia",
+  },
+  portfolio: {
+    fieldMatch: /portfolio\s*link|portfolio|portafolio|personal\s*website|github\.io/i,
+    value: "https://gabrielagarayzavalia.github.io/linkedin-bug-report/",
+  },
 } as const;
 
 const EMPTY_SELECT_RE = /select an option|seleccion(a|á)|choose|elegí|elegir/i;
@@ -354,11 +362,62 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
   return false;
 }
 
+async function fillTextByFieldMatch(
+  page: Page,
+  fieldMatch: RegExp,
+  value: string,
+  logName: string
+): Promise<boolean> {
+  const root = scopeRoot(page);
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
+    const blob = `${label} ${aria} ${ph}`;
+    if (!fieldMatch.test(blob)) continue;
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (current === value || current.includes("gabriela-garayzavalia")) {
+      return true;
+    }
+    await el.fill(value);
+    console.log(`   ↳ ${logName}: ${value}`);
+    await sleep(300);
+    return true;
+  }
+  return false;
+}
+
 /** Aplica pseudo-respuestas conocidas en el paso actual. */
 export async function fillPseudoAnswers(page: Page): Promise<number> {
   let filled = 0;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
+  if (
+    await fillTextByFieldMatch(
+      page,
+      PSEUDO_ANSWERS.linkedinProfile.fieldMatch,
+      PSEUDO_ANSWERS.linkedinProfile.value,
+      "LinkedIn Profile"
+    )
+  ) {
+    filled++;
+  }
+  if (
+    await fillTextByFieldMatch(
+      page,
+      PSEUDO_ANSWERS.portfolio.fieldMatch,
+      PSEUDO_ANSWERS.portfolio.value,
+      "Portfolio"
+    )
+  ) {
+    filled++;
+  }
   await dismissModalOverlays(page);
   return filled;
 }

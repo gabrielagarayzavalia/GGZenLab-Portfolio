@@ -11,7 +11,10 @@
       "when": "Location/City o hint comuna 9",
       "type": "Liniers",
       "selectSuggestion": true
-    }
+    },
+    "country": "Argentina",
+    "linkedinProfile": "https://www.linkedin.com/in/gabriela-garayzavalia",
+    "portfolio": "https://gabrielagarayzavalia.github.io/linkedin-bug-report/"
   },
   "yesNoDefaults": {
     "workAuthorization": true,

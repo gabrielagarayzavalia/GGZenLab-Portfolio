@@ -170,8 +170,10 @@ async function maybeFillOptionalTexts(page: Page): Promise<void> {
     const area = areas.nth(i);
     if (!(await area.isVisible().catch(() => false))) continue;
     const current = (await area.inputValue().catch(() => "")).trim();
-    if (current) continue;
     const label = ((await area.getAttribute("aria-label")) ?? "").toLowerCase();
+    const isCoverSummary = /cover\s*letter|carta|summary|resumen|message|mensaje/i.test(label);
+    // Cover/summary: pisar con nuestros textos. Resto: solo si vacío.
+    if (!isCoverSummary && current) continue;
     const text = /summary|resumen|message|mensaje/i.test(label)
       ? APPLICATION_SUMMARY
       : COVER_LETTER_DEFAULT;
@@ -180,10 +182,9 @@ async function maybeFillOptionalTexts(page: Page): Promise<void> {
 }
 
 async function maybeAnswerYesNo(page: Page): Promise<void> {
-  const yes = page.getByText(/^Yes$|^Sí$/i).first();
-  if (await yes.isVisible({ timeout: 800 }).catch(() => false)) {
-    await yes.click();
-  }
+  // Skills Sí/No según MY_SKILLS (vía fillPseudoAnswers / answerSkillYesNoQuestions).
+  // No clickear Yes genérico a ciegas: puede marcar mal una skill ausente.
+  void page;
 }
 
 /** Capturas de debug del dry-run → output/apply/screenshots/ */

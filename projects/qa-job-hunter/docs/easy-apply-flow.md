@@ -55,7 +55,10 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Sin Easy Apply (y no closed/applied) → **sigue pendiente** → siguiente.
 - Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
 - Si hay Easy Apply y **no entra al modal** → **STOP** de toda la corrida (exit 2); no seguir al siguiente.
-- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración pretendida bruta → **2750** (USD/dólares) o **3500000** (pesos/ARS) (`fill-answers.ts`).
+- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
+- **Prefill:** si el campo ya trae respuesta, **no pisar** — excepto **cover letter** y **summary** (siempre nuestros textos).
+- **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` (lista del perfil) → **Yes/Sí**; si no → **No**.
+- Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**
   - **Dry-run (prueba):** → **Discard** y **salir** (cerrar sin guardar ni enviar).

@@ -6,6 +6,7 @@ import path from "path";
 import type { Locator, Page } from "playwright";
 import { APPLY_DIR, ensureDirs } from "./paths.js";
 import { dismissModalOverlays, easyApplyModalRoot } from "./modal-controls.js";
+import { resolveSkillYesNo } from "./my-skills.js";
 
 export interface CapturedField {
   label: string;
@@ -64,10 +65,48 @@ export const PSEUDO_ANSWERS = {
     /** Sin moneda explícita → ARS (contexto AR). */
     defaultCurrency: "ARS",
   },
+  startAvailability: {
+    fieldMatch:
+      /when can you (start|begin)|available to start|earliest (start|availability)|start date|fecha de (inicio|ingreso)|cu[aá]ndo (pod[eé]s?|puede) (empezar|comenzar|iniciar)|disponib(ilidad|le) para (empezar|comenzar)|notice period/i,
+    en: "Immediately",
+    es: "Inmediatamente",
+  },
+  workOrLiveCityFreeText: {
+    fieldMatch:
+      /where (would you like to work|do you (live|want to work)|are you (based|located))|preferred (work )?location|work location|based in|d[oó]nde (viv|te gustar[ií]a trabajar|prefer[ií]s trabajar)|ciudad (de residencia|donde)|lugar de (trabajo|residencia)/i,
+    en: "Buenos Aires city",
+    es: "Ciudad Autonoma de Buenos Aires",
+  },
+  citySelect: {
+    fieldMatch: /^(city|ciudad)\s*\*?$/i,
+    optionMatch: /Buenos Aires/i,
+  },
 } as const;
 
 const EMPTY_SELECT_RE = /select an option|seleccion(a|á)|choose|elegí|elegir/i;
 const PLEASE_SELECT_RE = /please make a selection|hac[eé] una selecci[oó]n|seleccion(a|á) una opci[oó]n/i;
+
+/** Cover letter / summary: sí se pisan. Resto: respetar respuesta ya cargada. */
+export function isCoverOrSummaryLabel(blob: string): boolean {
+  return /cover\s*letter|carta\s*de\s*presentaci[oó]n|summary|resumen(\s*profesional)?|\bmessage\b|\bmensaje\b/i.test(
+    blob
+  );
+}
+
+/** ¿Ya hay respuesta usable? (no placeholder de select vacío). */
+export function hasPrefillValue(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (EMPTY_SELECT_RE.test(v)) return false;
+  if (v === "0") return false;
+  return true;
+}
+
+function prefersSpanish(blob: string): boolean {
+  return /[áéíóúñ¿¡]|\b(d[oó]nde|cu[aá]ndo|ciudad|disponib|empezar|viv[ií]|gustar[ií]a|pretendid|salario|pa[ií]s)\b/i.test(
+    blob
+  );
+}
 
 export class RequiredFieldsBlockedError extends Error {
   constructor(
@@ -633,12 +672,37 @@ export async function fillLocationLiniers(page: Page): Promise<boolean> {
 
   if (!fieldMatch.test(blob) && !hintMatch.test(blob)) return false;
 
-  // Solo OK si ya quedó el GEO completo (Liniers + Comuna 9 o con coma)
-  if (locationValueOk(val)) {
+  // Respuesta ya cargada → no pisar (salvo GEO incompleto tipo "Liniers" sin Comuna)
+  if (hasPrefillValue(val)) {
+    if (locationValueOk(val)) return true;
+    // Prefill parcial LinkedIn: intentar completar dropdown; si no, dejar lo que hay
+    const completed = await typeaheadWithDropdownRetries(
+      page,
+      input,
+      typeText,
+      "Location",
+      locationValueOk,
+      3
+    );
+    if (completed) return true;
+    console.log(`   ↳ Location: dejo prefill existente ("${val.slice(0, 60)}")`);
     return true;
   }
 
-  return typeaheadWithDropdownRetries(page, input, typeText, "Location", locationValueOk, 3);
+  const ok = await typeaheadWithDropdownRetries(page, input, typeText, "Location", locationValueOk, 3);
+  if (ok) return true;
+
+  // Sin dropdown: texto libre CABA / Buenos Aires city
+  const free = prefersSpanish(blob)
+    ? PSEUDO_ANSWERS.workOrLiveCityFreeText.es
+    : PSEUDO_ANSWERS.workOrLiveCityFreeText.en;
+  console.log(`   ↳ Location: sin lista predictiva → texto libre "${free}"`);
+  return fillInputWithWaits(page, input, free, {
+    logName: "Location (texto libre)",
+    maxAttempts: 2,
+    expectTypeahead: false,
+    valueOk: (v) => hasPrefillValue(v),
+  });
 }
 
 export type MandatoryRecoverResult = "ok" | "failed_close";
@@ -659,11 +723,11 @@ export async function recoverMandatoryTypeaheadOrClose(
 
   console.log("   ⚠ Campo mandatorio / typeahead — recover (máx. 3 intentos)…");
   const ok = await fillLocationLiniers(page);
-  // Si Location ya tiene GEO válido, no cerrar por ruido de otros labels ("required" en UI).
+  // Si Location ya tiene GEO válido o prefill, no cerrar.
   const loc = await findLocationInput(page);
   const locVal = loc ? ((await loc.inputValue().catch(() => "")) ?? "").trim() : "";
-  if (ok || locationValueOk(locVal)) {
-    console.log("   ✓ Recover typeahead OK (Location válido)");
+  if (ok || locationValueOk(locVal) || hasPrefillValue(locVal)) {
+    console.log("   ✓ Recover typeahead OK (Location válido o prefill)");
     return "ok";
   }
 
@@ -706,7 +770,11 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
     if (/phone|tel[eé]fono|c[oó]digo/i.test(label)) continue;
     if (!fieldMatch.test(label) && !/^(country|pa[ií]s)\b/i.test(label)) continue;
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
-    if (val && !EMPTY_SELECT_RE.test(val) && selectText.test(val)) return true;
+    // Prefill válido → no pisar
+    if (hasPrefillValue(val) && !EMPTY_SELECT_RE.test(val)) {
+      console.log(`   ↳ Country: dejo prefill ("${val.slice(0, 40)}")`);
+      return true;
+    }
     const opt = el.locator("option").filter({ hasText: selectText }).first();
     await opt.waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
     if (await opt.count().catch(() => 0)) {
@@ -812,9 +880,9 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     if (!fieldMatch.test(blob)) continue;
 
     const { value, currency } = resolveCompensationValue(blob);
-    const current = ((await el.inputValue().catch(() => "")) ?? "").trim().replace(/[,\s.]/g, "");
-    const normalizedTarget = value.replace(/[,\s.]/g, "");
-    if (current === normalizedTarget || current === value) {
+    const raw = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(raw)) {
+      console.log(`   ↳ Remuneración: dejo prefill ("${raw.slice(0, 40)}")`);
       filled = true;
       continue;
     }
@@ -855,10 +923,11 @@ async function fillTextByFieldMatch(
     const blob = `${label} ${aria} ${ph}`;
     if (!fieldMatch.test(blob)) continue;
     const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
-    if (current === value || current.includes("gabriela-garayzavalia")) {
+    // Prefill (excepto cover/summary que se pisan en otro path)
+    if (hasPrefillValue(current) && !isCoverOrSummaryLabel(blob)) {
+      console.log(`   ↳ ${logName}: dejo prefill ("${current.slice(0, 50)}")`);
       return true;
     }
-    // URLs / textos: waitFor + reintento; si hay lista predictiva, esperar y Escape
     const ok = await fillInputWithWaits(page, el, value, {
       logName,
       maxAttempts: 3,
@@ -875,11 +944,230 @@ async function fillTextByFieldMatch(
   return false;
 }
 
+/** Cuándo empezar → Immediately / Inmediatamente (solo si vacío). */
+export async function fillStartAvailability(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, en, es } = PSEUDO_ANSWERS.startAvailability;
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
+    const blob = `${label} ${aria} ${ph}`;
+    if (!fieldMatch.test(blob)) continue;
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(current)) {
+      console.log(`   ↳ Start availability: dejo prefill ("${current.slice(0, 40)}")`);
+      return true;
+    }
+    const value = prefersSpanish(blob) ? es : en;
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName: "Start availability",
+      maxAttempts: 2,
+    });
+    if (ok) console.log(`   ↳ Start availability: ${value}`);
+    return ok;
+  }
+  return false;
+}
+
+/** Dónde vivís / trabajar — texto libre sin dropdown (solo si vacío). */
+export async function fillWorkOrLiveCityFreeText(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, en, es } = PSEUDO_ANSWERS.workOrLiveCityFreeText;
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']), textarea"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
+    const blob = `${label} ${aria} ${ph}`;
+    if (!fieldMatch.test(blob)) continue;
+    // No pisar el Location (city) typeahead de LinkedIn (va por fillLocationLiniers)
+    if (PSEUDO_ANSWERS.locationCity.fieldMatch.test(blob) && /location\s*\(city\)/i.test(blob)) {
+      continue;
+    }
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(current)) {
+      console.log(`   ↳ Work/live city: dejo prefill ("${current.slice(0, 50)}")`);
+      return true;
+    }
+    const value = prefersSpanish(blob) ? es : en;
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName: "Work/live city",
+      maxAttempts: 2,
+      expectTypeahead: false,
+    });
+    if (ok) console.log(`   ↳ Work/live city: ${value}`);
+    return ok;
+  }
+  return false;
+}
+
+/** City <select> → Buenos Aires si vacío. */
+export async function fillCitySelect(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, optionMatch } = PSEUDO_ANSWERS.citySelect;
+  const selects = root.locator("select");
+  const n = await selects.count();
+  for (let i = 0; i < n; i++) {
+    const el = selects.nth(i);
+    if (!(await waitForControlReady(el, 3000))) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    if (!fieldMatch.test(label)) continue;
+    const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(val)) {
+      console.log(`   ↳ City select: dejo prefill ("${val.slice(0, 40)}")`);
+      return true;
+    }
+    const opt = el.locator("option").filter({ hasText: optionMatch }).first();
+    await opt.waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+    if (!(await opt.count().catch(() => 0))) continue;
+    const v = await opt.getAttribute("value");
+    if (v != null) await el.selectOption(v);
+    else await el.selectOption({ label: /Buenos Aires/i }).catch(() => {});
+    console.log("   ↳ City select: Buenos Aires");
+    await sleep(300);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Preguntas Sí/No de skills: si está en MY_SKILLS → Yes/Sí; si no → No.
+ * Respeta prefill si ya hay radio seleccionado.
+ */
+export async function answerSkillYesNoQuestions(page: Page): Promise<number> {
+  const root = scopeRoot(page);
+  if (!(await root.isVisible({ timeout: 1000 }).catch(() => false))) return 0;
+
+  let answered = 0;
+  const blocks = root.locator(
+    "fieldset, .fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], li.jobs-easy-apply-form-section__grouping"
+  );
+  const n = await blocks.count().catch(() => 0);
+
+  for (let i = 0; i < Math.min(n, 40); i++) {
+    const block = blocks.nth(i);
+    if (!(await block.isVisible().catch(() => false))) continue;
+    const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (blob.length < 6 || blob.length > 400) continue;
+
+    const resolved = resolveSkillYesNo(blob);
+    if (!resolved) continue;
+
+    const wantYes = resolved.answerYes;
+    const yesRe = /^(Yes|Sí|Si)$/i;
+    const noRe = /^(No)$/i;
+
+    // ¿Ya hay selección?
+    const checked = block.locator("input[type='radio']:checked, input[type='checkbox']:checked");
+    if ((await checked.count().catch(() => 0)) > 0) {
+      console.log(`   ↳ Skill ${resolved.skill}: dejo prefill`);
+      continue;
+    }
+
+    const radios = block.locator("input[type='radio'], input[type='checkbox']");
+    const rc = await radios.count().catch(() => 0);
+    let clicked = false;
+
+    for (let r = 0; r < rc; r++) {
+      const radio = radios.nth(r);
+      const id = (await radio.getAttribute("id").catch(() => "")) ?? "";
+      const val = ((await radio.getAttribute("value")) ?? "").trim();
+      let lab = "";
+      if (id) {
+        lab = ((await block.locator(`label[for="${id}"]`).first().innerText().catch(() => "")) ?? "").trim();
+      }
+      if (!lab) {
+        lab = ((await radio.evaluate((node) => {
+          const wrap = node.closest("label") ?? node.parentElement;
+          return (wrap?.textContent ?? "").trim();
+        }).catch(() => "")) ?? "").trim();
+      }
+      const token = `${val} ${lab}`.trim();
+      const isYes = yesRe.test(val) || yesRe.test(lab) || /^yes|sí|si$/i.test(token);
+      const isNo = noRe.test(val) || noRe.test(lab) || /^no$/i.test(token);
+      if (wantYes && isYes) {
+        await radio.check({ force: true }).catch(async () => {
+          await radio.click({ force: true, timeout: 2000 });
+        });
+        clicked = true;
+        break;
+      }
+      if (!wantYes && isNo) {
+        await radio.check({ force: true }).catch(async () => {
+          await radio.click({ force: true, timeout: 2000 });
+        });
+        clicked = true;
+        break;
+      }
+    }
+
+    // Fallback: botones / labels clickables Yes|No
+    if (!clicked) {
+      const target = block
+        .getByRole("radio", { name: wantYes ? yesRe : noRe })
+        .or(block.getByText(wantYes ? yesRe : noRe))
+        .first();
+      if (await target.isVisible({ timeout: 600 }).catch(() => false)) {
+        await target.click({ force: true, timeout: 2000 }).catch(() => {});
+        clicked = true;
+      }
+    }
+
+    // Select Yes/No
+    if (!clicked) {
+      const sel = block.locator("select").first();
+      if (await sel.isVisible({ timeout: 400 }).catch(() => false)) {
+        const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
+        if (hasPrefillValue(cur)) {
+          console.log(`   ↳ Skill ${resolved.skill}: dejo prefill select`);
+          continue;
+        }
+        const opt = sel
+          .locator("option")
+          .filter({ hasText: wantYes ? yesRe : noRe })
+          .first();
+        if (await opt.count().catch(() => 0)) {
+          const v = await opt.getAttribute("value");
+          if (v != null) await sel.selectOption(v);
+          else await sel.selectOption({ label: wantYes ? /Yes|Sí/i : /^No$/i });
+          clicked = true;
+        }
+      }
+    }
+
+    if (clicked) {
+      console.log(
+        `   ↳ Skill "${resolved.skill}": ${wantYes ? "Yes/Sí" : "No"} (lista MY_SKILLS)`
+      );
+      answered++;
+      await sleep(200);
+    }
+  }
+
+  return answered;
+}
+
 /** Aplica pseudo-respuestas conocidas en el paso actual. */
 export async function fillPseudoAnswers(page: Page): Promise<number> {
   let filled = 0;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
+  if (await fillCitySelect(page)) filled++;
+  if (await fillWorkOrLiveCityFreeText(page)) filled++;
+  if (await fillStartAvailability(page)) filled++;
+  filled += await answerSkillYesNoQuestions(page);
   if (
     await fillTextByFieldMatch(
       page,

@@ -41,7 +41,13 @@ import {
   hasBlockingEmptyFields,
   hasMandatoryFieldError,
   recoverMandatoryTypeaheadOrClose,
+  isCoverOrSummaryLabel,
+  hasPrefillValue,
 } from "./apply/fill-answers.js";
+import {
+  APPLICATION_SUMMARY,
+  COVER_LETTER_DEFAULT,
+} from "./apply/canonical-text.js";
 import {
   MAXIMIZED_LAUNCH_ARGS,
   maximizeWindow,
@@ -414,7 +420,21 @@ async function tryEasyApply(
         for (let t = 0; t < count; t++) {
           const area = areas.nth(t);
           const current = (await area.inputValue().catch(() => "")).trim();
-          if (!current) await area.fill(letter);
+          const aria = ((await area.getAttribute("aria-label")) ?? "").trim();
+          const labelBlob = `${aria} ${(await area.evaluate((n) => {
+            const wrap =
+              n.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
+              n.parentElement;
+            const lab = wrap?.querySelector("label, legend, span[class*='label']");
+            return (lab?.textContent ?? "").trim();
+          }).catch(() => ""))}`;
+          // Cover/summary: siempre nuestros textos. Otros: respetar prefill.
+          if (isCoverOrSummaryLabel(labelBlob)) {
+            const text = /summary|resumen/i.test(labelBlob) ? APPLICATION_SUMMARY : letter || COVER_LETTER_DEFAULT;
+            await area.fill(text);
+            continue;
+          }
+          if (!hasPrefillValue(current)) await area.fill(letter);
         }
         await sleep(800);
         if (

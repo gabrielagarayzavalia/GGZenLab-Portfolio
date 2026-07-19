@@ -154,10 +154,11 @@ async function tryEasyApply(
         .locator(".jobs-easy-apply-modal input[required]:not([value]), [role='dialog'] input[required]")
         .count();
 
-      const bodyText =
-        modal === page
-          ? await page.locator("main").innerText().catch(() => "")
-          : await modal.innerText().catch(() => "");
+      const bodyText = await page
+        .locator(".jobs-easy-apply-modal, [role='dialog'], main")
+        .first()
+        .innerText()
+        .catch(() => "");
 
       if (/assessment|evaluaci[oó]n|quiz|test/i.test(bodyText)) {
         record.status = "blocked";

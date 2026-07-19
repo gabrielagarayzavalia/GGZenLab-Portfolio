@@ -3,7 +3,15 @@
   "valueRefs": {
     "summary": "APPLICATION_SUMMARY from canonical-text.ts",
     "coverLetter": "COVER_LETTER_DEFAULT from canonical-text.ts",
-    "resumeChoice": "generic QA / most recent LinkedIn resume"
+    "resumeChoice": "generic QA / most recent LinkedIn resume",
+    "locationCity": "PSEUDO_ANSWERS.locationCity in fill-answers.ts — tipar Liniers si comuna 9"
+  },
+  "pseudoHardcoded": {
+    "locationCity": {
+      "when": "Location/City o hint comuna 9",
+      "type": "Liniers",
+      "selectSuggestion": true
+    }
   },
   "yesNoDefaults": {
     "workAuthorization": true,

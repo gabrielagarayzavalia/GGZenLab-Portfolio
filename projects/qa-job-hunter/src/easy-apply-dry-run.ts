@@ -8,8 +8,9 @@
 // - Sin Easy Apply → Excel sigue pendiente → siguiente
 // - Con Easy Apply → dry-run hasta Submit → Excel pendiente
 // - Easy Apply visible y modal no abre → STOP (exit 2)
+// - Next bloqueado por required → captura campos, cierra sesión (exit 3)
 
-import { chromium, type Page } from "playwright";
+import { chromium, type Browser, type Locator, type Page } from "playwright";
 import {
   APPLICATION_SUMMARY,
   COVER_LETTER_DEFAULT,
@@ -19,6 +20,14 @@ import {
   detectPageApplySignal,
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
+import {
+  captureRequiredFields,
+  fillPseudoAnswers,
+  isNextDisabled,
+  logCapturedFields,
+  RequiredFieldsBlockedError,
+  saveRequiredFieldsDump,
+} from "./apply/fill-answers.js";
 import {
   clickButtonOrLink,
   cssPrimaryActions,
@@ -86,8 +95,64 @@ async function maybeAnswerYesNo(page: Page): Promise<void> {
   }
 }
 
-async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete" | "no_modal"> {
-  // Modal clásico (dialog) o flujo SDUI en /apply/
+async function stopForRequiredFields(
+  page: Page,
+  jobId: string,
+  url: string
+): Promise<never> {
+  const fields = await captureRequiredFields(page);
+  const dumpPath = saveRequiredFieldsDump(jobId, url, fields);
+  logCapturedFields(fields);
+  console.error(`   Dump → ${dumpPath}`);
+  console.error("   Completá opciones en src/apply/fill-answers.ts (PSEUDO_ANSWERS) y reintentá.");
+  updateQueueRow(jobId, {
+    status: "pendiente",
+    easyApply: "yes",
+    reason: `STOP: required fields (${fields.length}) — ver required-fields-${jobId}.json`,
+  });
+  throw new RequiredFieldsBlockedError(jobId, url, fields, dumpPath);
+}
+
+async function tryAdvanceNext(
+  page: Page,
+  scope: Page | Locator
+): Promise<"advanced" | "blocked" | "no_next"> {
+  if (await isNextDisabled(page)) return "blocked";
+
+  const beforeUrl = page.url();
+  const advanced =
+    (await clickButtonOrLink(scope, MODAL_LABELS.review, 600, page)) ||
+    (await clickButtonOrLink(scope, MODAL_LABELS.continue, 800, page)) ||
+    (await clickButtonOrLink(scope, MODAL_LABELS.next, 500, page));
+
+  if (!advanced) {
+    const cssNext = cssPrimaryActions(scope);
+    if (await cssNext.isVisible({ timeout: 400 }).catch(() => false)) {
+      await page.keyboard.press("Escape").catch(() => {});
+      await sleep(200);
+      const ok =
+        (await cssNext.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
+        (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
+      if (!ok) return "blocked";
+    } else {
+      return "no_next";
+    }
+  }
+
+  await sleep(1200);
+  // Si Next sigue disabled o aparecen errores → bloqueado
+  if (await isNextDisabled(page)) return "blocked";
+  const fields = await captureRequiredFields(page);
+  const hasErrors = fields.some((f) => f.errorText);
+  if (hasErrors && page.url() === beforeUrl) return "blocked";
+  return "advanced";
+}
+
+async function dryRunThroughModal(
+  page: Page,
+  jobId: string,
+  jobUrl: string
+): Promise<"ok" | "incomplete" | "no_modal"> {
   const scope = await resolveApplyScope(page, 12000);
   if (!scope) {
     console.error("   ✗ Modal/flujo Easy Apply NO visible tras el click");
@@ -100,45 +165,31 @@ async function dryRunThroughModal(page: Page): Promise<"ok" | "incomplete" | "no
       : "   Modal Easy Apply abierto"
   );
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     await maybeFillOptionalTexts(page);
     await maybeAnswerYesNo(page);
+    const filled = await fillPseudoAnswers(page);
+    if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
 
-    // button o link (LinkedIn mezcla ambos)
     if (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) {
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return "ok";
     }
 
-    if (await clickButtonOrLink(scope, MODAL_LABELS.review, 800, page)) {
-      await sleep(1200);
-      continue;
-    }
+    const step = await tryAdvanceNext(page, scope);
+    if (step === "advanced") continue;
 
-    // Preferir Continue — Next solo dentro del scope (no carrusel del feed).
-    if (await clickButtonOrLink(scope, MODAL_LABELS.continue, 800, page)) {
-      await sleep(1200);
-      continue;
-    }
-    if (await clickButtonOrLink(scope, MODAL_LABELS.next, 500, page)) {
-      await sleep(1200);
-      continue;
-    }
-
-    const cssNext = cssPrimaryActions(scope);
-    if (await cssNext.isVisible({ timeout: 500 }).catch(() => false)) {
-      await page.keyboard.press("Escape").catch(() => {});
-      await sleep(200);
-      const ok =
-        (await cssNext.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
-        (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
-      if (ok) {
-        await sleep(1200);
-        continue;
+    if (step === "blocked" || step === "no_next") {
+      // Reintentar fill (ej. Location) y un Next más
+      await fillPseudoAnswers(page);
+      await sleep(500);
+      if (await isNextDisabled(page)) {
+        await stopForRequiredFields(page, jobId, jobUrl);
       }
+      const retry = await tryAdvanceNext(page, scope);
+      if (retry === "advanced") continue;
+      await stopForRequiredFields(page, jobId, jobUrl);
     }
-
-    break;
   }
   return "incomplete";
 }
@@ -216,7 +267,7 @@ async function processJob(
   }
   await sleep(2000);
 
-  const result = await dryRunThroughModal(page);
+  const result = await dryRunThroughModal(page, row.jobId, job.url);
   if (result === "no_modal") {
     updateQueueRow(row.jobId, {
       status: "pendiente",
@@ -262,13 +313,19 @@ async function main() {
   );
 
   const sessionPath = resolveSessionPath();
-  const browser = await chromium.launch({ headless: false, slowMo: 150 });
+  let browser: Browser | null = await chromium.launch({ headless: false, slowMo: 150 });
   const context = await browser.newContext({
     storageState: sessionPath,
     locale: "en-US",
     viewport: { width: 1280, height: 900 },
   });
   const page = await context.newPage();
+
+  const closeSession = async (why: string) => {
+    console.error(`\n🔒 Cerrando sesión Playwright (${why})…`);
+    await browser?.close().catch(() => {});
+    browser = null;
+  };
 
   let dryOk = 0;
   let enviada = 0;
@@ -277,45 +334,52 @@ async function main() {
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
   const seen = new Set<string>();
 
-  for (let n = 0; n < maxJobs; n++) {
-    const row = nextPending(true, seen);
-    if (!row) {
-      console.log("\nNo hay más pendiente distinto.");
-      break;
-    }
-    seen.add(row.jobId);
-
-    let outcome: Awaited<ReturnType<typeof processJob>>;
-    try {
-      outcome = await processJob(page, row);
-    } catch (err) {
-      if (err instanceof EasyApplyModalNotOpenedError) {
-        console.error(`\n🛑 ${err.message}`);
-        console.error("   Dry-run frenado a propósito. Revisá selectores / overlay LinkedIn.");
-        await browser.close().catch(() => {});
-        process.exit(2);
+  try {
+    for (let n = 0; n < maxJobs; n++) {
+      const row = nextPending(true, seen);
+      if (!row) {
+        console.log("\nNo hay más pendiente distinto.");
+        break;
       }
-      throw err;
+      seen.add(row.jobId);
+
+      let outcome: Awaited<ReturnType<typeof processJob>>;
+      try {
+        outcome = await processJob(page, row);
+      } catch (err) {
+        if (err instanceof EasyApplyModalNotOpenedError) {
+          console.error(`\n🛑 ${err.message}`);
+          await closeSession("modal no abrió");
+          process.exit(2);
+        }
+        if (err instanceof RequiredFieldsBlockedError) {
+          console.error(`\n🛑 ${err.message}`);
+          await closeSession("campos obligatorios — esperando tus opciones de relleno");
+          process.exit(3);
+        }
+        throw err;
+      }
+
+      if (outcome === "dry_ok") {
+        dryOk++;
+        if (process.env.DRY_RUN_ALL !== "1") break;
+      } else if (outcome === "enviada") enviada++;
+      else if (outcome === "cerrada") cerrada++;
+      else if (outcome === "skip_no_ea") skipNoEa++;
+
+      await sleep(1500 + Math.random() * 1000);
     }
-
-    if (outcome === "dry_ok") {
-      dryOk++;
-      if (process.env.DRY_RUN_ALL !== "1") break;
-    } else if (outcome === "enviada") enviada++;
-    else if (outcome === "cerrada") cerrada++;
-    else if (outcome === "skip_no_ea") skipNoEa++;
-
-    await sleep(1500 + Math.random() * 1000);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 
-  await browser.close();
   console.log(
     `\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
   );
   console.log(`Excel: ${APPLY_QUEUE_PATH}`);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(err);
   process.exit(1);
 });

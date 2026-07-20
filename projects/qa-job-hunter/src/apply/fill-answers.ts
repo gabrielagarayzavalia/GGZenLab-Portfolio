@@ -13,6 +13,11 @@ import {
 import { resolveSkillYesNo } from "./my-skills.js";
 import { resolveSkillYears } from "./skills-years.js";
 import {
+  optionsLookNumeric,
+  parseYearsOptionLabel,
+  pickBestYearsOption,
+} from "./years-option.js";
+import {
   detectApplyRoleKind,
   resolveApplicationSummary,
   resolveCoverLetterPdfPath,
@@ -66,10 +71,11 @@ export const PSEUDO_ANSWERS = {
   },
   hybridWorkOk: {
     fieldMatch:
-      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial)/i,
+      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial)|trabajo h[ií]brid|disponib.*h[ií]brid|h[ií]brida/i,
   },
   programmingScripting: {
-    fieldMatch: /programaci[oó]n y scripting|programming and scripting|experiencia en programaci[oó]n/i,
+    fieldMatch:
+      /programaci[oó]n y scripting|programming and scripting|experiencia en programaci[oó]n|conocimientos?\s+(de\s+)?(programaci[oó]n|scripting)|programming\s*\/\s*scripting/i,
   },
   linkedinProfile: {
     fieldMatch:
@@ -122,10 +128,12 @@ export const PSEUDO_ANSWERS = {
   },
   englishProficiency: {
     fieldMatch:
-      /english\s*(level|proficiency|skill)|nivel de ingl[eé]s|proficiency in english|idioma:?\s*ingl[eé]s/i,
+      /english\s*(level|proficiency|skill|years)|nivel\s*(de\s*)?ingl[eé]s|proficiency in english|idioma:?\s*ingl[eé]s|ingl[eé]s\s*(nivel|level|scale|escala)?|years?\s+(of\s+)?english|a[nñ]os?\s+(de\s+)?ingl[eé]s/i,
     freeText: "Advanced (C1)",
     selectMatch: /advanced|c1|professional|proficient|fluent|b2|upper.?intermediate/i,
     preferredSelect: /advanced|c1|professional/i,
+    /** Años reales de uso → en escala UI elegimos el máximo (suele ser 10+). */
+    numericYears: 50,
   },
   consentCheckbox: {
     fieldMatch:
@@ -134,7 +142,7 @@ export const PSEUDO_ANSWERS = {
   /** Años por skill (SQL/Python/…): sin mapa → pendiente (no enviar). */
   yearsOfExperience: {
     fieldMatch:
-      /years?\s+of\s+experience\s+(with|in|using)|a[nñ]os?\s+(de\s+)?experiencia\s+(con|en|usando)|how many years\s+(of\s+)?(experience\s+)?(with|in|using)|cu[aá]ntos a[nñ]os\s+(de\s+)?experiencia\s+(con|en)/i,
+      /years?\s+of\s+(work\s+)?experience\s+(with|in|using)|a[nñ]os?\s+(de\s+)?experiencia\s+(con|en|usando|como)|how many years\s+(of\s+)?(experience\s+)?(with|in|using)|cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia\s+(con|en)|experiencia\s+(con|en|usando)\s+\w+|years?\s+(with|in|using)\s+\w+/i,
   },
   /**
    * Años generales / dominio (ej. Administrative): 0–99.
@@ -1026,6 +1034,29 @@ async function clickYesNoInBlock(
     console.log(`   ↳ ${logLabel}: ${wantYes ? "Yes/Sí" : "No"} (role)`);
     return true;
   }
+
+  // Dropdown Sí/No (Capgemini/Macro y similares)
+  const sel = block.locator("select").first();
+  if (await sel.isVisible({ timeout: 400 }).catch(() => false)) {
+    const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(cur) && !EMPTY_SELECT_RE.test(cur)) {
+      console.log(`   ↳ ${logLabel}: dejo prefill select`);
+      return true;
+    }
+    const opt = sel
+      .locator("option")
+      .filter({ hasText: wantYes ? yesRe : noRe })
+      .first();
+    if (await opt.count().catch(() => 0)) {
+      const v = await opt.getAttribute("value");
+      const lab = ((await opt.innerText().catch(() => "")) ?? (wantYes ? "Yes" : "No")).trim();
+      if (v != null) await sel.selectOption(v);
+      else await sel.selectOption({ label: lab }).catch(() => {});
+      console.log(`   ↳ ${logLabel}: ${wantYes ? "Yes/Sí" : "No"} (select)`);
+      await sleep(250);
+      return true;
+    }
+  }
   return false;
 }
 
@@ -1532,21 +1563,15 @@ export async function fillStartAvailability(page: Page): Promise<boolean> {
 }
 
 /**
- * Años por skill (SQL/Python/Playwright/…): usa skills-years.ts.
+ * Años por skill (SQL/Python/Playwright/…): inputs + dropdowns numéricos.
  * Si no hay mapa → pendiente (no enviar).
  */
 export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
   const root = scopeRoot(page);
   const skillYearsRe = PSEUDO_ANSWERS.yearsOfExperience.fieldMatch;
-  const controls = root.locator(
-    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio'])"
-  );
-  const n = await controls.count();
   let filled = 0;
 
-  for (let i = 0; i < n; i++) {
-    const el = controls.nth(i);
-    if (!(await el.isVisible().catch(() => false))) continue;
+  async function blobFor(el: Locator): Promise<string> {
     const label = await fieldLabel(el);
     const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
     const id = ((await el.getAttribute("id")) ?? "").trim();
@@ -1559,12 +1584,30 @@ export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
         return (wrap?.textContent ?? "").trim().slice(0, 320);
       })
       .catch(() => "");
-    const blob = `${label} ${aria} ${id} ${near}`;
-    if (!skillYearsRe.test(blob) && !/years?\s+of\s+work\s+experience|a[nñ]os?\s+de\s+experiencia\s+(con|en|usando)/i.test(blob)) {
-      continue;
-    }
-    // Administrative / genérico → fillYearsNumericGeneral
-    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) continue;
+    return `${label} ${aria} ${id} ${near}`;
+  }
+
+  function matchesYearsQuestion(blob: string): boolean {
+    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) return false;
+    if (PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob)) return false;
+    return (
+      skillYearsRe.test(blob) ||
+      /years?\s+of\s+work\s+experience|a[nñ]os?\s+de\s+experiencia\s+(con|en|usando|como)|experiencia\s+(en|con)\s+(qa|automat|javascript|js|cypress|playwright|selenium|postman)/i.test(
+        blob
+      )
+    );
+  }
+
+  // 1) Inputs numéricos
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio'])"
+  );
+  const n = await controls.count();
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const blob = await blobFor(el);
+    if (!matchesYearsQuestion(blob)) continue;
 
     const hit = resolveSkillYears(blob);
     if (!hit) continue;
@@ -1588,6 +1631,46 @@ export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
       filled++;
     }
   }
+
+  // 2) <select> con opciones 0–10 / 10+ / rangos
+  const selects = root.locator("select");
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await waitForControlReady(el, 2000))) continue;
+    const blob = await blobFor(el);
+    if (!matchesYearsQuestion(blob)) continue;
+
+    const hit = resolveSkillYears(blob);
+    if (!hit) continue;
+
+    const optionEls = el.locator("option");
+    const oc = await optionEls.count().catch(() => 0);
+    const opts: { text: string; value: string | null }[] = [];
+    for (let o = 0; o < oc; o++) {
+      const opt = optionEls.nth(o);
+      const text = ((await opt.innerText().catch(() => "")) ?? "").trim();
+      const value = await opt.getAttribute("value");
+      opts.push({ text, value });
+    }
+    if (!optionsLookNumeric(opts.map((x) => x.text))) continue;
+
+    const cur = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(cur) && !EMPTY_SELECT_RE.test(cur) && parseYearsOptionLabel(cur)) {
+      console.log(`   ↳ Years select (${hit.label}): dejo prefill ("${cur}")`);
+      filled++;
+      continue;
+    }
+
+    const best = pickBestYearsOption(opts, hit.years);
+    if (!best) continue;
+    if (best.value != null && best.value !== "") await el.selectOption(best.value);
+    else await el.selectOption({ label: best.text }).catch(() => {});
+    console.log(`   ↳ Years select (${hit.label}): ${best.text} (target ${hit.years})`);
+    filled++;
+    await sleep(250);
+  }
+
   return filled;
 }
 
@@ -2624,10 +2707,11 @@ export async function fillApplicationSummary(
   return filled;
 }
 
-/** English proficiency: texto → Advanced (C1); dropdown → closest match. Prefill se respeta. */
+/** English proficiency: escala numérica → máximo (50 años); CEFR → Advanced (C1). */
 export async function fillEnglishProficiency(page: Page): Promise<boolean> {
   const root = scopeRoot(page);
-  const { fieldMatch, freeText, selectMatch, preferredSelect } = PSEUDO_ANSWERS.englishProficiency;
+  const { fieldMatch, freeText, selectMatch, preferredSelect, numericYears } =
+    PSEUDO_ANSWERS.englishProficiency;
 
   const selects = root.locator("select");
   const sn = await selects.count();
@@ -2635,7 +2719,45 @@ export async function fillEnglishProficiency(page: Page): Promise<boolean> {
     const el = selects.nth(i);
     if (!(await waitForControlReady(el, 2500))) continue;
     const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
-    if (!fieldMatch.test(label)) continue;
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 280);
+      })
+      .catch(() => "");
+    const blob = `${label} ${aria} ${near}`;
+    if (!fieldMatch.test(blob)) continue;
+
+    const optionEls = el.locator("option");
+    const oc = await optionEls.count().catch(() => 0);
+    const opts: { text: string; value: string | null }[] = [];
+    for (let o = 0; o < oc; o++) {
+      const opt = optionEls.nth(o);
+      const text = ((await opt.innerText().catch(() => "")) ?? "").trim();
+      const value = await opt.getAttribute("value");
+      opts.push({ text, value });
+    }
+
+    // Escala numérica (1–10 / 10+ / 8-9): NUNCA poner "Advanced (C1)"
+    if (optionsLookNumeric(opts.map((x) => x.text))) {
+      const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+      if (hasPrefillValue(val) && !EMPTY_SELECT_RE.test(val) && parseYearsOptionLabel(val)) {
+        console.log(`   ↳ English numeric: dejo prefill ("${val.slice(0, 40)}")`);
+        return true;
+      }
+      const best = pickBestYearsOption(opts, numericYears);
+      if (!best) continue;
+      if (best.value != null && best.value !== "") await el.selectOption(best.value);
+      else await el.selectOption({ label: best.text }).catch(() => {});
+      console.log(`   ↳ English numeric: ${best.text} (target ${numericYears})`);
+      await sleep(300);
+      return true;
+    }
+
     const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
     if (hasPrefillValue(val) && selectMatch.test(val)) {
       console.log(`   ↳ English: dejo prefill ("${val.slice(0, 40)}")`);
@@ -2664,19 +2786,32 @@ export async function fillEnglishProficiency(page: Page): Promise<boolean> {
     if (!(await el.isVisible().catch(() => false))) continue;
     const label = await fieldLabel(el);
     const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
-    const blob = `${label} ${aria}`;
+    const id = ((await el.getAttribute("id")) ?? "").trim();
+    const blob = `${label} ${aria} ${id}`;
     if (!fieldMatch.test(blob)) continue;
     const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
     if (hasPrefillValue(current)) {
       console.log(`   ↳ English: dejo prefill ("${current.slice(0, 40)}")`);
       return true;
     }
-    const ok = await fillInputWithWaits(page, el, freeText, {
+    // Input numérico (0–99 / escala) → tope, no texto CEFR
+    const isNumericInput =
+      /numeric|number|spinner/i.test(id) ||
+      ((await el.getAttribute("type")) ?? "").toLowerCase() === "number" ||
+      /years|a[nñ]os|escala|scale|1\s*[-–]\s*10/i.test(blob);
+    const fillValue = isNumericInput ? String(Math.min(numericYears, 99)) : freeText;
+    // Si parece escala corta (placeholder 1-10), preferir 10
+    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
+    const finalValue =
+      isNumericInput && /10|1\s*[-–]\s*10/i.test(`${blob} ${ph}`)
+        ? "10"
+        : fillValue;
+    const ok = await fillInputWithWaits(page, el, finalValue, {
       logName: "English proficiency",
       maxAttempts: 2,
       expectTypeahead: false,
     });
-    if (ok) console.log(`   ↳ English: ${freeText}`);
+    if (ok) console.log(`   ↳ English: ${finalValue}`);
     return ok;
   }
   return false;
@@ -2763,6 +2898,34 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
         console.log("   ↳ Data quality frameworks: No");
       }
       continue;
+    }
+
+    // Dropdown visible sin respuesta definida → Notas (no adivinar)
+    const sel = block.locator("select").first();
+    if (await sel.isVisible({ timeout: 200 }).catch(() => false)) {
+      const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
+      const empty = !cur || EMPTY_SELECT_RE.test(cur) || cur === "0";
+      if (!empty) continue;
+      const known =
+        PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.country.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.phoneCountryCode.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.startAvailability.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.howDidYouHear.fieldMatch.test(blob) ||
+        resolveSkillYesNo(blob) != null ||
+        resolveSkillYears(blob) != null;
+      if (known) continue;
+      // Sí/No genérico sin skill mapeada
+      const optsText = ((await sel.innerText().catch(() => "")) ?? "").slice(0, 200);
+      if (/Yes|Sí|Si|\bNo\b/i.test(optsText) && !resolveSkillYesNo(blob)) {
+        return {
+          reason: "Dropdown Sí/No sin regla definida — pendiente",
+          notes: `Pendiente dropdown sin definir: "${blob.slice(0, 100)}"`,
+        };
+      }
     }
   }
   return null;

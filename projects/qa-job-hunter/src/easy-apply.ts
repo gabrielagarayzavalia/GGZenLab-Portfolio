@@ -19,6 +19,7 @@ import { resolveCoverLetter } from "./apply/cover-letter.js";
 import {
   clickEasyApply,
   detectAlreadyApplied,
+  detectJobClosed,
   detectPageApplySignal,
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
@@ -348,7 +349,21 @@ async function tryEasyApply(
     await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
     await waitForJobPageReady(page);
 
-    // Easy Apply visible manda; applied/closed solo si NO hay link Easy Apply.
+    // Cerrado primero (banner en lugar de Apply) → Excel cerrada, sin esperar Easy Apply.
+    if (await detectJobClosed(page)) {
+      record.status = "blocked";
+      record.reason = "Aviso cerrado / ya no acepta postulaciones";
+      updateQueueRow(job.jobId, {
+        status: "cerrada",
+        easyApply: "no",
+        reason: record.reason,
+      });
+      exportQueueToExcel();
+      console.log("   ✗ No longer accepting applications → Excel: cerrada; siguiente");
+      return record;
+    }
+
+    // Easy Apply visible manda; applied solo si NO hay link Easy Apply.
     if (!(await findEasyApplyControl(page, 10000))) {
       const signal = await detectPageApplySignal(page);
       if (signal === "applied") {
@@ -372,6 +387,8 @@ async function tryEasyApply(
           easyApply: "no",
           reason: record.reason,
         });
+        exportQueueToExcel();
+        console.log("   ✗ Aviso cerrado → Excel: cerrada; siguiente");
         return record;
       }
       record.status = "manual_pending";

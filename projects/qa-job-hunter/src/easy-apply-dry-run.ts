@@ -19,6 +19,7 @@ import {
 } from "./apply/canonical-text.js";
 import {
   clickEasyApply,
+  detectJobClosed,
   detectPageApplySignal,
   findEasyApplyControl,
 } from "./apply/detect-apply.js";
@@ -521,6 +522,17 @@ async function processJob(
 
   await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
   await waitForJobPageReady(page);
+
+  // Banner cerrado primero → Excel cerrada sin esperar Easy Apply.
+  if (await detectJobClosed(page)) {
+    updateQueueRow(row.jobId, {
+      status: "cerrada",
+      easyApply: "no",
+      reason: "Aviso cerrado / ya no acepta postulaciones",
+    });
+    console.log("   ✗ No longer accepting applications → Excel: cerrada; siguiente");
+    return "cerrada";
+  }
 
   // Easy Apply visible manda: no marcar enviada/cerrada por texto del feed.
   const hasEasy = await findEasyApplyControl(page, 10000);

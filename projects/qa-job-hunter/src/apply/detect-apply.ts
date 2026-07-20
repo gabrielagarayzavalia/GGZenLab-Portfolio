@@ -12,7 +12,7 @@ const APPLIED_RE =
  * → Excel: cerrada
  */
 const CLOSED_RE =
-  /no longer accepting applications|no longer accepting applications?|job is no longer available|this job is closed|position has been filled|not accepting applications|ya no acepta postulaciones|ya no acepta solicitudes|esta oferta (ya )?no est[aá] disponible|aviso cerrado|puesto cubierto|oferta cerrada|this posting is no longer|has expired/i;
+  /no longer accepting applications|no longer accepting applications?|job is no longer available|this job is closed|position has been filled|not accepting applications|applications?\s+are\s+closed|ya no acepta postulaciones|ya no acepta solicitudes|esta oferta (ya )?no est[aá] disponible|aviso cerrado|puesto cubierto|oferta cerrada|this posting is no longer|has expired/i;
 
 export type PageApplySignal = "applied" | "closed" | "unknown";
 

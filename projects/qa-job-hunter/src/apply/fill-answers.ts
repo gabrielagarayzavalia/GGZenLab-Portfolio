@@ -15,6 +15,8 @@ import {
   detectApplyRoleKind,
   resolveApplicationSummary,
   resolveCoverLetterPdfPath,
+  RESUME_FALLBACK_FILENAME,
+  RESUME_FALLBACK_MATCH,
   RESUME_FILE_MATCH,
   scoreResumeForRole,
   type ApplyRoleKind,
@@ -1949,8 +1951,60 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
 }
 
 /**
+ * Último recurso: CV Eng01-2026 cuando no hay match Analyst/Automation.
+ * NUNCA cover letter / intro-GGZ.
+ */
+async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
+  const modal = page.locator(".jobs-easy-apply-modal").first();
+  if (!(await modal.isVisible({ timeout: 500 }).catch(() => false))) return false;
+
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    if (DOWNLOAD_RESUME_RE.test(t.aria) || COVER_AS_RESUME_RE.test(t.title)) continue;
+    if (!RESUME_FALLBACK_MATCH.test(t.title) && !RESUME_FALLBACK_MATCH.test(t.aria)) continue;
+    if (t.selected) {
+      console.log(`   ↳ Resume: fallback ya seleccionado → ${RESUME_FALLBACK_FILENAME}`);
+      return true;
+    }
+    const ok = await clickDocumentCardToggle(page, t.id);
+    if (ok) {
+      console.log(`   ↳ Resume: fallback (sin match rol) → ${t.title.slice(0, 90)}`);
+      await sleep(600);
+      return true;
+    }
+  }
+
+  const selectLabels = modal.locator('[aria-label^="Select resume" i]');
+  const n = await selectLabels.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const el = selectLabels.nth(i);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
+    if (!RESUME_FALLBACK_MATCH.test(aria)) continue;
+    await el.scrollIntoViewIfNeeded().catch(() => {});
+    await el
+      .click({ timeout: 4000, noWaitAfter: true })
+      .catch(() => el.click({ force: true, timeout: 4000, noWaitAfter: true }));
+    console.log(`   ↳ Resume: fallback (aria) → ${RESUME_FALLBACK_FILENAME}`);
+    await sleep(600);
+    return true;
+  }
+
+  const deselect = modal.locator(
+    `[aria-label^="Deselect resume" i][aria-label*="Eng01-2026" i]`
+  );
+  if (await deselect.first().isVisible({ timeout: 400 }).catch(() => false)) {
+    console.log(`   ↳ Resume: fallback ya en Deselect → ${RESUME_FALLBACK_FILENAME}`);
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Selecciona CV Analyst vs Automation vía toggle Ember (shadow DOM).
  * NUNCA dejar intro-GGZ / cover; NUNCA clickear Download.
+ * Si no hay match de rol → fallback Eng01-2026.
  */
 export async function selectResumeForRole(
   page: Page,
@@ -2037,12 +2091,19 @@ export async function selectResumeForRole(
   await clickShowMoreResumes(root);
   if (await clickBestResumeToggle(page, kind)) return true;
 
+  // Sin match Analyst/Automation → CV canónico Eng01-2026
+  console.log(
+    `   ↳ Resume: sin match ${kind} → fallback ${RESUME_FALLBACK_FILENAME}`
+  );
+  await clickShowMoreResumes(root);
+  if (await clickResumeFallbackDefault(page)) return true;
+
   if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(page, root))) {
     console.log("   ↳ Resume: ✗ sigue seleccionado intro-GGZ / cover — no avanzar");
     return false;
   }
 
-  console.log(`   ↳ Resume: no encontré / no quedó seleccionado CV ${kind}`);
+  console.log(`   ↳ Resume: no encontré / no quedó seleccionado CV ${kind} ni fallback`);
   return false;
 }
 

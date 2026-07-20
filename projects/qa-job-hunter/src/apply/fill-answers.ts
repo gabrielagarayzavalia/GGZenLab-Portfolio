@@ -123,6 +123,15 @@ export const PSEUDO_ANSWERS = {
     fieldMatch:
       /years?\s+of\s+experience\s+(with|in|using)|a[nñ]os?\s+(de\s+)?experiencia\s+(con|en|usando)|how many years\s+(of\s+)?(experience\s+)?(with|in|using)|cu[aá]ntos a[nñ]os\s+(de\s+)?experiencia\s+(con|en)/i,
   },
+  /**
+   * Años generales / dominio (ej. Administrative): 0–99.
+   * No confundir con remuneración (también usa inputs *-numeric).
+   */
+  yearsNumericGeneral: {
+    fieldMatch:
+      /how many years of .+ experience|years of .+ experience do you|years?\s+of\s+administrative|a[nñ]os?\s+(de\s+)?experiencia\s+administrat|administrative experience/i,
+    value: "25",
+  },
   /** Frameworks DQ: No + dejar pendiente. */
   dataQualityFrameworks: {
     fieldMatch: /deequ|great expectations|data quality framework/i,
@@ -920,6 +929,17 @@ function resolveCompensationValue(blob: string): { value: string; currency: "USD
   return { value: arsValue, currency: "ARS" };
 }
 
+/** Evita tratar años de experiencia (inputs *-numeric) como remuneración. */
+function looksLikeYearsExperienceField(blob: string): boolean {
+  return (
+    PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob) ||
+    PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob) ||
+    /years?\s+of\s+.+experience|how many years|a[nñ]os?\s+(de\s+)?experiencia|between 0 and 99/i.test(
+      blob
+    )
+  );
+}
+
 /** Rellena remuneración usando ids/labels ya capturados (blocking dump). */
 async function fillCompensationFromCaptured(
   page: Page,
@@ -929,6 +949,7 @@ async function fillCompensationFromCaptured(
   let any = false;
   for (const f of fields) {
     const blob = `${f.label} ${f.ariaLabel} ${f.id}`;
+    if (looksLikeYearsExperienceField(blob)) continue;
     if (!fieldMatch.test(blob) && !/remuneraci|salary|compensation|sueldo|pretendid/i.test(blob)) {
       continue;
     }
@@ -991,7 +1012,10 @@ async function fillCompensationViaDom(
               ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
             ) || input.parentElement;
           const blob = ((wrap && wrap.textContent) || "") + " " + input.id + " " + (input.getAttribute("aria-label") || "");
-          return /remuneraci|salary|compensation|sueldo|pretendid|numeric/i.test(blob);
+          const yearsLike = /years?\s+of|how many years|a[nñ]os?\s+(de\s+)?experiencia|administrative experience|between 0 and 99/i;
+          return (
+            /remuneraci|salary|compensation|sueldo|pretendid/i.test(blob) && !yearsLike.test(blob)
+          );
         };
         const walk = (root) => {
           if (pid) {
@@ -999,6 +1023,22 @@ async function fillCompensationViaDom(
               (root.getElementById && root.getElementById(pid)) ||
               (root.querySelector && root.querySelector('[id="' + pid + '"]'));
             if (byId && byId.tagName === "INPUT") {
+              const wrap =
+                byId.closest(
+                  ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+                ) || byId.parentElement;
+              const blob =
+                ((wrap && wrap.textContent) || "") +
+                " " +
+                byId.id +
+                " " +
+                (byId.getAttribute("aria-label") || "");
+              if (/years?\s+of|how many years|a[nñ]os?\s+(de\s+)?experiencia|administrative/i.test(blob)) {
+                return "";
+              }
+              if (!/remuneraci|salary|compensation|sueldo|pretendid/i.test(blob)) {
+                return "";
+              }
               setVal(byId);
               return byId.id || pid;
             }
@@ -1007,10 +1047,6 @@ async function fillCompensationViaDom(
           for (const input of inputs) {
             if (input.type === "hidden" || input.type === "checkbox" || input.type === "radio") continue;
             const id = input.id || "";
-            if (/easyApplyFormElement/i.test(id) && /numeric/i.test(id)) {
-              setVal(input);
-              return id;
-            }
             if (!matchBlob(input)) continue;
             const near = ((input.closest("div, fieldset, li") && input.closest("div, fieldset, li").textContent) || "").slice(0, 200);
             if (!/remuneraci|salary|compensation|pretendid/i.test(id + " " + (input.getAttribute("aria-label") || "") + " " + near)) {
@@ -1137,6 +1173,7 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
       })
       .catch(() => "");
     const blob = `${label} ${aria} ${ph} ${name} ${id} ${near}`;
+    if (looksLikeYearsExperienceField(blob)) continue;
     const looksNumeric = /numeric/i.test(id);
     const isComp =
       fieldMatch.test(blob) ||
@@ -1146,7 +1183,7 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     if (await tryFillEl(el, blob || "remuneración pretendida", "control")) return true;
   }
 
-  // Fallbacks: texto de pregunta → input; getByLabel; id *-numeric (solo modal)
+  // Fallbacks: solo por texto/label de remuneración (NUNCA primer *-numeric del modal)
   const question = root
     .getByText(/remuneraci[oó]n\s+bruta\s+pretendida|expected\s*(salary|compensation)|desired\s*salary/i)
     .first();
@@ -1162,14 +1199,10 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
     }
   }
 
-  const candidates: { loc: Locator; via: string }[] = [
-    { loc: root.getByLabel(/remuneraci[oó]n|sueldo|salary|compensation|pretendid/i).first(), via: "getByLabel" },
-    { loc: root.locator("input[id*='-numeric']").first(), via: "id-numeric" },
-  ];
-  for (const { loc, via } of candidates) {
-    if (!(await loc.count().catch(() => 0))) continue;
-    const id = ((await loc.getAttribute("id")) ?? "").trim();
-    const near = await loc
+  const labelLoc = root.getByLabel(/remuneraci[oó]n|sueldo|salary|compensation|pretendid/i).first();
+  if (await labelLoc.count().catch(() => 0)) {
+    const id = ((await labelLoc.getAttribute("id")) ?? "").trim();
+    const near = await labelLoc
       .evaluate((node) => {
         const wrap =
           node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div") ??
@@ -1177,8 +1210,10 @@ export async function fillExpectedCompensation(page: Page): Promise<boolean> {
         return (wrap?.textContent ?? "").trim().slice(0, 300);
       })
       .catch(() => "");
-    const blob = `${near} ${id} remuneración`;
-    if (await tryFillEl(loc, blob, via)) return true;
+    const blob = `${near} ${id}`;
+    if (!looksLikeYearsExperienceField(blob)) {
+      if (await tryFillEl(labelLoc, blob || "remuneración", "getByLabel")) return true;
+    }
   }
 
   // Revelar pregunta bajo el fold (PageDown) y set via DOM
@@ -1356,6 +1391,61 @@ export async function fillStartAvailability(page: Page): Promise<boolean> {
     return ok;
   }
   return false;
+}
+
+/**
+ * Años generales / Administrative (0–99). No skill-tools (esos → pendiente).
+ * Corrige si quedó basura de remuneración (ej. 3500000).
+ */
+export async function fillYearsNumericGeneral(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, value } = PSEUDO_ANSWERS.yearsNumericGeneral;
+  const skillYears = PSEUDO_ANSWERS.yearsOfExperience.fieldMatch;
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio'])"
+  );
+  const n = await controls.count();
+  let any = false;
+
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const id = ((await el.getAttribute("id")) ?? "").trim();
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 280);
+      })
+      .catch(() => "");
+    const blob = `${label} ${aria} ${id} ${near}`;
+    if (skillYears.test(blob)) continue;
+    if (!fieldMatch.test(blob) && !(/years/i.test(blob) && /administrative/i.test(blob))) {
+      continue;
+    }
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    const nVal = Number(current.replace(/[^\d]/g, ""));
+    const alreadyOk = current !== "" && Number.isFinite(nVal) && nVal >= 0 && nVal <= 99;
+    if (alreadyOk) {
+      console.log(`   ↳ Years (general): dejo prefill ("${current}")`);
+      any = true;
+      continue;
+    }
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName: "Years (general/admin)",
+      maxAttempts: 2,
+      expectTypeahead: false,
+    });
+    if (ok) {
+      console.log(`   ↳ Years (general/admin): ${value}`);
+      any = true;
+    }
+  }
+  return any;
 }
 
 /** Dónde vivís / trabajar — texto libre sin dropdown (solo si vacío). */
@@ -2548,6 +2638,8 @@ export async function fillPseudoAnswers(
   ) {
     filled++;
   }
+  // Antes de remuneración: años 0–99 (evita pisar con 3500000)
+  if (await fillYearsNumericGeneral(page)) filled++;
   if (await fillExpectedCompensation(page)) filled++;
 
   const skipLate = await detectSkipPending(page);

@@ -2497,7 +2497,8 @@ export async function answerSkillYesNoQuestions(page: Page): Promise<number> {
     const block = blocks.nth(i);
     if (!(await block.isVisible().catch(() => false))) continue;
     const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-    if (blob.length < 6 || blob.length > 400) continue;
+    // Capgemini/Macro meten varias preguntas en un mismo bloque (>400 chars)
+    if (blob.length < 6 || blob.length > 1200) continue;
 
     const resolved = resolveSkillYesNo(blob);
     if (!resolved) continue;
@@ -2505,6 +2506,8 @@ export async function answerSkillYesNoQuestions(page: Page): Promise<number> {
     const wantYes = resolved.answerYes;
     const yesRe = /^(Yes|Sí|Si)$/i;
     const noRe = /^(No)$/i;
+    const yesLoose = /yes|s[ií]/i;
+    const noLoose = /^no$/i;
 
     // ¿Ya hay selección?
     const checked = block.locator("input[type='radio']:checked, input[type='checkbox']:checked");
@@ -2562,26 +2565,33 @@ export async function answerSkillYesNoQuestions(page: Page): Promise<number> {
       }
     }
 
-    // Select Yes/No
+    // Select Yes/No (Capgemini: "Selecciona una opción" + Sí/No)
     if (!clicked) {
       const sel = block.locator("select").first();
       if (await sel.isVisible({ timeout: 400 }).catch(() => false)) {
         const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
-        if (hasPrefillValue(cur)) {
+        if (hasPrefillValue(cur) && !EMPTY_SELECT_RE.test(cur)) {
           console.log(`   ↳ Skill ${resolved.skill}: dejo prefill select`);
           continue;
         }
-        const opt = sel
-          .locator("option")
-          .filter({ hasText: wantYes ? yesRe : noRe })
-          .first();
-        if (await opt.count().catch(() => 0)) {
+        const opts = sel.locator("option");
+        const oc = await opts.count().catch(() => 0);
+        let picked: { v: string | null; lab: string } | null = null;
+        for (let o = 0; o < oc; o++) {
+          const opt = opts.nth(o);
+          const lab = ((await opt.innerText().catch(() => "")) ?? "").trim();
+          if (EMPTY_SELECT_RE.test(lab) || !lab) continue;
+          const match = wantYes ? yesRe.test(lab) || yesLoose.test(lab) : noRe.test(lab) || noLoose.test(lab);
+          if (!match) continue;
+          // Prefer exact Yes/Sí over longer labels
+          const exact = wantYes ? yesRe.test(lab) : noRe.test(lab);
           const v = await opt.getAttribute("value");
-          if (v != null) await sel.selectOption(v);
-          else {
-            const lab = ((await opt.innerText().catch(() => "")) ?? (wantYes ? "Yes" : "No")).trim();
-            await sel.selectOption({ label: lab }).catch(() => {});
-          }
+          if (exact || !picked) picked = { v, lab };
+          if (exact) break;
+        }
+        if (picked) {
+          if (picked.v != null && picked.v !== "") await sel.selectOption(picked.v);
+          else await sel.selectOption({ label: picked.lab }).catch(() => {});
           clicked = true;
         }
       }

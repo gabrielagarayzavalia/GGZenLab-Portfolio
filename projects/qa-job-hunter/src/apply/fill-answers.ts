@@ -142,7 +142,7 @@ export const PSEUDO_ANSWERS = {
   /** Años por skill (SQL/Python/…): sin mapa → pendiente (no enviar). */
   yearsOfExperience: {
     fieldMatch:
-      /years?\s+of\s+(work\s+)?experience\s+(with|in|using)|a[nñ]os?\s+(de\s+)?experiencia\s+(con|en|usando|como)|how many years\s+(of\s+)?(experience\s+)?(with|in|using)|cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia\s+(con|en)|experiencia\s+(con|en|usando)\s+\w+|years?\s+(with|in|using)\s+\w+/i,
+      /years?\s+of\s+(work\s+)?experience|how many years\s+(of\s+)?(experience|work)|cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia|a[nñ]os?\s+(de\s+)?experiencia(\s+\w+){0,6}\s+(con|en|usando|como|trabajando)|a[nñ]os?\s+(de\s+)?experiencia\s+(ten[eé]s|tienes|tiene)|experiencia\s+(ten[eé]s|tienes|tiene)\s+trabajando|experiencia\s+(con|en|usando)\s+\w+|years?\s+(with|in|using)\s+\w+/i,
   },
   /**
    * Años generales / dominio (ej. Administrative): 0–99.
@@ -165,7 +165,8 @@ export const PSEUDO_ANSWERS = {
   },
 } as const;
 
-const EMPTY_SELECT_RE = /select an option|seleccion(a|á)|choose|elegí|elegir/i;
+const EMPTY_SELECT_RE =
+  /select an option|seleccion(a|á)|selecciona una opci|choose|eleg[ií]|elegir/i;
 const PLEASE_SELECT_RE = /please make a selection|hac[eé] una selecci[oó]n|seleccion(a|á) una opci[oó]n/i;
 
 export function isSummaryLabel(blob: string): boolean {
@@ -1592,7 +1593,7 @@ export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
     if (PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob)) return false;
     return (
       skillYearsRe.test(blob) ||
-      /years?\s+of\s+work\s+experience|a[nñ]os?\s+de\s+experiencia\s+(con|en|usando|como)|experiencia\s+(en|con)\s+(qa|automat|javascript|js|cypress|playwright|selenium|postman)/i.test(
+      /cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia|a[nñ]os?\s+(de\s+)?experiencia|years?\s+of\s+(work\s+)?experience|experiencia\s+(ten[eé]s|tienes).{0,40}(como|con|en)|experiencia\s+(en|con)\s+(qa|automat|javascript|js|cypress|playwright|selenium|postman|jmeter)/i.test(
         blob
       )
     );
@@ -2787,23 +2788,30 @@ export async function fillEnglishProficiency(page: Page): Promise<boolean> {
     const label = await fieldLabel(el);
     const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
     const id = ((await el.getAttribute("id")) ?? "").trim();
-    const blob = `${label} ${aria} ${id}`;
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 320);
+      })
+      .catch(() => "");
+    const blob = `${label} ${aria} ${id} ${near}`;
     if (!fieldMatch.test(blob)) continue;
     const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
     if (hasPrefillValue(current)) {
       console.log(`   ↳ English: dejo prefill ("${current.slice(0, 40)}")`);
       return true;
     }
-    // Input numérico (0–99 / escala) → tope, no texto CEFR
+    // Input numérico / escala 1–10 → tope, no texto CEFR
     const isNumericInput =
       /numeric|number|spinner/i.test(id) ||
       ((await el.getAttribute("type")) ?? "").toLowerCase() === "number" ||
-      /years|a[nñ]os|escala|scale|1\s*[-–]\s*10/i.test(blob);
+      /years|a[nñ]os|escala|scale|1\s*(al|a|[-–])\s*10|del\s*1\s*al\s*10/i.test(blob);
     const fillValue = isNumericInput ? String(Math.min(numericYears, 99)) : freeText;
-    // Si parece escala corta (placeholder 1-10), preferir 10
-    const ph = ((await el.getAttribute("placeholder")) ?? "").trim();
     const finalValue =
-      isNumericInput && /10|1\s*[-–]\s*10/i.test(`${blob} ${ph}`)
+      isNumericInput && /10|1\s*(al|a|[-–])\s*10|del\s*1\s*al\s*10/i.test(blob)
         ? "10"
         : fillValue;
     const ok = await fillInputWithWaits(page, el, finalValue, {
@@ -3088,12 +3096,25 @@ export async function handleSaveDiscardModal(
 
   if (mode === "dry_run") {
     const discard = scope.getByRole("button", { name: /Discard|Descartar/i }).first();
-    await discard.click({ timeout: 4000 }).catch(async () => {
-      await page.getByRole("button", { name: /Discard|Descartar/i }).first().click({ force: true });
-    });
-    console.log("   ↳ [dry-run] Save/Discard → Discard (salir sin guardar ni enviar)");
-    await sleep(600);
-    return "discarded";
+    const clicked =
+      (await discard
+        .click({ timeout: 4000 })
+        .then(() => true)
+        .catch(() => false)) ||
+      (await page
+        .getByRole("button", { name: /Discard|Descartar/i })
+        .first()
+        .click({ force: true, timeout: 4000 })
+        .then(() => true)
+        .catch(() => false));
+    if (clicked) {
+      console.log("   ↳ [dry-run] Save/Discard → Discard (salir sin guardar ni enviar)");
+      await sleep(600);
+      return "discarded";
+    }
+    await page.keyboard.press("Escape").catch(() => {});
+    console.log("   ↳ [dry-run] Save/Discard → Escape (Discard no clickeable)");
+    return "absent";
   }
 
   const save = scope.getByRole("button", { name: /^Save$|Save for later|Guardar/i }).first();

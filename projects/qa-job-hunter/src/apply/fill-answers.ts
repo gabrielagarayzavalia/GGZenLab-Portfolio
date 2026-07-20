@@ -139,10 +139,10 @@ export const PSEUDO_ANSWERS = {
     fieldMatch:
       /i consent|consent|select checkbox to proceed|autorizo|acepto (los |las )?(t[eé]rminos|condiciones)|privacy policy|pol[ií]tica de privacidad/i,
   },
-  /** Años por skill (SQL/Python/…): sin mapa → pendiente (no enviar). */
+  /** Años por skill (SQL/Python/…): sin mapa → pendiente (no enviar). Requiere años/years (no Sí/No de skills). */
   yearsOfExperience: {
     fieldMatch:
-      /years?\s+of\s+(work\s+)?experience|how many years\s+(of\s+)?(experience|work)|cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia|a[nñ]os?\s+(de\s+)?experiencia(\s+\w+){0,6}\s+(con|en|usando|como|trabajando)|a[nñ]os?\s+(de\s+)?experiencia\s+(ten[eé]s|tienes|tiene)|experiencia\s+(ten[eé]s|tienes|tiene)\s+trabajando|experiencia\s+(con|en|usando)\s+\w+|years?\s+(with|in|using)\s+\w+/i,
+      /(?:years?\s+of\s+(work\s+)?experience|how many years\s+(of\s+)?(?:experience|work)|cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia|a[nñ]os?\s+(de\s+)?experiencia)/i,
   },
   /**
    * Años generales / dominio (ej. Administrative): 0–99.
@@ -2887,6 +2887,8 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
     if (blob.length < 8) continue;
 
     if (PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob)) {
+      // Solo bloquear si parece pregunta de AÑOS (no Sí/No "experiencia en X")
+      if (!/years?|a[nñ]os?/i.test(blob)) continue;
       const hit = resolveSkillYears(blob);
       if (hit) {
         // Hay mapa → no bloquear; fillSkillYearsOfExperience lo rellena

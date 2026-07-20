@@ -14,6 +14,14 @@ export const RESUME_FILE_MATCH = {
   automation: /QA_Automation|QA[\s_-]*Automation|Zavalia_QA_Automation|Automation\.pdf/i,
 } as const;
 
+/**
+ * Si no hay match claro Analyst/Automation, usar este CV (no cover letter).
+ * Nombre exacto en LinkedIn document picker.
+ */
+export const RESUME_FALLBACK_FILENAME = "cv-Gabriela A Garay Zavalia - Eng01-2026.pdf";
+export const RESUME_FALLBACK_MATCH =
+  /cv-Gabriela\s*A\s*Garay\s*Zavalia\s*-\s*Eng01-2026\.pdf|Eng01-2026/i;
+
 /** Score 0–100: qué tan bien matchea un filename/card al rol. */
 export function scoreResumeForRole(blob: string, kind: ApplyRoleKind): number {
   const t = blob.replace(/\s+/g, " ");

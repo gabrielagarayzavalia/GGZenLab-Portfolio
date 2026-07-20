@@ -320,6 +320,11 @@ async function tryAdvanceNext(
     return "discarded_exit";
   }
 
+  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos)
+  await scrollEasyApplyFormToEnd(page);
+  await fillPseudoAnswers(page, { jobTitle, company });
+  await fillExpectedCompensation(page);
+
   if (await isNextDisabled(page)) return "blocked";
   let fields = await captureRequiredFields(page);
   let hasErrors = fields.some((f) => f.errorText);
@@ -327,13 +332,19 @@ async function tryAdvanceNext(
     (hasErrors || (await hasBlockingEmptyFields(page)).length > 0) &&
     page.url() === beforeUrl
   ) {
-    // Tras Next/Review LinkedIn revela remuneración debajo del fold
+    // Tras Next/Review LinkedIn revela remuneración / textareas debajo del fold
     await fillExpectedCompensation(page);
+    await fillPseudoAnswers(page, { jobTitle, company });
     fields = await captureRequiredFields(page);
     hasErrors = fields.some((f) => f.errorText);
   }
   if (hasErrors && page.url() === beforeUrl) return "blocked";
-  if ((await hasBlockingEmptyFields(page)).length > 0) return "blocked";
+  let blockingAfter = await hasBlockingEmptyFields(page);
+  if (blockingAfter.length > 0) {
+    await fillPseudoAnswers(page, { jobTitle, company });
+    blockingAfter = await hasBlockingEmptyFields(page);
+  }
+  if (blockingAfter.length > 0) return "blocked";
 
   // Tras Review, Submit puede aparecer sin cambiar mucho el fingerprint
   if (

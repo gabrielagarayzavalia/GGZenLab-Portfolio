@@ -30,6 +30,7 @@ export const SKILL_YEARS_ENTRIES: readonly {
   },
   { label: "selenium", years: 6, patterns: [/selenium/i] },
   { label: "python", years: 3, patterns: [/\bpython\b/i] },
+  { label: "sql", years: 8, patterns: [/\bsql\b|structured\s*query\s*language/i] },
   { label: "java", years: 2, patterns: [/\bjava\b(?!\s*script)/i] },
   { label: "csharp", years: 3, patterns: [/c\s*#|csharp|c\s*sharp/i] },
   { label: "javascript", years: 3, patterns: [/javascript|\bjs\b(?!\s*x)/i] },

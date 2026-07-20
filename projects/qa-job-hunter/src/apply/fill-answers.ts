@@ -59,6 +59,18 @@ export const PSEUDO_ANSWERS = {
     fieldMatch: /^(country|pa[ií]s)\s*\*?$/i,
     selectText: /Argentina/i,
   },
+  phoneCountryCode: {
+    fieldMatch:
+      /c[oó]digo del pa[ií]s|phone country code|country calling code|c[oó]digo\s*(de\s*)?pa[ií]s(\s*del\s*tel[eé]fono)?/i,
+    selectText: /Argentina\s*\(\+54\)|\+54|Argentina/i,
+  },
+  hybridWorkOk: {
+    fieldMatch:
+      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial)/i,
+  },
+  programmingScripting: {
+    fieldMatch: /programaci[oó]n y scripting|programming and scripting|experiencia en programaci[oó]n/i,
+  },
   linkedinProfile: {
     fieldMatch:
       /linkedin\s*profile|perfil\s*de\s*linkedin|linkedin\s*url|link\s+to\s+your\s+linkedin|share\s+the\s+link\s+to\s+your\s+linkedin|enlace\s+(a|de)\s+(tu\s+)?linkedin/i,
@@ -914,6 +926,131 @@ export async function fillCountrySelect(page: Page): Promise<boolean> {
 
   void combos;
   return false;
+}
+
+/** Código del país / Phone country code → Argentina (+54). Issue #148. */
+export async function fillPhoneCountryCode(page: Page): Promise<boolean> {
+  const root = scopeRoot(page);
+  const { fieldMatch, selectText } = PSEUDO_ANSWERS.phoneCountryCode;
+
+  const selects = root.locator("select");
+  const sn = await selects.count();
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await waitForControlReady(el, 3000))) continue;
+    const label = (await fieldLabel(el)).replace(/\s+/g, " ").trim();
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${label} ${aria}`;
+    if (!fieldMatch.test(blob)) continue;
+    const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    if (hasPrefillValue(val) && /\+54|Argentina/i.test(val) && !EMPTY_SELECT_RE.test(val)) {
+      console.log(`   ↳ Phone country: dejo prefill ("${val.slice(0, 40)}")`);
+      return true;
+    }
+    const opt = el.locator("option").filter({ hasText: selectText }).first();
+    await opt.waitFor({ state: "attached", timeout: 2500 }).catch(() => {});
+    if (await opt.count().catch(() => 0)) {
+      const v = await opt.getAttribute("value");
+      const lab = ((await opt.innerText().catch(() => "")) ?? "").trim();
+      if (v != null) await el.selectOption(v);
+      else await el.selectOption({ label: lab }).catch(() => {});
+      console.log(`   ↳ Phone country: ${lab.slice(0, 40) || "Argentina (+54)"}`);
+      await sleep(300);
+      return true;
+    }
+  }
+
+  const combos = root.locator("[role='combobox'], [aria-haspopup='listbox']");
+  const cn = await combos.count();
+  for (let i = 0; i < cn; i++) {
+    const el = combos.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${label} ${aria}`;
+    if (!fieldMatch.test(blob)) continue;
+    const current = (
+      ((await el.inputValue().catch(() => "")) || (await el.innerText().catch(() => "")) || "")
+    ).trim();
+    if (/\+54|Argentina/i.test(current) && !EMPTY_SELECT_RE.test(current)) {
+      console.log(`   ↳ Phone country: dejo prefill ("${current.slice(0, 40)}")`);
+      return true;
+    }
+    await el.click({ force: true }).catch(() => {});
+    await sleep(400);
+    const opt = page.getByRole("option", { name: selectText }).first();
+    if (await opt.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await opt.click({ force: true }).catch(() => {});
+      console.log("   ↳ Phone country: Argentina (+54) (option)");
+      await sleep(300);
+      return true;
+    }
+  }
+  return false;
+}
+
+async function clickYesNoInBlock(
+  block: Locator,
+  wantYes: boolean,
+  logLabel: string
+): Promise<boolean> {
+  const yesRe = /^(Yes|Sí|Si)$/i;
+  const noRe = /^(No)$/i;
+  const checked = block.locator("input[type='radio']:checked, input[type='checkbox']:checked");
+  if ((await checked.count().catch(() => 0)) > 0) {
+    console.log(`   ↳ ${logLabel}: dejo prefill`);
+    return true;
+  }
+  const radios = block.locator("input[type='radio'], input[type='checkbox']");
+  const rc = await radios.count().catch(() => 0);
+  for (let r = 0; r < rc; r++) {
+    const radio = radios.nth(r);
+    const lab =
+      ((await radio.getAttribute("aria-label")) ?? "").trim() ||
+      ((await radio
+        .evaluate((n) => (n as HTMLInputElement).labels?.[0]?.textContent ?? "")
+        .catch(() => "")) ||
+        "");
+    const match = wantYes ? yesRe.test(lab) : noRe.test(lab);
+    if (!match) continue;
+    await radio.check({ force: true }).catch(async () => {
+      await radio.click({ force: true, timeout: 2000 });
+    });
+    console.log(`   ↳ ${logLabel}: ${wantYes ? "Yes/Sí" : "No"}`);
+    await sleep(250);
+    return true;
+  }
+  const btn = block.getByRole("radio", { name: wantYes ? yesRe : noRe }).first();
+  if (await btn.isVisible({ timeout: 600 }).catch(() => false)) {
+    await btn.click({ force: true }).catch(() => {});
+    console.log(`   ↳ ${logLabel}: ${wantYes ? "Yes/Sí" : "No"} (role)`);
+    return true;
+  }
+  return false;
+}
+
+/** Híbrida CABA → Sí; Programación y scripting → Sí. Issue #149. */
+export async function answerHybridAndProgramming(page: Page): Promise<number> {
+  const root = scopeRoot(page);
+  if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return 0;
+  const blocks = root.locator(
+    "fieldset, .fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], li.jobs-easy-apply-form-section__grouping"
+  );
+  const n = await blocks.count().catch(() => 0);
+  let answered = 0;
+  for (let i = 0; i < Math.min(n, 40); i++) {
+    const block = blocks.nth(i);
+    if (!(await block.isVisible().catch(() => false))) continue;
+    const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob)) {
+      if (await clickYesNoInBlock(block, true, "Hybrid work")) answered++;
+      continue;
+    }
+    if (PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob)) {
+      if (await clickYesNoInBlock(block, true, "Programming/scripting")) answered++;
+    }
+  }
+  return answered;
 }
 
 function resolveCompensationValue(blob: string): { value: string; currency: "USD" | "ARS" } {
@@ -2619,16 +2756,13 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
     }
 
     if (PSEUDO_ANSWERS.dataQualityFrameworks.fieldMatch.test(blob)) {
-      // Intentar No
+      // No + continuar (no bloquear envío)
       const noRadio = block.getByRole("radio", { name: /^No$/i }).or(block.getByText(/^No$/i)).first();
       if (await noRadio.isVisible({ timeout: 600 }).catch(() => false)) {
         await noRadio.click({ force: true }).catch(() => {});
+        console.log("   ↳ Data quality frameworks: No");
       }
-      return {
-        reason: "Data quality frameworks (Deequ/GE) — No; pendiente manual",
-        notes:
-          "Pendiente: Experience with Deequ / Great Expectations / data quality frameworks → No (confirmar envío manual)",
-      };
+      continue;
     }
   }
   return null;
@@ -2656,6 +2790,7 @@ export async function fillPseudoAnswers(
   if (await selectResumeForRole(page, jobTitle, company)) filled++;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
+  if (await fillPhoneCountryCode(page)) filled++;
   if (await fillCitySelect(page)) filled++;
   if (await fillPreferredWorkLocation(page)) filled++;
   if (await fillWorkOrLiveCityFreeText(page)) filled++;
@@ -2663,6 +2798,7 @@ export async function fillPseudoAnswers(
   if (await fillStartAvailability(page)) filled++;
   if (await fillEnglishProficiency(page)) filled++;
   filled += await answerSkillYesNoQuestions(page);
+  filled += await answerHybridAndProgramming(page);
 
   const consent = await fillConsentCheckbox(page);
   if (consent === "ok") filled++;

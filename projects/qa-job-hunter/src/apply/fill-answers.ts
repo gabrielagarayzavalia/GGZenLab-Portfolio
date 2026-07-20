@@ -11,6 +11,7 @@ import {
   easyApplyModalRoot,
 } from "./modal-controls.js";
 import { resolveSkillYesNo } from "./my-skills.js";
+import { resolveSkillYears } from "./skills-years.js";
 import {
   detectApplyRoleKind,
   resolveApplicationSummary,
@@ -1394,7 +1395,67 @@ export async function fillStartAvailability(page: Page): Promise<boolean> {
 }
 
 /**
- * Años generales / Administrative (0–99). No skill-tools (esos → pendiente).
+ * Años por skill (SQL/Python/Playwright/…): usa skills-years.ts.
+ * Si no hay mapa → pendiente (no enviar).
+ */
+export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
+  const root = scopeRoot(page);
+  const skillYearsRe = PSEUDO_ANSWERS.yearsOfExperience.fieldMatch;
+  const controls = root.locator(
+    "input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio'])"
+  );
+  const n = await controls.count();
+  let filled = 0;
+
+  for (let i = 0; i < n; i++) {
+    const el = controls.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const id = ((await el.getAttribute("id")) ?? "").trim();
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 320);
+      })
+      .catch(() => "");
+    const blob = `${label} ${aria} ${id} ${near}`;
+    if (!skillYearsRe.test(blob) && !/years?\s+of\s+work\s+experience|a[nñ]os?\s+de\s+experiencia\s+(con|en|usando)/i.test(blob)) {
+      continue;
+    }
+    // Administrative / genérico → fillYearsNumericGeneral
+    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) continue;
+
+    const hit = resolveSkillYears(blob);
+    if (!hit) continue;
+
+    const value = String(hit.years);
+    const current = ((await el.inputValue().catch(() => "")) ?? "").trim();
+    const nVal = Number(current.replace(/[^\d]/g, ""));
+    const alreadyOk = current !== "" && Number.isFinite(nVal) && nVal >= 0 && nVal <= 99;
+    if (alreadyOk) {
+      console.log(`   ↳ Years (${hit.label}): dejo prefill ("${current}")`);
+      filled++;
+      continue;
+    }
+    const ok = await fillInputWithWaits(page, el, value, {
+      logName: `Years (${hit.label})`,
+      maxAttempts: 2,
+      expectTypeahead: false,
+    });
+    if (ok) {
+      console.log(`   ↳ Years (${hit.label}): ${value}`);
+      filled++;
+    }
+  }
+  return filled;
+}
+
+/**
+ * Años generales / Administrative (0–99). No skill-tools (esos → skills-years).
  * Corrige si quedó basura de remuneración (ej. 3500000).
  */
 export async function fillYearsNumericGeneral(page: Page): Promise<boolean> {
@@ -2546,11 +2607,14 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
     if (blob.length < 8) continue;
 
     if (PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob)) {
-      // Dejar cantidad default; no enviamos
+      const hit = resolveSkillYears(blob);
+      if (hit) {
+        // Hay mapa → no bloquear; fillSkillYearsOfExperience lo rellena
+        continue;
+      }
       return {
-        reason: "Pregunta years of experience (sin mapa de años) — pendiente",
-        notes:
-          "Pendiente: years of experience (SQL/Python/…) — dejar default; definir mapa de años",
+        reason: "Pregunta years of experience (skill sin mapa) — pendiente",
+        notes: `Pendiente: years of experience — skill no mapeada en skills-years.ts ("${blob.slice(0, 80)}")`,
       };
     }
 
@@ -2638,7 +2702,8 @@ export async function fillPseudoAnswers(
   ) {
     filled++;
   }
-  // Antes de remuneración: años 0–99 (evita pisar con 3500000)
+  // Antes de remuneración: años por skill, luego años generales/admin
+  filled += await fillSkillYearsOfExperience(page);
   if (await fillYearsNumericGeneral(page)) filled++;
   if (await fillExpectedCompensation(page)) filled++;
 

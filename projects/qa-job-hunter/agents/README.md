@@ -2,23 +2,28 @@
 
 Taxonomía canónica del orquestador `npm run campaign`. Cada carpeta es un **agente**; la herramienta (Gmail API, Playwright, Excel) vive dentro.
 
+Story: [US-JH-B23 #131](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131).
+
 | Agente | Rol | Entrada npm |
 |--------|-----|-------------|
 | `gmail-fetch` | Trae mails de empleo / labels Empleo | `npm run agent:gmail-fetch` |
 | `pipeline-match` | Clasifica, match skills → Excel | `npm run agent:pipeline` |
-| `easy-apply` | Easy Apply LinkedIn (Playwright + sesión) | `npm run easy-apply` |
-| `excel-bridge` | Export cola + abrir `Empleos_Tracker.xlsx` | `npm run agent:excel` |
+| `excel-bridge` | Export cola + abrir `Empleos_Tracker.xlsx` (revisión) | `npm run agent:excel` |
+| `easy-apply` | Easy Apply LinkedIn (Playwright + sesión) — **canónico** | `npm run easy-apply` |
 | `gmail-reconcile` | Reorganiza labels Gmail según Excel | `npm run agent:gmail-reconcile` |
 
 ## Orden correcto
 
 ```
-fetch → pipeline → easy-apply → Excel (manual) → reconcile
+fetch → pipeline → Excel (revisión) → easy-apply → reconcile
 ```
 
-Reconcile va **después** de que edites Excel. No abre Gmail UI ni mailto.
+Easy Apply canónico = **este repo** (GGZenLab). Applied-list = Gmail / pipeline / reconcile.  
+El clone bajo QA-portfolio/`qa-job-hunter` no es el motor de apply.
 
-## Código fuente (Fase 2)
+Excel canónico: Escritorio (`Empleos_Tracker.xlsx`).
+
+## Código fuente
 
 Hoy `gmail-fetch`, `pipeline-match` y `gmail-reconcile` **delegan** al proyecto hermano `qa-job-applied-list` vía env `APPLIED_LIST_ROOT` (default: `~/projects/QA-portfolio/projects/qa-job-applied-list`).
 

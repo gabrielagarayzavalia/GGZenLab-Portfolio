@@ -247,10 +247,10 @@ Easy Apply es **un sub-agente** del flujo de campaña. El orden correcto (**reco
 flowchart TD
   startNode[Inicio_campania] --> fetch[Agente_GmailFetch]
   fetch --> pipeline[Agente_Pipeline_match_Excel]
-  pipeline --> easy[Agente_EasyApply_LinkedIn]
-  easy --> excelManual[Abrir_Excel_postulacion_manual]
-  excelManual --> userEdit[Usuario_actualiza_Excel]
-  userEdit --> reconcile[Agente_GmailReconcile]
+  pipeline --> excelReview[Abrir_Excel_revision]
+  excelReview --> userEdit[Usuario_revisa_pendientes]
+  userEdit --> easy[Agente_EasyApply_LinkedIn]
+  easy --> reconcile[Agente_GmailReconcile]
   reconcile --> endNode[Fin_labels_y_Excel]
 ```
 
@@ -258,9 +258,11 @@ flowchart TD
 |------|--------|---------|
 | 1 | Gmail fetch | `npm run agent:gmail-fetch` (vía applied-list) |
 | 2 | Pipeline match → Excel | `npm run agent:pipeline` |
-| 3 | Easy Apply (Playwright) | `npm run easy-apply` |
-| 4 | Excel bridge + manual | abre `Empleos_Tracker.xlsx` — vos postulás/actualizás |
+| 3 | Excel bridge + revisión | abre `Empleos_Tracker.xlsx` (Escritorio) — revisá pendientes/Notas |
+| 4 | Easy Apply (Playwright) — **canónico este repo** | `npm run easy-apply` |
 | 5 | Gmail reconcile | `npm run agent:gmail-reconcile` — **reorganiza labels**, no abre Gmail UI |
+
+Orden alineado a #131: fetch → pipeline → Excel (revisión) → apply → reconcile.
 
 Orquestador:
 

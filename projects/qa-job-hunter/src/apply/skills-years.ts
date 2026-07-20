@@ -53,7 +53,9 @@ export const SKILL_YEARS_ENTRIES: readonly {
   {
     label: "qa automation",
     years: 12,
-    patterns: [/qa\s*automation|test\s*automation|automatizaci[oó]n\s*(de\s*)?pruebas/i],
+    patterns: [
+      /qa\s*automation|test\s*automation|automatizaci[oó]n\s*(de\s*)?pruebas|a[nñ]os?\s+(de\s+)?experiencia\s+(en\s+)?automat|experiencia\s+en\s+automatizaci[oó]n|automation\s*(years|experience)/i,
+    ],
   },
   {
     label: "testing methodologies",

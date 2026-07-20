@@ -62,14 +62,16 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - **Country** = Argentina; **City (dropdown LinkedIn)** = Liniers, Comuna 9 (CABA no está en lista); **City texto** = `Ciudad Autónoma de Buenos Aires, Argentina`.
 - **(Country, city)** / preferred location = `Argentina, Ciudad Autónoma de Buenos Aires`.
 - **Dónde vivís/trabajar (texto):** EN `Buenos Aires city, Argentina` · ES `Ciudad Autonoma de Buenos Aires, Argentina`.
-- **English proficiency:** texto `Advanced (C1)`; dropdown = closest (Professional/Advanced); prefill se respeta.
+- **English proficiency:** escala numérica (1–10 / 10+ / 8–9) → **máximo** (50 años de uso); CEFR/texto → `Advanced (C1)`. Nunca meter texto CEFR en dropdown numérico.
 - **Where did you learn about…** = LinkedIn (select o typeahead + click).
 - **Prefill:** si el campo ya trae respuesta, **no pisar** — excepto **summary** (siempre pisar) y cover letter (upload).
-- **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` → **Yes/Sí**; si no → **No** (Deequ/GE → No + pendiente).
-- **Years of experience por skill:** sin mapa → Excel **Pendiente** + Notas, cerrar, siguiente.
+- **Skills Sí/No:** si la skill está en `src/apply/my-skills.ts` → **Yes/Sí**; si no → **No** (Deequ/GE → No + pendiente). También en **`<select>`**.
+- **Híbrida / Programación y scripting:** Sí (radio o select). Capgemini/Macro ES.
+- **Years of experience por skill:** input o dropdown numérico (`skills-years.ts` + clamp a `10+`); sin mapa → Excel **Pendiente** + Notas, cerrar, siguiente.
+- **Aviso cerrado** (`No longer accepting applications`): Excel **cerrada** al toque (sin esperar Easy Apply) → siguiente.
 - **Consent checkbox:** click; si no queda marcado → pendiente + siguiente. **Top choice / Follow company:** no tocar (spikes en BACKLOG).
 - **Assessment/honeypot:** pendiente + Notas con **assessment** en negrita; siguiente.
-- **Preguntas nuevas:** se acumulan en Excel columna **Notas** + `output/apply/new-questions-latest.json` al cerrar la corrida.
+- **Preguntas nuevas / dropdown sin regla:** se acumulan en Excel columna **Notas** + `output/apply/new-questions-latest.json` al cerrar la corrida.
 - Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**

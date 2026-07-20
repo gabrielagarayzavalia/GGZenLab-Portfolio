@@ -19,8 +19,21 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | ID | Priority | Scope |
 |----|----------|--------|
 | **EA-SPIKE-01** | Low | *Mark job as a top choice* — hoy no se toca (opcional LinkedIn). Spike: ¿auto-marcar siempre / nunca / por empresa? |
-| **EA-SPIKE-02** | Low | *Follow company* — hoy no se toca. Spike: política (seguir siempre / nunca / lista blanca). |
-| **EA-SPIKE-03** | Medium | Mapa de **años de experiencia por skill** (SQL, Python, …). Hoy: si aparece la pregunta → pendiente + siguiente. |
+| **EA-SPIKE-02** | Low | *Follow company* — hoy no se toca. Spike: política (seguir siempre / nunca / lista blanca). → [#142](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/142) |
+| **EA-SPIKE-03** | Medium | Mapa de **años de experiencia por skill** (SQL, Python, …). **Hecho en código** (`skills-years.ts`); ampliar skills nuevas cuando fallen. |
+| **EA-SPIKE-04** | Medium | **Estrategia campos desconocidos** (por tipo de widget). Hoy: Notas + seguir (salvo skipPending parcial) → quemar pasos / `draft_saved`. Objetivo: required+unknown → pendiente + Notas + siguiente; optional → solo Notas; **nunca inventar**. → [#154](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/154) |
+
+### EA-SPIKE-04 — detalle (política propuesta)
+
+| Tipo | Required desconocido | Optional desconocido |
+|------|----------------------|----------------------|
+| select / listbox | pendiente + Notas (label + opciones) → cerrar → siguiente | solo Notas, seguir |
+| text / numeric | pendiente + Notas → cerrar → siguiente | solo Notas, seguir |
+| radio Sí/No | pendiente + Notas (salvo `MY_SKILLS` / reglas) | solo Notas |
+| checkbox (Follow, top choice) | no tocar hasta EA-SPIKE-01/02 | no tocar |
+| typeahead | reintentos actuales; si falla → pendiente | — |
+
+Regla base: **nunca inventar** texto libre ni opción de select sin regla.
 
 ## Backlog — execution order
 

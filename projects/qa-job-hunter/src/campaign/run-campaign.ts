@@ -1,11 +1,12 @@
 /**
- * Orquestador de campaña QA:
- *   fetch → pipeline → easy-apply → abrir Excel (pausa) → reconcile
+ * Orquestador de campaña QA (#131):
+ *   fetch → pipeline → abrir Excel (revisión) → easy-apply → reconcile
  *
- * No abre Gmail UI ni mailto. Reconcile solo reorganiza labels tras editar Excel.
+ * No abre Gmail UI ni mailto. Easy Apply canónico = este repo.
+ * Applied-list = Gmail / pipeline / reconcile.
  *
  * Flags:
- *   --from=fetch|pipeline|apply|excel|reconcile
+ *   --from=fetch|pipeline|excel|apply|reconcile
  *   --apply-max=N
  *   --skip-apply
  *   --yes   (sin pausa interactiva tras Excel; útil CI/no-TTY)
@@ -21,9 +22,9 @@ import { stdin as input, stdout as output } from "process";
 import { exportQueueToExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
 
-type Step = "fetch" | "pipeline" | "apply" | "excel" | "reconcile";
+type Step = "fetch" | "pipeline" | "excel" | "apply" | "reconcile";
 
-const STEPS: Step[] = ["fetch", "pipeline", "apply", "excel", "reconcile"];
+const STEPS: Step[] = ["fetch", "pipeline", "excel", "apply", "reconcile"];
 
 function parseArgs(argv: string[]): {
   from: Step;
@@ -55,7 +56,7 @@ function parseArgs(argv: string[]): {
     } else if (arg === "--help" || arg === "-h") {
       console.log(`Uso: npm run campaign -- [--from=STEP] [--apply-max=N] [--skip-apply] [--yes]
 
-Orden: fetch → pipeline → apply → excel (pausa) → reconcile
+Orden: fetch → pipeline → excel (revisión) → apply → reconcile
 
 APPLIED_LIST_ROOT=${resolveAppliedListRoot()}
 `);
@@ -73,13 +74,13 @@ function stepsFrom(from: Step): Step[] {
 
 async function pauseForManualExcel(yes: boolean): Promise<void> {
   if (yes || !input.isTTY) {
-    console.log("\n⏭  Pausa Excel omitida (--yes o sin TTY). Seguí con reconcile.");
+    console.log("\n⏭  Pausa Excel omitida (--yes o sin TTY). Seguí con Easy Apply.");
     return;
   }
   const rl = createInterface({ input, output });
   try {
     await rl.question(
-      "\n⏸  Postulá lo manual en Excel y actualizá estados. Enter cuando termines → reconcile… "
+      "\n⏸  Revisá Excel del Escritorio (pendientes / Notas). Enter cuando termines → Easy Apply… "
     );
   } finally {
     rl.close();
@@ -112,7 +113,7 @@ async function main(): Promise<void> {
   console.log("🎯 Campaña QA — orquestador (sub-agentes bajo qa-job-hunter)");
   console.log(`   applied-list: ${root}`);
   console.log(`   desde: ${from}${skipApply ? " (skip-apply)" : ""}`);
-  console.log("   orden: fetch → pipeline → apply → Excel → reconcile\n");
+  console.log("   orden: fetch → pipeline → Excel (revisión) → apply → reconcile\n");
 
   for (const step of stepsFrom(from)) {
     if (step === "fetch") {
@@ -123,6 +124,12 @@ async function main(): Promise<void> {
       runAppliedListScript("run-pipeline");
       continue;
     }
+    if (step === "excel") {
+      exportQueueToExcel();
+      openTrackerExcel();
+      await pauseForManualExcel(yes);
+      continue;
+    }
     if (step === "apply") {
       if (skipApply) {
         console.log("\n⏭  Easy Apply omitido (--skip-apply)");
@@ -131,16 +138,8 @@ async function main(): Promise<void> {
       runHunterEasyApply(applyMax);
       continue;
     }
-    if (step === "excel") {
-      // Si venimos de apply, finishProductiveRun ya exportó/abrió; reforzamos por si --from=excel
-      exportQueueToExcel();
-      openTrackerExcel();
-      await pauseForManualExcel(yes);
-      continue;
-    }
     if (step === "reconcile") {
       runAppliedListScript("gmail:reconcile");
-      // Refrescar Excel desde applied-list si existe el script
       try {
         runAppliedListScript("excel:refresh");
       } catch {

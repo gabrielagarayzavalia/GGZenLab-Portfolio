@@ -57,7 +57,8 @@ export const PSEUDO_ANSWERS = {
     selectText: /Argentina/i,
   },
   linkedinProfile: {
-    fieldMatch: /linkedin\s*profile|perfil\s*de\s*linkedin|linkedin\s*url/i,
+    fieldMatch:
+      /linkedin\s*profile|perfil\s*de\s*linkedin|linkedin\s*url|link\s+to\s+your\s+linkedin|share\s+the\s+link\s+to\s+your\s+linkedin|enlace\s+(a|de)\s+(tu\s+)?linkedin/i,
     value: "https://www.linkedin.com/in/gabriela-garayzavalia",
   },
   portfolio: {
@@ -83,7 +84,7 @@ export const PSEUDO_ANSWERS = {
   },
   workOrLiveCityFreeText: {
     fieldMatch:
-      /where (would you like to work|do you (live|want to work)|are you (based|located))|work location|based in|d[oó]nde (viv|te gustar[ií]a trabajar|prefer[ií]s trabajar)|ciudad (de residencia|donde)|lugar de (trabajo|residencia)/i,
+      /where (would you like to work|do you (live|want to work)|are you (based|located))|what is your current location|current location|work location|based in|d[oó]nde (viv|te gustar[ií]a trabajar|prefer[ií]s trabajar)|ciudad (de residencia|donde)|lugar de (trabajo|residencia)|ubicaci[oó]n\s*actual/i,
     en: "Buenos Aires city, Argentina",
     es: "Ciudad Autonoma de Buenos Aires, Argentina",
   },

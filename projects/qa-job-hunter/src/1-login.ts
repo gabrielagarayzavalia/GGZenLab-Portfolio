@@ -95,12 +95,12 @@ async function loginLinkedIn() {
     ) {
       console.log("\n⚠️  LinkedIn pide verificación adicional (2FA/CAPTCHA).");
       console.log("👉 Completá la verificación manualmente en el navegador.");
-      console.log("⏳ Tenés hasta 90 segundos...\n");
-      await page.waitForURL("**/feed/**", { timeout: 90000 });
+      console.log("⏳ Tenés hasta 10 minutos...\n");
+      await page.waitForURL("**/feed/**", { timeout: 600_000 });
     }
 
-    // Esperar a llegar al feed
-    await page.waitForURL("**/feed/**", { timeout: 20000 });
+    // Esperar a llegar al feed (también 10 min: a veces el checkpoint no cambia la URL a tiempo)
+    await page.waitForURL("**/feed/**", { timeout: 600_000 });
     console.log("✅ Login exitoso!");
 
     await context.storageState({ path: SESSION_PATH });

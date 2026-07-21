@@ -30,11 +30,15 @@ JOB_ID_RE = re.compile(r"(?:currentJobId=|/jobs/view/)(\d+)")
 ASSESSMENT_RE = re.compile(r"(assessment|honeypot)", re.I)
 
 # Cola → Excel
+# Automatización NUNCA escribe Descartado (solo la usuaria en Excel).
 STATUS_TO_EXCEL = {
     "pendiente": "Pendiente",
     "enviada": "Enviada",
     "cerrada": "Cerrado",
-    "descartada": "Descartado",
+    "descartada": "Stand-by",  # redirigido; ver nota abajo
+    "duplicado": "Duplicado",
+    "stand-by": "Stand-by",
+    "borrador": "Borrador abierto",
 }
 
 # Excel → cola (solo lectura de finales / pendiente)
@@ -43,6 +47,7 @@ EXCEL_TO_STATUS = {
     "enviada": "enviada",
     "cerrado": "cerrada",
     "descartado": "descartada",
+    "duplicado": "duplicado",
     "stand-by": "pendiente",
     "borrador abierto": "pendiente",
 }
@@ -206,13 +211,25 @@ def cmd_export(xlsx: Path) -> None:
         if not jid or jid not in queue:
             continue
         current = (ws.cell(row_idx, 6).value or "").strip()  # Estado
-        # No pisar finales del Excel ni Stand-by
-        if current.lower() in ("cerrado", "descartado", "stand-by"):
+        # No pisar finales del Excel ni Stand-by / Duplicado / Descartado (manual)
+        if current.lower() in ("cerrado", "descartado", "stand-by", "duplicado"):
             skipped_final += 1
             continue
         q = queue[jid]
         status = (q.get("ApplyStatus") or "pendiente").strip().lower()
         excel_estado = STATUS_TO_EXCEL.get(status)
+        # Defensa: nunca escribir Descartado desde la cola
+        if excel_estado and excel_estado.lower() == "descartado":
+            excel_estado = "Stand-by"
+            reason_extra = "Automatización no puede Descartado → Stand-by"
+            notes_q = (q.get("Notes") or q.get("notes") or "").strip()
+            if reason_extra not in notes_q:
+                q["Notes"] = f"{notes_q}\n{reason_extra}".strip() if notes_q else reason_extra
+        if status == "descartada":
+            notes_q = (q.get("Notes") or q.get("notes") or "").strip()
+            hint = "Stand-by: cola tenía descartada (solo vos marcás Descartado en Excel)"
+            if hint not in notes_q:
+                q["Notes"] = f"{notes_q}\n{hint}".strip() if notes_q else hint
         if excel_estado and current != excel_estado:
             ws.cell(row_idx, 6).value = excel_estado
             if excel_estado == "Enviada" and not ws.cell(row_idx, 7).value:

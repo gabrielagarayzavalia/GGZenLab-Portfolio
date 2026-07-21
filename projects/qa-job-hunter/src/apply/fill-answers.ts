@@ -191,7 +191,7 @@ export function hasPrefillValue(value: string): boolean {
   const v = value.trim();
   if (!v) return false;
   if (EMPTY_SELECT_RE.test(v)) return false;
-  if (v === "0") return false;
+  // "0" es válido (años Apache/Tosca=0). Placeholder de select suele ser texto, no "0".
   return true;
 }
 
@@ -1005,6 +1005,8 @@ async function clickYesNoInBlock(
 ): Promise<boolean> {
   const yesRe = /^(Yes|Sí|Si)$/i;
   const noRe = /^(No)$/i;
+  const yesLoose = /\b(Yes|Sí|Si)\b/i;
+  const noLoose = /\bNo\b/i;
   const checked = block.locator("input[type='radio']:checked, input[type='checkbox']:checked");
   if ((await checked.count().catch(() => 0)) > 0) {
     console.log(`   ↳ ${logLabel}: dejo prefill`);
@@ -1020,7 +1022,7 @@ async function clickYesNoInBlock(
         .evaluate((n) => (n as HTMLInputElement).labels?.[0]?.textContent ?? "")
         .catch(() => "")) ||
         "");
-    const match = wantYes ? yesRe.test(lab) : noRe.test(lab);
+    const match = wantYes ? yesRe.test(lab) || yesLoose.test(lab) : noRe.test(lab) || noLoose.test(lab);
     if (!match) continue;
     await radio.check({ force: true }).catch(async () => {
       await radio.click({ force: true, timeout: 2000 });
@@ -1039,37 +1041,104 @@ async function clickYesNoInBlock(
   // Dropdown Sí/No (Capgemini/Macro y similares)
   const sel = block.locator("select").first();
   if (await sel.isVisible({ timeout: 400 }).catch(() => false)) {
-    const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
-    if (hasPrefillValue(cur) && !EMPTY_SELECT_RE.test(cur)) {
-      console.log(`   ↳ ${logLabel}: dejo prefill select`);
-      return true;
-    }
-    const opt = sel
-      .locator("option")
-      .filter({ hasText: wantYes ? yesRe : noRe })
-      .first();
-    if (await opt.count().catch(() => 0)) {
-      const v = await opt.getAttribute("value");
-      const lab = ((await opt.innerText().catch(() => "")) ?? (wantYes ? "Yes" : "No")).trim();
-      if (v != null) await sel.selectOption(v);
-      else await sel.selectOption({ label: lab }).catch(() => {});
-      console.log(`   ↳ ${logLabel}: ${wantYes ? "Yes/Sí" : "No"} (select)`);
-      await sleep(250);
-      return true;
-    }
+    if (await selectYesNoOption(sel, wantYes, logLabel)) return true;
   }
   return false;
+}
+
+/** Elige Sí/Yes o No en un <select> nativo (opciones con espacios / value numérico). */
+async function selectYesNoOption(
+  sel: Locator,
+  wantYes: boolean,
+  logLabel: string
+): Promise<boolean> {
+  const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
+  const curText = (
+    (await sel.locator("option:checked").innerText().catch(() => "")) ||
+    (await sel.evaluate((n) => (n as HTMLSelectElement).selectedOptions?.[0]?.text ?? "").catch(
+      () => ""
+    )) ||
+    cur
+  ).trim();
+  if (
+    hasPrefillValue(curText) &&
+    !EMPTY_SELECT_RE.test(curText) &&
+    (wantYes ? /^(Yes|Sí|Si)$/i.test(curText) : /^No$/i.test(curText))
+  ) {
+    console.log(`   ↳ ${logLabel}: dejo prefill select`);
+    return true;
+  }
+  const optionEls = sel.locator("option");
+  const oc = await optionEls.count().catch(() => 0);
+  let picked: { v: string | null; lab: string } | null = null;
+  for (let o = 0; o < oc; o++) {
+    const opt = optionEls.nth(o);
+    const lab = ((await opt.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (!lab || EMPTY_SELECT_RE.test(lab)) continue;
+    const isYes = /^(Yes|Sí|Si)$/i.test(lab);
+    const isNo = /^No$/i.test(lab);
+    if (wantYes ? isYes : isNo) {
+      picked = { v: await opt.getAttribute("value"), lab };
+      break;
+    }
+  }
+  if (!picked) {
+    const dump: string[] = [];
+    for (let o = 0; o < Math.min(oc, 8); o++) {
+      dump.push(((await optionEls.nth(o).innerText().catch(() => "")) ?? "").trim());
+    }
+    console.log(`   ↳ ${logLabel}: sin opción Sí/No (opts: ${dump.join(" | ") || "—"})`);
+    return false;
+  }
+  if (picked.v != null && picked.v !== "") await sel.selectOption(picked.v);
+  else await sel.selectOption({ label: picked.lab }).catch(() => {});
+  console.log(`   ↳ ${logLabel}: ${picked.lab} (select)`);
+  await sleep(250);
+  return true;
 }
 
 /** Híbrida CABA → Sí; Programación y scripting → Sí. Issue #149. */
 export async function answerHybridAndProgramming(page: Page): Promise<number> {
   const root = scopeRoot(page);
   if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return 0;
+  let answered = 0;
+
+  async function blobFor(el: Locator): Promise<string> {
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 320);
+      })
+      .catch(() => "");
+    return `${label} ${aria} ${near}`;
+  }
+
+  // 1) Selects nativos por label (TCS: "modalidad hibrida" / "asistir … CABA")
+  const selects = root.locator("select");
+  const sn = await selects.count().catch(() => 0);
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const blob = ((await blobFor(el)) ?? "").replace(/\s+/g, " ").trim();
+    if (PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob)) {
+      if (await selectYesNoOption(el, true, "Hybrid work")) answered++;
+      continue;
+    }
+    if (PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob)) {
+      if (await selectYesNoOption(el, true, "Programming/scripting")) answered++;
+    }
+  }
+
+  // 2) Radios / checkbox en bloques
   const blocks = root.locator(
     "fieldset, .fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], li.jobs-easy-apply-form-section__grouping"
   );
   const n = await blocks.count().catch(() => 0);
-  let answered = 0;
   for (let i = 0; i < Math.min(n, 40); i++) {
     const block = blocks.nth(i);
     if (!(await block.isVisible().catch(() => false))) continue;
@@ -2924,7 +2993,7 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
     const sel = block.locator("select").first();
     if (await sel.isVisible({ timeout: 200 }).catch(() => false)) {
       const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
-      const empty = !cur || EMPTY_SELECT_RE.test(cur) || cur === "0";
+      const empty = !cur || EMPTY_SELECT_RE.test(cur);
       if (!empty) continue;
       const known =
         PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob) ||
@@ -3048,8 +3117,8 @@ export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[
   const blocking = all.filter((f) => {
     const label = f.label.replace(/\s+/g, " ");
     const starred = /\*/.test(label);
-    const emptySelect =
-      !f.value || EMPTY_SELECT_RE.test(f.value) || f.value === "0";
+    // No tratar "0" como vacío: es respuesta válida de años (Apache/Tosca).
+    const emptySelect = !f.value || EMPTY_SELECT_RE.test(f.value);
     const isCountry =
       PSEUDO_ANSWERS.country.fieldMatch.test(label) ||
       (/^(country|pa[ií]s)\b/i.test(label) && !/phone|tel/i.test(label));

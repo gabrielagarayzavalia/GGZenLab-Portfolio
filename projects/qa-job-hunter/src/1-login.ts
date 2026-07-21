@@ -37,13 +37,18 @@ async function loginLinkedIn() {
 
   try {
     console.log("📄 Navegando a LinkedIn login...");
+    // LinkedIn casi nunca llega a networkidle (trackers/polling) → timeout falso.
     await page.goto("https://www.linkedin.com/login", {
-      waitUntil: "networkidle",
-      timeout: 30000,
+      waitUntil: "domcontentloaded",
+      timeout: 90_000,
     });
 
-    // Esperar a que el formulario esté completamente cargado
-    await page.waitForTimeout(2000);
+    // Formulario listo (mejor que sleep fijo)
+    await page
+      .locator('input[type="text"], input[type="email"]')
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    await page.waitForTimeout(500);
 
     // Imprimir todos los inputs visibles para diagnóstico
     const inputs = await page.evaluate(() => {

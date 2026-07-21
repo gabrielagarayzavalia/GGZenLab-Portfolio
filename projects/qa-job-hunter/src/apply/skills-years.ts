@@ -48,6 +48,19 @@ export const SKILL_YEARS_ENTRIES: readonly {
   { label: "html", years: 13, patterns: [/\bhtml\b/i] },
   { label: "css", years: 13, patterns: [/\bcss\b/i] },
   { label: "xpath", years: 13, patterns: [/xpath/i] },
+  {
+    label: "manual testing",
+    years: 25,
+    patterns: [
+      /manual\s*test/i,
+      /tester\s*manual|testing\s*manual|pruebas?\s*manuales?/i,
+      /working\s+in\s+manual\s+testing/i,
+      /qa\s*analyst|analista\s*(qa|de\s*calidad|funcional)/i,
+      /a[nñ]os?\s+(de\s+)?experiencia\s+(como\s+)?(qa\s*)?tester\s*manual/i,
+      /\bquality\s*assurance\b(?!\s*automation)/i,
+      /experiencia\s+(con|en)\s+quality\s*assurance|with\s+quality\s*assurance/i,
+    ],
+  },
   { label: "pandas", years: 3, patterns: [/pandas|athena|\bs3\b/i] },
   { label: "claude", years: 1, patterns: [/claude/i] },
   { label: "github copilot", years: 1, patterns: [/copilot/i] },
@@ -74,8 +87,8 @@ export const SKILL_YEARS_ENTRIES: readonly {
   { label: "cypress", years: 2, patterns: [/cypress/i] },
   { label: "git", years: 13, patterns: [/\bgit\b(?!\s*hub|\s*lab)/i] },
   { label: "ci/cd", years: 2, patterns: [/ci\s*\/\s*cd|continuous\s*integration/i] },
-  /** Sin experiencia → 0 en numeric; Sí/No vía my-skills (No). */
-  { label: "apache nifi", years: 0, patterns: [/apache\s*nifi|\bnifi\b/i] },
+  /** Apache * (NiFi, Kafka, …): sin experiencia → 0 / No. */
+  { label: "apache", years: 0, patterns: [/\bapache\b/i] },
   { label: "tosca", years: 0, patterns: [/\btosca\b/i] },
 ] as const;
 
@@ -86,9 +99,8 @@ export const SKILL_YEARS_ENTRIES: readonly {
 export function resolveSkillYears(questionText: string): SkillYearsHit | null {
   const text = questionText.replace(/\s+/g, " ").trim();
   if (text.length < 8) return null;
-  // Debe parecer pregunta de años + skill (no Administrative genérico)
+  // Pregunta de años + skill (primer pattern que matchee gana).
   if (!/years?|a[nñ]os?/i.test(text)) return null;
-  if (!/experience|experiencia|with|in|using|con|en|usando/i.test(text)) return null;
 
   for (const entry of SKILL_YEARS_ENTRIES) {
     if (entry.patterns.some((p) => p.test(text))) {

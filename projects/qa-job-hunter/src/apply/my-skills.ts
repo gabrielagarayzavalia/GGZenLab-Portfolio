@@ -67,7 +67,7 @@ const SKILL_HINTS: { label: string; patterns: RegExp[]; knownIf: "list" | "autom
     { label: "postman", patterns: [/postman/i], knownIf: "list" },
     { label: "xml", patterns: [/\bxml\b/i], knownIf: "list" },
     { label: "tosca", patterns: [/\btosca\b/i], knownIf: "list" },
-    { label: "apache nifi", patterns: [/apache\s*nifi|\bnifi\b/i], knownIf: "list" },
+    { label: "apache", patterns: [/\bapache\b/i], knownIf: "list" },
     { label: "bdd", patterns: [/\bbdd\b/i, /cucumber/i, /gherkin/i], knownIf: "list" },
     { label: "ci/cd", patterns: [/ci\/cd/i, /jenkins/i, /github actions/i, /gitlab ci/i], knownIf: "list" },
     { label: "agile", patterns: [/\bagile\b/i, /\bscrum\b/i, /\bkanban\b/i], knownIf: "list" },

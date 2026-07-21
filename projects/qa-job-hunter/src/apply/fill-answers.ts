@@ -71,11 +71,26 @@ export const PSEUDO_ANSWERS = {
   },
   hybridWorkOk: {
     fieldMatch:
-      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial)|trabajo h[ií]brid|disponib.*h[ií]brid|h[ií]brida/i,
+      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial|asistir)|trabajo h[ií]brid|disponib.*h[ií]brid|h[ií]brida|asistir\s+\d|presencial\s+a\s+las\s+oficinas|d[ií]a\s*presencial.*caba|oficinas?\?\s*caba/i,
   },
   programmingScripting: {
     fieldMatch:
       /programaci[oó]n y scripting|programming and scripting|experiencia en programaci[oó]n|conocimientos?\s+(de\s+)?(programaci[oó]n|scripting)|programming\s*\/\s*scripting/i,
+  },
+  /** Functionary: 80% Manual / 20% Automation → Sí. */
+  manualAutomationMix: {
+    fieldMatch:
+      /80%\s*Manual.*20%\s*Automation|comfortable to work in .{0,40}Manual.{0,40}Automation|manual\s+and\s+\d+%\s*automation/i,
+  },
+  /** Confirmación B2+/C1 (Sí/No), no escala CEFR. */
+  englishB2C1Confirm: {
+    fieldMatch:
+      /B2\+?\s*\/?\s*C1.{0,40}English|have\s+B2.{0,20}English\s+proficiency|English\s+proficiency\s+level\s*\?/i,
+  },
+  /** Backend testing con SQL → Sí. */
+  backendSqlTesting: {
+    fieldMatch:
+      /strong\s+backend\s+testing.{0,40}SQL|backend\s+testing\s+writing\s+SQL|testing\s+writing\s+SQL\s+queries/i,
   },
   linkedinProfile: {
     fieldMatch:
@@ -89,7 +104,7 @@ export const PSEUDO_ANSWERS = {
   /** Remuneración pretendida bruta (mensual). */
   expectedCompensation: {
     fieldMatch:
-      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s+\w+){0,3}\s*pretendida|remuneraci[oó]n\s*bruta|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)/i,
+      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s+\w+){0,3}\s*pretendida|remuneraci[oó]n\s*bruta|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|pretension\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)|pretensi[oó]n.*brutos?|brutos?\s*\?/i,
     usdMatch: /\b(usd|u\$s|us\$|d[oó]lar(es)?|dollars?)\b|\$\s*usd/i,
     arsMatch: /\b(ars|peso(s)?(\s*argentinos?)?|\$\s*ar|arg(?:entina)?)\b/i,
     usdValue: "2750",
@@ -146,11 +161,11 @@ export const PSEUDO_ANSWERS = {
   },
   /**
    * Años generales / dominio (ej. Administrative): 0–99.
-   * No confundir con remuneración (también usa inputs *-numeric).
+   * No confundir con remuneración ni con skills (SQL/XML/…) → skills-years.
    */
   yearsNumericGeneral: {
     fieldMatch:
-      /how many years of .+ experience|years of .+ experience do you|years?\s+of\s+administrative|a[nñ]os?\s+(de\s+)?experiencia\s+administrat|administrative experience/i,
+      /years?\s+of\s+administrative|a[nñ]os?\s+(de\s+)?experiencia\s+administrat|administrative experience|how many years of administrative/i,
     value: "25",
   },
   /** Frameworks DQ: No + dejar pendiente. */
@@ -191,7 +206,7 @@ export function hasPrefillValue(value: string): boolean {
   const v = value.trim();
   if (!v) return false;
   if (EMPTY_SELECT_RE.test(v)) return false;
-  if (v === "0") return false;
+  // "0" es válido (años Apache/Tosca=0). Placeholder de select suele ser texto, no "0".
   return true;
 }
 
@@ -1005,6 +1020,8 @@ async function clickYesNoInBlock(
 ): Promise<boolean> {
   const yesRe = /^(Yes|Sí|Si)$/i;
   const noRe = /^(No)$/i;
+  const yesLoose = /\b(Yes|Sí|Si)\b/i;
+  const noLoose = /\bNo\b/i;
   const checked = block.locator("input[type='radio']:checked, input[type='checkbox']:checked");
   if ((await checked.count().catch(() => 0)) > 0) {
     console.log(`   ↳ ${logLabel}: dejo prefill`);
@@ -1020,7 +1037,7 @@ async function clickYesNoInBlock(
         .evaluate((n) => (n as HTMLInputElement).labels?.[0]?.textContent ?? "")
         .catch(() => "")) ||
         "");
-    const match = wantYes ? yesRe.test(lab) : noRe.test(lab);
+    const match = wantYes ? yesRe.test(lab) || yesLoose.test(lab) : noRe.test(lab) || noLoose.test(lab);
     if (!match) continue;
     await radio.check({ force: true }).catch(async () => {
       await radio.click({ force: true, timeout: 2000 });
@@ -1039,48 +1056,122 @@ async function clickYesNoInBlock(
   // Dropdown Sí/No (Capgemini/Macro y similares)
   const sel = block.locator("select").first();
   if (await sel.isVisible({ timeout: 400 }).catch(() => false)) {
-    const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
-    if (hasPrefillValue(cur) && !EMPTY_SELECT_RE.test(cur)) {
-      console.log(`   ↳ ${logLabel}: dejo prefill select`);
-      return true;
-    }
-    const opt = sel
-      .locator("option")
-      .filter({ hasText: wantYes ? yesRe : noRe })
-      .first();
-    if (await opt.count().catch(() => 0)) {
-      const v = await opt.getAttribute("value");
-      const lab = ((await opt.innerText().catch(() => "")) ?? (wantYes ? "Yes" : "No")).trim();
-      if (v != null) await sel.selectOption(v);
-      else await sel.selectOption({ label: lab }).catch(() => {});
-      console.log(`   ↳ ${logLabel}: ${wantYes ? "Yes/Sí" : "No"} (select)`);
-      await sleep(250);
-      return true;
-    }
+    if (await selectYesNoOption(sel, wantYes, logLabel)) return true;
   }
   return false;
 }
 
-/** Híbrida CABA → Sí; Programación y scripting → Sí. Issue #149. */
+/** Elige Sí/Yes o No en un <select> nativo (opciones con espacios / value numérico). */
+async function selectYesNoOption(
+  sel: Locator,
+  wantYes: boolean,
+  logLabel: string
+): Promise<boolean> {
+  const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
+  const curText = (
+    (await sel.locator("option:checked").innerText().catch(() => "")) ||
+    (await sel.evaluate((n) => (n as HTMLSelectElement).selectedOptions?.[0]?.text ?? "").catch(
+      () => ""
+    )) ||
+    cur
+  ).trim();
+  if (
+    hasPrefillValue(curText) &&
+    !EMPTY_SELECT_RE.test(curText) &&
+    (wantYes ? /^(Yes|Sí|Si)$/i.test(curText) : /^No$/i.test(curText))
+  ) {
+    console.log(`   ↳ ${logLabel}: dejo prefill select`);
+    return true;
+  }
+  const optionEls = sel.locator("option");
+  const oc = await optionEls.count().catch(() => 0);
+  let picked: { v: string | null; lab: string } | null = null;
+  for (let o = 0; o < oc; o++) {
+    const opt = optionEls.nth(o);
+    const lab = ((await opt.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (!lab || EMPTY_SELECT_RE.test(lab)) continue;
+    const isYes = /^(Yes|Sí|Si)$/i.test(lab);
+    const isNo = /^No$/i.test(lab);
+    if (wantYes ? isYes : isNo) {
+      picked = { v: await opt.getAttribute("value"), lab };
+      break;
+    }
+  }
+  if (!picked) {
+    const dump: string[] = [];
+    for (let o = 0; o < Math.min(oc, 8); o++) {
+      dump.push(((await optionEls.nth(o).innerText().catch(() => "")) ?? "").trim());
+    }
+    console.log(`   ↳ ${logLabel}: sin opción Sí/No (opts: ${dump.join(" | ") || "—"})`);
+    return false;
+  }
+  if (picked.v != null && picked.v !== "") await sel.selectOption(picked.v);
+  else await sel.selectOption({ label: picked.lab }).catch(() => {});
+  console.log(`   ↳ ${logLabel}: ${picked.lab} (select)`);
+  await sleep(250);
+  return true;
+}
+
+/** Híbrida / scripting / 80-20 Manual / B2+C1 / backend SQL → Sí. */
 export async function answerHybridAndProgramming(page: Page): Promise<number> {
   const root = scopeRoot(page);
   if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return 0;
+  let answered = 0;
+
+  const yesRules: { log: string; re: RegExp }[] = [
+    { log: "Hybrid work", re: PSEUDO_ANSWERS.hybridWorkOk.fieldMatch },
+    { log: "Programming/scripting", re: PSEUDO_ANSWERS.programmingScripting.fieldMatch },
+    { log: "Manual/Automation 80/20", re: PSEUDO_ANSWERS.manualAutomationMix.fieldMatch },
+    { log: "English B2+/C1", re: PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch },
+    { log: "Backend SQL testing", re: PSEUDO_ANSWERS.backendSqlTesting.fieldMatch },
+  ];
+
+  async function blobFor(el: Locator): Promise<string> {
+    const label = await fieldLabel(el);
+    const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+    const near = await el
+      .evaluate((node) => {
+        const wrap =
+          node.closest(
+            ".fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], fieldset, li, div"
+          ) ?? node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 320);
+      })
+      .catch(() => "");
+    return `${label} ${aria} ${near}`;
+  }
+
+  function matchRule(blob: string): { log: string; re: RegExp } | null {
+    for (const rule of yesRules) {
+      if (rule.re.test(blob)) return rule;
+    }
+    return null;
+  }
+
+  // 1) Selects nativos por label
+  const selects = root.locator("select");
+  const sn = await selects.count().catch(() => 0);
+  for (let i = 0; i < sn; i++) {
+    const el = selects.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const blob = ((await blobFor(el)) ?? "").replace(/\s+/g, " ").trim();
+    const rule = matchRule(blob);
+    if (!rule) continue;
+    if (await selectYesNoOption(el, true, rule.log)) answered++;
+  }
+
+  // 2) Radios / checkbox en bloques
   const blocks = root.locator(
     "fieldset, .fb-form-element, .jobs-easy-apply-form-element, [data-test-form-element], li.jobs-easy-apply-form-section__grouping"
   );
   const n = await blocks.count().catch(() => 0);
-  let answered = 0;
   for (let i = 0; i < Math.min(n, 40); i++) {
     const block = blocks.nth(i);
     if (!(await block.isVisible().catch(() => false))) continue;
     const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-    if (PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob)) {
-      if (await clickYesNoInBlock(block, true, "Hybrid work")) answered++;
-      continue;
-    }
-    if (PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob)) {
-      if (await clickYesNoInBlock(block, true, "Programming/scripting")) answered++;
-    }
+    const rule = matchRule(blob);
+    if (!rule) continue;
+    if (await clickYesNoInBlock(block, true, rule.log)) answered++;
   }
   return answered;
 }
@@ -1589,8 +1680,10 @@ export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
   }
 
   function matchesYearsQuestion(blob: string): boolean {
-    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) return false;
     if (PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob)) return false;
+    // Skill mapeada (SQL/XML/…) gana sobre "años generales"
+    if (resolveSkillYears(blob)) return true;
+    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) return false;
     return (
       skillYearsRe.test(blob) ||
       /cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia|a[nñ]os?\s+(de\s+)?experiencia|years?\s+of\s+(work\s+)?experience|experiencia\s+(ten[eé]s|tienes).{0,40}(como|con|en)|experiencia\s+(en|con)\s+(qa|automat|javascript|js|cypress|playwright|selenium|postman|jmeter)/i.test(
@@ -2753,6 +2846,11 @@ export async function fillEnglishProficiency(page: Page): Promise<boolean> {
       opts.push({ text, value });
     }
 
+    // Confirmación Sí/No (ej. "So you have B2+/C1 English proficiency level?")
+    if (opts.some((o) => /^(Yes|Sí|Si)$/i.test(o.text))) {
+      if (await selectYesNoOption(el, true, "English proficiency Yes/No")) return true;
+    }
+
     // Escala numérica (1–10 / 10+ / 8-9): NUNCA poner "Advanced (C1)"
     if (optionsLookNumeric(opts.map((x) => x.text))) {
       const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
@@ -2906,7 +3004,7 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
       }
       return {
         reason: "Pregunta years of experience (skill sin mapa) — pendiente",
-        notes: `Pendiente: years of experience — skill no mapeada en skills-years.ts ("${blob.slice(0, 80)}")`,
+        notes: `Pendiente: years of experience — skill no mapeada en skills-years.ts ("${blob.slice(0, 120)}")`,
       };
     }
 
@@ -2924,11 +3022,14 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
     const sel = block.locator("select").first();
     if (await sel.isVisible({ timeout: 200 }).catch(() => false)) {
       const cur = ((await sel.inputValue().catch(() => "")) ?? "").trim();
-      const empty = !cur || EMPTY_SELECT_RE.test(cur) || cur === "0";
+      const empty = !cur || EMPTY_SELECT_RE.test(cur);
       if (!empty) continue;
       const known =
         PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.manualAutomationMix.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.backendSqlTesting.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.country.fieldMatch.test(blob) ||
@@ -3048,8 +3149,8 @@ export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[
   const blocking = all.filter((f) => {
     const label = f.label.replace(/\s+/g, " ");
     const starred = /\*/.test(label);
-    const emptySelect =
-      !f.value || EMPTY_SELECT_RE.test(f.value) || f.value === "0";
+    // No tratar "0" como vacío: es respuesta válida de años (Apache/Tosca).
+    const emptySelect = !f.value || EMPTY_SELECT_RE.test(f.value);
     const isCountry =
       PSEUDO_ANSWERS.country.fieldMatch.test(label) ||
       (/^(country|pa[ií]s)\b/i.test(label) && !/phone|tel/i.test(label));

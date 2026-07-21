@@ -71,7 +71,7 @@ export const PSEUDO_ANSWERS = {
   },
   hybridWorkOk: {
     fieldMatch:
-      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial)|trabajo h[ií]brid|disponib.*h[ií]brid|h[ií]brida/i,
+      /modalidad h[ií]brid|hybrid.*(office|presencial|caba)|1\s*d[ií]a presencial|2 o 1 d[ií]a|acuerdo.*(h[ií]brid|presencial|asistir)|trabajo h[ií]brid|disponib.*h[ií]brid|h[ií]brida|asistir\s+\d|presencial\s+a\s+las\s+oficinas|d[ií]a\s*presencial.*caba|oficinas?\?\s*caba/i,
   },
   programmingScripting: {
     fieldMatch:
@@ -89,7 +89,7 @@ export const PSEUDO_ANSWERS = {
   /** Remuneración pretendida bruta (mensual). */
   expectedCompensation: {
     fieldMatch:
-      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s+\w+){0,3}\s*pretendida|remuneraci[oó]n\s*bruta|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)/i,
+      /expected\s*(salary|compensation|pay|ctc)|salary\s*expectation|desired\s*salary|compensation\s*expectation|financial expectations|remuneraci[oó]n(\s+\w+){0,3}\s*pretendida|remuneraci[oó]n\s*bruta|remuneraci[oó]n(\s*pretendida)?|sueldo\s*(pretendido|esperado|bruto)|pretensi[oó]n\s*salarial|pretension\s*salarial|salario\s*(bruto|esperado|deseado)|current\s*salary|annual\s*salary|monthly\s*(gross|salary)|gross\s*(salary|pay)|pretensi[oó]n.*brutos?|brutos?\s*\?/i,
     usdMatch: /\b(usd|u\$s|us\$|d[oó]lar(es)?|dollars?)\b|\$\s*usd/i,
     arsMatch: /\b(ars|peso(s)?(\s*argentinos?)?|\$\s*ar|arg(?:entina)?)\b/i,
     usdValue: "2750",
@@ -2906,7 +2906,7 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
       }
       return {
         reason: "Pregunta years of experience (skill sin mapa) — pendiente",
-        notes: `Pendiente: years of experience — skill no mapeada en skills-years.ts ("${blob.slice(0, 80)}")`,
+        notes: `Pendiente: years of experience — skill no mapeada en skills-years.ts ("${blob.slice(0, 120)}")`,
       };
     }
 

@@ -33,6 +33,9 @@ const KNOWN_FIELD_RE: RegExp[] = [
   /skills assessment|online assessment|coding assessment|honeypot|\bquiz\b/i,
   PSEUDO_ANSWERS.hybridWorkOk.fieldMatch,
   PSEUDO_ANSWERS.programmingScripting.fieldMatch,
+  PSEUDO_ANSWERS.manualAutomationMix.fieldMatch,
+  PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch,
+  PSEUDO_ANSWERS.backendSqlTesting.fieldMatch,
   PSEUDO_ANSWERS.phoneCountryCode.fieldMatch,
 ];
 

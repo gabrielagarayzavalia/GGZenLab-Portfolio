@@ -77,6 +77,21 @@ export const PSEUDO_ANSWERS = {
     fieldMatch:
       /programaci[oó]n y scripting|programming and scripting|experiencia en programaci[oó]n|conocimientos?\s+(de\s+)?(programaci[oó]n|scripting)|programming\s*\/\s*scripting/i,
   },
+  /** Functionary: 80% Manual / 20% Automation → Sí. */
+  manualAutomationMix: {
+    fieldMatch:
+      /80%\s*Manual.*20%\s*Automation|comfortable to work in .{0,40}Manual.{0,40}Automation|manual\s+and\s+\d+%\s*automation/i,
+  },
+  /** Confirmación B2+/C1 (Sí/No), no escala CEFR. */
+  englishB2C1Confirm: {
+    fieldMatch:
+      /B2\+?\s*\/?\s*C1.{0,40}English|have\s+B2.{0,20}English\s+proficiency|English\s+proficiency\s+level\s*\?/i,
+  },
+  /** Backend testing con SQL → Sí. */
+  backendSqlTesting: {
+    fieldMatch:
+      /strong\s+backend\s+testing.{0,40}SQL|backend\s+testing\s+writing\s+SQL|testing\s+writing\s+SQL\s+queries/i,
+  },
   linkedinProfile: {
     fieldMatch:
       /linkedin\s*profile|perfil\s*de\s*linkedin|linkedin\s*url|link\s+to\s+your\s+linkedin|share\s+the\s+link\s+to\s+your\s+linkedin|enlace\s+(a|de)\s+(tu\s+)?linkedin/i,
@@ -1097,11 +1112,19 @@ async function selectYesNoOption(
   return true;
 }
 
-/** Híbrida CABA → Sí; Programación y scripting → Sí. Issue #149. */
+/** Híbrida / scripting / 80-20 Manual / B2+C1 / backend SQL → Sí. */
 export async function answerHybridAndProgramming(page: Page): Promise<number> {
   const root = scopeRoot(page);
   if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return 0;
   let answered = 0;
+
+  const yesRules: { log: string; re: RegExp }[] = [
+    { log: "Hybrid work", re: PSEUDO_ANSWERS.hybridWorkOk.fieldMatch },
+    { log: "Programming/scripting", re: PSEUDO_ANSWERS.programmingScripting.fieldMatch },
+    { log: "Manual/Automation 80/20", re: PSEUDO_ANSWERS.manualAutomationMix.fieldMatch },
+    { log: "English B2+/C1", re: PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch },
+    { log: "Backend SQL testing", re: PSEUDO_ANSWERS.backendSqlTesting.fieldMatch },
+  ];
 
   async function blobFor(el: Locator): Promise<string> {
     const label = await fieldLabel(el);
@@ -1118,20 +1141,23 @@ export async function answerHybridAndProgramming(page: Page): Promise<number> {
     return `${label} ${aria} ${near}`;
   }
 
-  // 1) Selects nativos por label (TCS: "modalidad hibrida" / "asistir … CABA")
+  function matchRule(blob: string): { log: string; re: RegExp } | null {
+    for (const rule of yesRules) {
+      if (rule.re.test(blob)) return rule;
+    }
+    return null;
+  }
+
+  // 1) Selects nativos por label
   const selects = root.locator("select");
   const sn = await selects.count().catch(() => 0);
   for (let i = 0; i < sn; i++) {
     const el = selects.nth(i);
     if (!(await el.isVisible().catch(() => false))) continue;
     const blob = ((await blobFor(el)) ?? "").replace(/\s+/g, " ").trim();
-    if (PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob)) {
-      if (await selectYesNoOption(el, true, "Hybrid work")) answered++;
-      continue;
-    }
-    if (PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob)) {
-      if (await selectYesNoOption(el, true, "Programming/scripting")) answered++;
-    }
+    const rule = matchRule(blob);
+    if (!rule) continue;
+    if (await selectYesNoOption(el, true, rule.log)) answered++;
   }
 
   // 2) Radios / checkbox en bloques
@@ -1143,13 +1169,9 @@ export async function answerHybridAndProgramming(page: Page): Promise<number> {
     const block = blocks.nth(i);
     if (!(await block.isVisible().catch(() => false))) continue;
     const blob = ((await block.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
-    if (PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob)) {
-      if (await clickYesNoInBlock(block, true, "Hybrid work")) answered++;
-      continue;
-    }
-    if (PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob)) {
-      if (await clickYesNoInBlock(block, true, "Programming/scripting")) answered++;
-    }
+    const rule = matchRule(blob);
+    if (!rule) continue;
+    if (await clickYesNoInBlock(block, true, rule.log)) answered++;
   }
   return answered;
 }
@@ -2822,6 +2844,11 @@ export async function fillEnglishProficiency(page: Page): Promise<boolean> {
       opts.push({ text, value });
     }
 
+    // Confirmación Sí/No (ej. "So you have B2+/C1 English proficiency level?")
+    if (opts.some((o) => /^(Yes|Sí|Si)$/i.test(o.text))) {
+      if (await selectYesNoOption(el, true, "English proficiency Yes/No")) return true;
+    }
+
     // Escala numérica (1–10 / 10+ / 8-9): NUNCA poner "Advanced (C1)"
     if (optionsLookNumeric(opts.map((x) => x.text))) {
       const val = ((await el.inputValue().catch(() => "")) ?? "").trim();
@@ -2998,6 +3025,9 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
       const known =
         PSEUDO_ANSWERS.hybridWorkOk.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.programmingScripting.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.manualAutomationMix.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch.test(blob) ||
+        PSEUDO_ANSWERS.backendSqlTesting.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.yearsOfExperience.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.country.fieldMatch.test(blob) ||

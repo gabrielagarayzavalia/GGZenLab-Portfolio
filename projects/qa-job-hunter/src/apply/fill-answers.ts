@@ -161,11 +161,11 @@ export const PSEUDO_ANSWERS = {
   },
   /**
    * Años generales / dominio (ej. Administrative): 0–99.
-   * No confundir con remuneración (también usa inputs *-numeric).
+   * No confundir con remuneración ni con skills (SQL/XML/…) → skills-years.
    */
   yearsNumericGeneral: {
     fieldMatch:
-      /how many years of .+ experience|years of .+ experience do you|years?\s+of\s+administrative|a[nñ]os?\s+(de\s+)?experiencia\s+administrat|administrative experience/i,
+      /years?\s+of\s+administrative|a[nñ]os?\s+(de\s+)?experiencia\s+administrat|administrative experience|how many years of administrative/i,
     value: "25",
   },
   /** Frameworks DQ: No + dejar pendiente. */
@@ -1680,8 +1680,10 @@ export async function fillSkillYearsOfExperience(page: Page): Promise<number> {
   }
 
   function matchesYearsQuestion(blob: string): boolean {
-    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) return false;
     if (PSEUDO_ANSWERS.englishProficiency.fieldMatch.test(blob)) return false;
+    // Skill mapeada (SQL/XML/…) gana sobre "años generales"
+    if (resolveSkillYears(blob)) return true;
+    if (PSEUDO_ANSWERS.yearsNumericGeneral.fieldMatch.test(blob)) return false;
     return (
       skillYearsRe.test(blob) ||
       /cu[aá]ntos?\s+a[nñ]os?\s+(de\s+)?experiencia|a[nñ]os?\s+(de\s+)?experiencia|years?\s+of\s+(work\s+)?experience|experiencia\s+(ten[eé]s|tienes).{0,40}(como|con|en)|experiencia\s+(en|con)\s+(qa|automat|javascript|js|cypress|playwright|selenium|postman|jmeter)/i.test(

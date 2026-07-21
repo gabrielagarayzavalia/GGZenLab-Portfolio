@@ -1,7 +1,10 @@
 // ============================================================
-//  2-scrape-jobs.ts — Scraping de empleos QA en LinkedIn
-//  Usa sesión guardada (sin re-login)
-//  Comando: npx tsx src\2-scrape-jobs.ts
+//  2-scrape-jobs.ts — Scraping de empleos QA en LinkedIn (SEARCH)
+//  OPT-IN / baja calidad: NO es el discovery canónico.
+//  Canónico: Gmail API → applied-list run-pipeline → Easy Apply.
+//  Ver docs/campaign-flow.md y docs/backlog-linkedin-search-scrape.md
+//  Comando: DISCOVERY=linkedin_search npx tsx src\2-scrape-jobs.ts
+//           (o npm run scrape a propósito)
 // ============================================================
 
 import { chromium } from "playwright";
@@ -28,6 +31,17 @@ function isRelevantTitle(title: string): boolean {
 }
 
 async function scrapeLinkedInJobs(): Promise<void> {
+  const discovery = (process.env.DISCOVERY ?? "").trim().toLowerCase();
+  if (discovery !== "linkedin_search" && discovery !== "linkedin" && discovery !== "search") {
+    console.warn(
+      "⚠️  LinkedIn SEARCH scrape no es el discovery diario.\n" +
+        "   Para continuar igual: $env:DISCOVERY='linkedin_search'; npm run scrape\n" +
+        "   Camino canónico: npm run campaign  (Gmail fetch → pipeline → Excel → Easy Apply)\n" +
+        "   Backlog: docs/backlog-linkedin-search-scrape.md\n"
+    );
+    process.exit(2);
+  }
+
   if (!fs.existsSync(SESSION_PATH)) {
     console.error("❌ No hay sesión guardada.");
     console.log("   Ejecutá primero: npx tsx src\\1-login.ts\n");

@@ -14,6 +14,7 @@
  * Env:
  *   APPLIED_LIST_ROOT  path a qa-job-applied-list
  *   APPLY_MAX          mismo efecto que --apply-max
+ *   DISCOVERY          gmail (default) | linkedin_search (opt-in; no es el camino diario)
  */
 
 import { spawnSync } from "child_process";
@@ -23,19 +24,30 @@ import { exportQueueToExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
 
 type Step = "fetch" | "pipeline" | "excel" | "apply" | "reconcile";
+type Discovery = "gmail" | "linkedin_search";
 
 const STEPS: Step[] = ["fetch", "pipeline", "excel", "apply", "reconcile"];
+
+function resolveDiscovery(): Discovery {
+  const raw = (process.env.DISCOVERY ?? "gmail").trim().toLowerCase();
+  if (raw === "linkedin_search" || raw === "linkedin" || raw === "search") {
+    return "linkedin_search";
+  }
+  return "gmail";
+}
 
 function parseArgs(argv: string[]): {
   from: Step;
   applyMax: number | null;
   skipApply: boolean;
   yes: boolean;
+  discovery: Discovery;
 } {
   let from: Step = "fetch";
   let applyMax: number | null = null;
   let skipApply = false;
   let yes = false;
+  const discovery = resolveDiscovery();
 
   for (const arg of argv) {
     if (arg.startsWith("--from=")) {
@@ -56,15 +68,16 @@ function parseArgs(argv: string[]): {
     } else if (arg === "--help" || arg === "-h") {
       console.log(`Uso: npm run campaign -- [--from=STEP] [--apply-max=N] [--skip-apply] [--yes]
 
-Orden: fetch → pipeline → excel (revisión) → apply → reconcile
+Orden canónico: gmail:fetch → pipeline → excel (revisión) → apply → reconcile
 
+DISCOVERY=gmail (default) | linkedin_search (opt-in; NO usar como fallback diario)
 APPLIED_LIST_ROOT=${resolveAppliedListRoot()}
 `);
       process.exit(0);
     }
   }
 
-  return { from, applyMax, skipApply, yes };
+  return { from, applyMax, skipApply, yes, discovery };
 }
 
 function stepsFrom(from: Step): Step[] {
@@ -107,16 +120,32 @@ function runHunterEasyApply(applyMax: number | null): void {
 }
 
 async function main(): Promise<void> {
-  const { from, applyMax, skipApply, yes } = parseArgs(process.argv.slice(2));
+  const { from, applyMax, skipApply, yes, discovery } = parseArgs(process.argv.slice(2));
   const root = resolveAppliedListRoot();
 
   console.log("🎯 Campaña QA — orquestador (sub-agentes bajo qa-job-hunter)");
   console.log(`   applied-list: ${root}`);
+  console.log(`   discovery: ${discovery}`);
   console.log(`   desde: ${from}${skipApply ? " (skip-apply)" : ""}`);
   console.log("   orden: fetch → pipeline → Excel (revisión) → apply → reconcile\n");
 
+  if (discovery === "linkedin_search") {
+    console.warn(
+      "⚠️  DISCOVERY=linkedin_search es opt-in y de baja calidad (cards basura).\n" +
+        "   El orquestador NO corre npm run scrape acá: hacelo a mano solo si sabés por qué.\n" +
+        "   Camino diario: DISCOVERY=gmail (default) → gmail:fetch → run-pipeline.\n" +
+        "   Ver docs/backlog-linkedin-search-scrape.md\n"
+    );
+  }
+
   for (const step of stepsFrom(from)) {
     if (step === "fetch") {
+      if (discovery !== "gmail") {
+        console.log(
+          "⏭  fetch Gmail omitido (DISCOVERY≠gmail). Pipeline/apply siguen; discovery LinkedIn search es manual."
+        );
+        continue;
+      }
       runAppliedListScript("gmail:fetch");
       continue;
     }

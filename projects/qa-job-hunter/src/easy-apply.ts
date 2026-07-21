@@ -853,7 +853,11 @@ async function main() {
   console.log("   ⚠️  Excel → enviada solo si Submit se confirma (Done/banner/Applied).");
 
   if (toApply.length === 0) {
-    console.log("No hay avisos pendientes para aplicar. Nada que hacer.");
+    console.log("No hay avisos pendientes para Easy Apply. Nada que hacer.");
+    console.log(
+      "   Siguiente (canónico): npm run campaign -- --from=fetch --skip-apply\n" +
+        "   (Gmail fetch + pipeline → Excel). NO uses npm run scrape (LinkedIn search) como fallback."
+    );
     return;
   }
 

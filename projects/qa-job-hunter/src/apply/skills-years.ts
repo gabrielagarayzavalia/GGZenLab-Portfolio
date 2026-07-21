@@ -57,6 +57,8 @@ export const SKILL_YEARS_ENTRIES: readonly {
       /working\s+in\s+manual\s+testing/i,
       /qa\s*analyst|analista\s*(qa|de\s*calidad|funcional)/i,
       /a[nñ]os?\s+(de\s+)?experiencia\s+(como\s+)?(qa\s*)?tester\s*manual/i,
+      /\bquality\s*assurance\b(?!\s*automation)/i,
+      /experiencia\s+(con|en)\s+quality\s*assurance|with\s+quality\s*assurance/i,
     ],
   },
   { label: "pandas", years: 3, patterns: [/pandas|athena|\bs3\b/i] },

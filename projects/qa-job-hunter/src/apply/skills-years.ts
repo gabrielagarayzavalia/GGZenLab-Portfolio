@@ -38,6 +38,8 @@ export const SKILL_YEARS_ENTRIES: readonly {
   { label: "postman", years: 4, patterns: [/postman/i] },
   { label: "swagger", years: 4, patterns: [/swagger|openapi/i] },
   { label: "soap ui", years: 4, patterns: [/soap\s*ui|soapui/i] },
+  /** Mismo orden de magnitud que APIs (Postman/Swagger). */
+  { label: "xml", years: 4, patterns: [/\bxml\b/i] },
   { label: "jenkins", years: 2, patterns: [/jenkins/i] },
   { label: "teamcity", years: 2, patterns: [/teamcity/i] },
   { label: "azure devops", years: 2, patterns: [/azure\s*devops|\bazdo\b/i] },
@@ -72,6 +74,9 @@ export const SKILL_YEARS_ENTRIES: readonly {
   { label: "cypress", years: 2, patterns: [/cypress/i] },
   { label: "git", years: 13, patterns: [/\bgit\b(?!\s*hub|\s*lab)/i] },
   { label: "ci/cd", years: 2, patterns: [/ci\s*\/\s*cd|continuous\s*integration/i] },
+  /** Sin experiencia → 0 en numeric; Sí/No vía my-skills (No). */
+  { label: "apache nifi", years: 0, patterns: [/apache\s*nifi|\bnifi\b/i] },
+  { label: "tosca", years: 0, patterns: [/\btosca\b/i] },
 ] as const;
 
 /**

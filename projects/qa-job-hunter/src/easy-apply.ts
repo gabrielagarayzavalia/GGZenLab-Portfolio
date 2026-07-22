@@ -783,7 +783,24 @@ async function tryEasyApply(
     }
 
     record.status = "draft_saved";
-    record.reason = `Flujo incompleto tras ${steps} pasos — revisar borrador`;
+    const leftover = await hasBlockingEmptyFields(page).catch(() => []);
+    const labels = leftover
+      .map((f) => (f.label || f.ariaLabel || "").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    const labelsNote = labels.length
+      ? ` Campos sin completar: ${labels.map((l) => `"${l.slice(0, 80)}"`).join("; ")}`
+      : "";
+    record.reason = `Flujo incompleto tras ${steps} pasos — revisar borrador.${labelsNote}`;
+    console.log(`   ✗ draft_saved — labels requeridos vacíos:${labelsNote || " (ninguno detectado)"}`);
+    updateQueueRow(job.jobId, {
+      status: "pendiente",
+      easyApply: "yes",
+      reason: record.reason,
+      notes: labels.length
+        ? `Pendiente campos: ${labels.map((l) => `- ${l}`).join("\n")}`
+        : record.reason,
+    });
     await page
       .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-incomplete.png`) })
       .catch(() => {});

@@ -65,6 +65,12 @@ import {
 } from "./apply/page-ready.js";
 import { exportQueueToExcel, finishProductiveRun } from "./apply/post-run.js";
 import {
+  TIMING,
+  betweenJobsDelayMs,
+  sleep,
+  waitForEasyApplyStepSettle,
+} from "./apply/timing.js";
+import {
   canonicalJobUrl,
   ensureQueueFromMatched,
   isFinalStatus,
@@ -101,7 +107,7 @@ async function dismissEasyApplyModal(page: import("playwright").Page): Promise<v
   } else {
     await page.keyboard.press("Escape").catch(() => {});
   }
-  await sleep(500);
+  await sleep(TIMING.modalReadySettleMs);
   await handleSaveDiscardModal(page, "dry_run");
 }
 
@@ -156,10 +162,6 @@ async function leavePendingTypeaheadFail(
   return leavePendingCloseContinue(page, job, record, reason, fieldNotes);
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 /**
  * Tras click en Submit: Excel → enviada SOLO si hay confirmación (Done / banner / Applied).
  * Si el Submit falla o no hay evidencia → pendiente + nota (nunca enviada).
@@ -174,7 +176,7 @@ async function completeSubmitAndDone(
     .catch(() => {});
 
   const clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
-  if (clickedDone) await sleep(1500);
+  if (clickedDone) await sleep(TIMING.afterDoneMs);
 
   const sentBanner = await page
     .getByText(/Application sent|Application submitted|Solicitud enviada/i)
@@ -241,7 +243,7 @@ async function afterSaveContinueToSubmit(
       fill.skipPending.notes
     );
   }
-  await sleep(800);
+  await sleep(TIMING.afterTextareaFillMs);
 
   // Next / Review hasta Submit
   for (let i = 0; i < 6; i++) {
@@ -264,7 +266,8 @@ async function afterSaveContinueToSubmit(
           "Tras Save: Submit visible pero click falló — queda pendiente"
         );
       }
-      await sleep(2500);
+      await waitForEasyApplyStepSettle(page);
+      await sleep(TIMING.afterSubmitMs);
       return completeSubmitAndDone(page, job, record);
     }
 
@@ -273,11 +276,11 @@ async function afterSaveContinueToSubmit(
       (await clickButtonOrLink(modal, MODAL_LABELS.continue, 700, page)) ||
       (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page));
     if (!advanced) break;
-    await sleep(1500);
+    await waitForEasyApplyStepSettle(page);
 
     const sd = await handleSaveDiscardModal(page, "productive");
     if (sd === "saved") {
-      await sleep(1000);
+      await sleep(TIMING.afterSaveMs);
       continue;
     }
   }
@@ -333,12 +336,12 @@ async function discardStaleDraftAndReopen(
     await discardApp.click({ timeout: 4000 }).catch(() =>
       discardApp.click({ force: true, timeout: 4000 })
     );
-    await sleep(800);
+    await sleep(TIMING.modalStepMs);
     await handleSaveDiscardModal(page, "dry_run");
   }
   await clickButtonOrLink(page, MODAL_LABELS.dismiss, 800, page);
   await page.keyboard.press("Escape").catch(() => {});
-  await sleep(600);
+  await sleep(TIMING.modalReadySettleMs);
 
   await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
   await waitForJobPageReady(page);
@@ -605,13 +608,13 @@ async function tryEasyApply(
           }
           if (!hasPrefillValue(current)) await area.fill(letter);
         }
-        await sleep(800);
+        await sleep(TIMING.afterTextareaFillMs);
         if (
           (await clickButtonOrLink(modal, MODAL_LABELS.review, 800, page)) ||
           (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800, page)) ||
           (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page))
         ) {
-          await sleep(1500);
+          await waitForEasyApplyStepSettle(page);
           continue;
         }
         const nextAfterFill = cssPrimaryActions(modal);
@@ -621,7 +624,7 @@ async function tryEasyApply(
             (await nextAfterFill.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
             (await nextAfterFill.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
           if (ok) {
-            await sleep(1500);
+            await waitForEasyApplyStepSettle(page);
             continue;
           }
         }
@@ -687,7 +690,8 @@ async function tryEasyApply(
             "Submit visible pero click falló (overlay) — queda pendiente"
           );
         }
-        await sleep(2500);
+        await waitForEasyApplyStepSettle(page);
+        await sleep(TIMING.afterSubmitMs);
         return completeSubmitAndDone(page, job, record);
       }
 
@@ -714,7 +718,7 @@ async function tryEasyApply(
           record.reason = "Next/Review visible pero click falló";
           return record;
         }
-        await sleep(2000);
+        await waitForEasyApplyStepSettle(page);
 
         // Tras Next: error mandatorio → recover typeahead (3×) o cerrar
         if (await hasMandatoryFieldError(page)) {
@@ -753,8 +757,8 @@ async function tryEasyApply(
         const ok =
           (await primary.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
           (await primary.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
-        if (ok) {
-          await sleep(1500);
+          if (ok) {
+          await waitForEasyApplyStepSettle(page);
           if (await hasMandatoryFieldError(page)) {
             const recover = await recoverMandatoryTypeaheadOrClose(page);
             if (recover === "failed_close") {
@@ -914,7 +918,7 @@ async function main() {
       /* ignore */
     }
 
-    await sleep(2000 + Math.random() * 1500);
+    await sleep(betweenJobsDelayMs());
   }
 
   fs.writeFileSync(APPLICATIONS_PATH, JSON.stringify(applications, null, 2), "utf-8");

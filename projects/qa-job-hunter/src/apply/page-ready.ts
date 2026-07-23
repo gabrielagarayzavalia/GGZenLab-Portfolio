@@ -2,10 +2,7 @@
 // Evita clicks fallidos por viewport chico o controles fuera de pantalla.
 
 import type { BrowserContext, Page } from "playwright";
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+import { TIMING, sleep } from "./timing.js";
 
 /**
  * Args de Chromium para ventana maximizada (usar con viewport: null en el context).
@@ -78,7 +75,10 @@ export async function maximizeWindow(page: Page): Promise<void> {
 export async function waitForJobPageReady(page: Page): Promise<void> {
   await page.waitForLoadState("domcontentloaded").catch(() => {});
   await page.waitForLoadState("load").catch(() => {});
-  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  // LinkedIn casi nunca llega a networkidle — soft + selectores (B24)
+  await page
+    .waitForLoadState("networkidle", { timeout: TIMING.networkIdleSoftMs })
+    .catch(() => {});
 
   await page
     .locator("main, .jobs-details, .job-view-layout, .jobs-search__job-details")
@@ -96,7 +96,7 @@ export async function waitForJobPageReady(page: Page): Promise<void> {
     .catch(() => {});
 
   await dismissTranslatorUi(page);
-  await sleep(600);
+  await sleep(TIMING.jobPageSettleMs);
 }
 
 /** Espera modal Easy Apply estable (contenido visible, no spinner eterno). */
@@ -113,8 +113,10 @@ export async function waitForEasyApplyModalReady(page: Page): Promise<boolean> {
     .waitFor({ state: "hidden", timeout: 10000 })
     .catch(() => {});
 
-  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-  await sleep(400);
+  await page
+    .waitForLoadState("networkidle", { timeout: TIMING.networkIdleSoftMs })
+    .catch(() => {});
+  await sleep(TIMING.modalReadySettleMs);
   return true;
 }
 
@@ -176,7 +178,7 @@ export async function scrollEasyApplyFormToEnd(page: Page): Promise<void> {
   await modal.click({ position: { x: 20, y: 20 }, timeout: 800 }).catch(() => {});
   await page.keyboard.press("End").catch(() => {});
   await page.keyboard.press("PageDown").catch(() => {});
-  await sleep(350);
+  await sleep(TIMING.scrollSettleMs);
 }
 
 /** Setup de página al inicio de la corrida: maximize + listo para navegar. */

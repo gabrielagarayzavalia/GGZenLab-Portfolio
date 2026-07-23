@@ -72,6 +72,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - **Consent checkbox:** click; si no queda marcado → pendiente + siguiente. **Top choice / Follow company:** no tocar (spikes en BACKLOG).
 - **Assessment/honeypot:** pendiente + Notas con **assessment** en negrita; siguiente.
 - **Preguntas nuevas / dropdown sin regla:** se acumulan en Excel columna **Notas** + `output/apply/new-questions-latest.json` al cerrar la corrida.
+- **Performance waits (B24 / #143):** constantes en `src/apply/timing.ts`; doc [`easy-apply-perf.md`](./easy-apply-perf.md). Preferir settle condicionado (loader) a sleeps 1.5–2.5s.
 - **Campos desconocidos (EA-SPIKE-04 / #156 Strategy):** política en [#154](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/154); código `src/apply/unknown-field-strategy.ts` (patrón [Strategy](https://refactoring.guru/es/design-patterns/strategy)). Required desconocido vacío → **pendiente + Notas + siguiente** (no quemar 8 pasos); optional → solo Notas; Follow/top choice → no tocar; typeahead → reintentos existentes. **Nunca inventar** respuestas.
 - Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).

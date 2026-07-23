@@ -99,6 +99,38 @@ export function collectUnknownQuestions(fields: CapturedField[]): UnknownQuestio
   return out;
 }
 
+/** Limpia label de widget (quita ruido de opciones / Select an option). */
+export function cleanFieldLabel(raw: string): string {
+  const t = (raw || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const cut =
+    t.split(/\bSelect an option\b|\bChoose an option\b|\bSeleccionar\b|\bSeleccione\b/i)[0]?.trim() ??
+    t;
+  return cut.slice(0, 200);
+}
+
+/**
+ * Notas Excel cuando fallan / faltan campos concretos (B30).
+ * Lista todos los nombres; no inventa valores.
+ */
+export function formatFailedFieldsNotes(
+  fieldLabels: string[],
+  header = "Campos que fallaron / faltaron completar:"
+): string {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of fieldLabels) {
+    const label = cleanFieldLabel(raw);
+    if (label.length < 2) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(label);
+  }
+  if (labels.length === 0) return "";
+  return [header, ...labels.map((l) => `- ${l}`)].join("\n").slice(0, 1800);
+}
+
 export function formatUnknownNotes(
   unknowns: UnknownQuestionHit[],
   extraNotes: string[] = []
@@ -113,7 +145,7 @@ export function formatUnknownNotes(
     for (const u of unknowns) {
       const req = u.required ? " [req]" : "";
       const pref = u.value ? ` (prefill: ${u.value})` : "";
-      parts.push(`- ${u.label}${req}${pref}`);
+      parts.push(`- ${cleanFieldLabel(u.label) || u.label}${req}${pref}`);
     }
   }
   return parts.join("\n").slice(0, 1800);

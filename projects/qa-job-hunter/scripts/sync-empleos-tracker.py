@@ -110,6 +110,47 @@ def notes_cell_value(text: str):
         return text
 
 
+def cell_as_text(value) -> str:
+    """Normaliza celda (str / rich text) a texto plano."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    try:
+        return str(value).strip()
+    except Exception:
+        return ""
+
+
+def append_notes(existing, incoming: str) -> str:
+    """Append Notas sin pisar ni duplicar (B30 / sync tracker)."""
+    prev = cell_as_text(existing)
+    new = (incoming or "").strip()
+    if not new:
+        return prev
+    if not prev:
+        return new
+    if new in prev:
+        return prev
+    return f"{prev}\n{new}"
+
+
+# Estados que la automatización no pisa (usuaria / finales / stand-by).
+PROTECTED_ESTADOS = frozenset(
+    {
+        "cerrado",
+        "descartado",
+        "stand-by",
+        "duplicado",
+        "enviada",
+        "en proceso",
+        "seleccionada",
+        "a-pendiente",
+        "a-realizado",
+    }
+)
+
+
 def cmd_import(xlsx: Path) -> None:
     wb = openpyxl.load_workbook(xlsx, read_only=True, data_only=True)
     ws = wb["Empleos"]
@@ -211,10 +252,7 @@ def cmd_export(xlsx: Path) -> None:
         if not jid or jid not in queue:
             continue
         current = (ws.cell(row_idx, 6).value or "").strip()  # Estado
-        # No pisar finales del Excel ni Stand-by / Duplicado / Descartado (manual)
-        if current.lower() in ("cerrado", "descartado", "stand-by", "duplicado"):
-            skipped_final += 1
-            continue
+        current_l = current.lower()
         q = queue[jid]
         status = (q.get("ApplyStatus") or "pendiente").strip().lower()
         excel_estado = STATUS_TO_EXCEL.get(status)
@@ -230,7 +268,12 @@ def cmd_export(xlsx: Path) -> None:
             hint = "Stand-by: cola tenía descartada (solo vos marcás Descartado en Excel)"
             if hint not in notes_q:
                 q["Notes"] = f"{notes_q}\n{hint}".strip() if notes_q else hint
-        if excel_estado and current != excel_estado:
+
+        # No pisar estados protegidos (Enviada / finales / stand-by / usuaria)
+        status_locked = current_l in PROTECTED_ESTADOS
+        if status_locked:
+            skipped_final += 1
+        elif excel_estado and current != excel_estado:
             ws.cell(row_idx, 6).value = excel_estado
             if excel_estado == "Enviada" and not ws.cell(row_idx, 7).value:
                 ws.cell(row_idx, 7).value = datetime.now().strftime("%Y-%m-%d")
@@ -238,9 +281,12 @@ def cmd_export(xlsx: Path) -> None:
 
         notes = (q.get("Notes") or q.get("notes") or "").strip()
         reason = (q.get("Reason") or "").strip()
-        # Si no hay Notes pero Reason habla de preguntas/assessment, volcar Reason
+        # Si no hay Notes pero Reason habla de campos/preguntas/assessment, volcar Reason
         if not notes and re.search(
-            r"preguntas nuevas|assessment|honeypot|definir respuesta|a[nñ]os de experiencia|deequ|great expectations",
+            r"preguntas nuevas|assessment|honeypot|definir respuesta|"
+            r"a[nñ]os de experiencia|deequ|great expectations|"
+            r"campos (que )?fallaron|campos sin completar|typeahead|dropdown|"
+            r"skill no mapeada|pendiente",
             reason,
             re.I,
         ):
@@ -248,10 +294,12 @@ def cmd_export(xlsx: Path) -> None:
 
         if notes:
             cell = ws.cell(row_idx, notas_col)
-            cell.value = notes_cell_value(notes)
-            if ASSESSMENT_RE.search(notes) and not isinstance(cell.value, CellRichText):
-                cell.font = Font(bold=True)
-            notes_updated += 1
+            merged = append_notes(cell.value, notes)
+            if merged != cell_as_text(cell.value):
+                cell.value = notes_cell_value(merged)
+                if ASSESSMENT_RE.search(merged) and not isinstance(cell.value, CellRichText):
+                    cell.font = Font(bold=True)
+                notes_updated += 1
             if proximo_col and "Preguntas nuevas" in notes:
                 prev = (ws.cell(row_idx, proximo_col).value or "").strip()
                 hint = "Definir respuestas (ver Notas) y avisar en chat"
@@ -263,7 +311,7 @@ def cmd_export(xlsx: Path) -> None:
     wb.save(xlsx)
     print(
         f"Export OK: {updated} estados, {notes_updated} notas en {xlsx} "
-        f"(omitidas finales/stand-by: {skipped_final})"
+        f"(estados protegidos omitidos: {skipped_final})"
     )
 
 

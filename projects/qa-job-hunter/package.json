@@ -14,11 +14,14 @@
     "playwright:ide": "npx tsx src/open-playwright-ide.ts",
     "easy-apply": "npx tsx src/easy-apply.ts",
     "easy-apply:dry-run": "npx tsx src/easy-apply-dry-run.ts",
+    "apply:sync": "npx tsx agents/excel-bridge/sync-only.ts",
+    "tracker:sync": "npx tsx agents/excel-bridge/sync-only.ts",
     "campaign": "npx tsx src/campaign/run-campaign.ts",
     "agent:gmail-fetch": "npx tsx agents/gmail-fetch/run.ts",
     "agent:pipeline": "npx tsx agents/pipeline-match/run.ts",
     "agent:excel": "npx tsx agents/excel-bridge/run.ts",
-    "agent:gmail-reconcile": "npx tsx agents/gmail-reconcile/run.ts"
+    "agent:gmail-reconcile": "npx tsx agents/gmail-reconcile/run.ts",
+    "test:apply-notes": "npx tsx --test tests/apply/failed-fields-notes.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

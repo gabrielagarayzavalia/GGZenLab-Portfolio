@@ -77,6 +77,7 @@ import {
 } from "./apply/apply-queue.js";
 import {
   collectUnknownQuestions,
+  formatFailedFieldsNotes,
   logRunUnknownQuestions,
   recordJobUnknownQuestions,
   resetRunUnknownQuestions,
@@ -132,6 +133,27 @@ async function leavePendingCloseContinue(
     .catch(() => {});
   await dismissEasyApplyModal(page);
   return record;
+}
+
+/** Typeahead/mandatorio falló: Notas con nombres de campos (B30) + pendiente. */
+async function leavePendingTypeaheadFail(
+  page: import("playwright").Page,
+  job: ApplyJob,
+  record: ApplicationRecord
+): Promise<ApplicationRecord> {
+  const blocking = await hasBlockingEmptyFields(page).catch(() => []);
+  const labels = blocking
+    .map((f) => (f.label || f.ariaLabel || f.placeholder || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
+  if (blocking.length > 0) logCapturedFields(blocking);
+  const fieldNotes =
+    formatFailedFieldsNotes(labels) ||
+    "Campos que fallaron / faltaron completar:\n- (typeahead obligatorio; ver dump required-fields)";
+  const reason =
+    "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia" +
+    ` — ver ${path.basename(dump)}`;
+  return leavePendingCloseContinue(page, job, record, reason, fieldNotes);
 }
 
 function sleep(ms: number) {
@@ -610,18 +632,7 @@ async function tryEasyApply(
       if (await hasMandatoryFieldError(page)) {
         const recover = await recoverMandatoryTypeaheadOrClose(page);
         if (recover === "failed_close") {
-          record.status = "blocked";
-          record.reason =
-            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-          updateQueueRow(job.jobId, {
-            status: "pendiente",
-            easyApply: "yes",
-            reason: record.reason,
-          });
-          await page
-            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
-            .catch(() => {});
-          return record;
+          return leavePendingTypeaheadFail(page, job, record);
         }
         const fill2 = await fillPseudoAnswers(page, {
           jobTitle: job.title,
@@ -692,18 +703,7 @@ async function tryEasyApply(
         if (await hasMandatoryFieldError(page)) {
           const recover = await recoverMandatoryTypeaheadOrClose(page);
           if (recover === "failed_close") {
-            record.status = "blocked";
-            record.reason =
-              "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-            updateQueueRow(job.jobId, {
-              status: "pendiente",
-              easyApply: "yes",
-              reason: record.reason,
-            });
-            await page
-              .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
-              .catch(() => {});
-            return record;
+            return leavePendingTypeaheadFail(page, job, record);
           }
           continue;
         }
@@ -741,15 +741,7 @@ async function tryEasyApply(
           if (await hasMandatoryFieldError(page)) {
             const recover = await recoverMandatoryTypeaheadOrClose(page);
             if (recover === "failed_close") {
-              record.status = "blocked";
-              record.reason =
-                "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-              updateQueueRow(job.jobId, {
-                status: "pendiente",
-                easyApply: "yes",
-                reason: record.reason,
-              });
-              return record;
+              return leavePendingTypeaheadFail(page, job, record);
             }
           }
           continue;
@@ -760,21 +752,7 @@ async function tryEasyApply(
       if (blocking.length > 0) {
         const recover = await recoverMandatoryTypeaheadOrClose(page);
         if (recover === "failed_close") {
-          record.status = "blocked";
-          record.reason =
-            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-          updateQueueRow(job.jobId, {
-            status: "pendiente",
-            easyApply: "yes",
-            reason: record.reason,
-          });
-          const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
-          logCapturedFields(blocking);
-          record.reason += ` — ver ${path.basename(dump)}`;
-          await page
-            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-required.png`) })
-            .catch(() => {});
-          return record;
+          return leavePendingTypeaheadFail(page, job, record);
         }
         continue;
       }
@@ -787,19 +765,25 @@ async function tryEasyApply(
     const labels = leftover
       .map((f) => (f.label || f.ariaLabel || "").replace(/\s+/g, " ").trim())
       .filter(Boolean)
-      .slice(0, 8);
+      .slice(0, 12);
+    const fieldNotes = formatFailedFieldsNotes(labels);
     const labelsNote = labels.length
       ? ` Campos sin completar: ${labels.map((l) => `"${l.slice(0, 80)}"`).join("; ")}`
       : "";
     record.reason = `Flujo incompleto tras ${steps} pasos — revisar borrador.${labelsNote}`;
     console.log(`   ✗ draft_saved — labels requeridos vacíos:${labelsNote || " (ninguno detectado)"}`);
+    const notes = recordJobUnknownQuestions(
+      job.jobId,
+      job.company,
+      job.title,
+      [],
+      fieldNotes ? [fieldNotes] : [record.reason]
+    );
     updateQueueRow(job.jobId, {
       status: "pendiente",
       easyApply: "yes",
       reason: record.reason,
-      notes: labels.length
-        ? `Pendiente campos: ${labels.map((l) => `- ${l}`).join("\n")}`
-        : record.reason,
+      notes: notes || fieldNotes || record.reason,
     });
     await page
       .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-incomplete.png`) })

@@ -22,7 +22,8 @@
     "agent:excel": "npx tsx agents/excel-bridge/run.ts",
     "agent:gmail-reconcile": "npx tsx agents/gmail-reconcile/run.ts",
     "test:apply-notes": "npx tsx --test tests/apply/failed-fields-notes.test.ts",
-    "test:unknown-strategy": "npx tsx --test tests/apply/unknown-field-strategy.test.ts"
+    "test:unknown-strategy": "npx tsx --test tests/apply/unknown-field-strategy.test.ts",
+    "test:timing": "npx tsx --test tests/apply/timing.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

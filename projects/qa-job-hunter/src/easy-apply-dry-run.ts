@@ -73,6 +73,12 @@ import {
 import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
 import { exportQueueToExcel } from "./apply/post-run.js";
 import {
+  TIMING,
+  betweenJobsDelayMs,
+  sleep,
+  waitForEasyApplyStepSettle,
+} from "./apply/timing.js";
+import {
   collectUnknownQuestions,
   formatFailedFieldsNotes,
   logRunUnknownQuestions,
@@ -81,10 +87,6 @@ import {
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
 import { setApplicationStatus } from "./application-status.js";
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 /** Frena toda la corrida: hay Easy Apply pero no entramos al modal. */
 export class EasyApplyModalNotOpenedError extends Error {
@@ -333,7 +335,7 @@ async function tryAdvanceNext(
     if (!ok) return "blocked";
   }
 
-  await sleep(2500);
+  await waitForEasyApplyStepSettle(page);
 
   // Dry-run: Save/Discard → Discard y SALIR (no guardar, no enviar).
   const saveDiscard = await handleSaveDiscardModal(page, "dry_run");
@@ -385,13 +387,13 @@ async function tryAdvanceNext(
     if (await needResume.isVisible({ timeout: 600 }).catch(() => false)) {
       console.log("   ↳ Next stuck + error currículum — re-fill resume y Next 1×");
       await selectResumeForRole(page, jobTitle, company);
-      await sleep(800);
+      await sleep(TIMING.modalStepMs);
       const next2 =
         (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
         (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
       if (next2) {
         await next2.click({ force: true, timeout: 4000 }).catch(() => {});
-        await sleep(2000);
+        await waitForEasyApplyStepSettle(page);
       }
       afterFp = await stepFingerprint(page);
       if (afterFp !== beforeFp) {
@@ -412,7 +414,7 @@ async function tryAdvanceNext(
     if (reviewAgain && (await hasBlockingEmptyFields(page)).length === 0) {
       console.log("   ↳ Reintento Review 1× tras re-fill");
       await reviewAgain.click({ force: true, timeout: 4000 }).catch(() => {});
-      await sleep(2000);
+      await waitForEasyApplyStepSettle(page);
       if (
         (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
         (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
@@ -610,7 +612,7 @@ async function processJob(
     });
     throw new EasyApplyModalNotOpenedError(row.jobId, job.url, "click falló");
   }
-  await sleep(2000);
+  await waitForEasyApplyStepSettle(page);
 
   const result = await dryRunThroughModal(
     page,
@@ -761,7 +763,7 @@ async function main() {
       else if (outcome === "cerrada") cerrada++;
       else if (outcome === "skip_no_ea") skipNoEa++;
 
-      await sleep(1500 + Math.random() * 1000);
+      await sleep(betweenJobsDelayMs());
     }
   } finally {
     if (browser) await browser.close().catch(() => {});

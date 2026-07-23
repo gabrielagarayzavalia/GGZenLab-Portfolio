@@ -42,8 +42,20 @@ Fuera de esta ola EA. Inventario rápido: `2-scrape-jobs.ts` / discover tienen s
 ## Cómo medir
 
 ```bash
-# Dry-run 1 aviso (cronometrar wall-clock)
-Measure-Command { $env:DRY_RUN_MAX='1'; npm run easy-apply:dry-run }
+# Dry-run 1 aviso (cronometrar wall-clock + perf por página)
+Measure-Command { $env:DRY_RUN_MAX='1'; $env:PERF_TEST='1'; npm run easy-apply:dry-run }
+
+# Campaña dry-run: sin Excel mid; Excel solo post-reconcile
+npm run campaign -- --dry-run --apply-max=1 --yes
 ```
+
+### Umbrales por página de modal
+
+| Umbral | Valor | Efecto |
+|--------|-------|--------|
+| Budget | **25s** | Meta; si se supera → `OVER` (warn) |
+| Fail | **45s** | Con `PERF_TEST=1` → error (exit 6) |
+
+Timer: `ModalPageTimer` en `src/apply/timing.ts` (labels `open-modal`, `pasoN-contact`, `pasoN-resume`, …).
 
 Comparar wall-clock antes/después en el mismo jobId. Expectativa: **varios segundos menos por paso** del modal + menos espera al abrir aviso.

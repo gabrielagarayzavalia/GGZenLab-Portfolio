@@ -76,13 +76,13 @@ import {
   updateQueueRow,
 } from "./apply/apply-queue.js";
 import {
-  collectUnknownQuestions,
   formatFailedFieldsNotes,
   logRunUnknownQuestions,
   recordJobUnknownQuestions,
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import { evaluateUnknownFields } from "./apply/unknown-field-strategy.js";
 import { handleFailures } from "./apply/failure-handler.js";
 import type { ApplicationRecord, ApplyJob } from "./apply/types.js";
 import type { AnalysisResult, JobMatch } from "./types.js";
@@ -459,16 +459,33 @@ async function tryEasyApply(
       if (inventory.length > 0) {
         console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
       }
-      const unknowns = collectUnknownQuestions(inventory);
-      if (unknowns.length > 0) {
+      // #156 Strategy: required desconocido → pendiente+Notas (no quemar 8 pasos)
+      const unknownDecision = evaluateUnknownFields(inventory);
+      if (unknownDecision.notes) {
         const notes = recordJobUnknownQuestions(
           job.jobId,
           job.company,
           job.title,
-          unknowns
+          [],
+          [unknownDecision.notes]
         );
-        updateQueueRow(job.jobId, { notes });
-        console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+        updateQueueRow(job.jobId, { notes: notes || unknownDecision.notes });
+        console.log(
+          `   📝 Strategy unknown-fields → Notas` +
+            (unknownDecision.pendingLabels.length
+              ? ` (pending: ${unknownDecision.pendingLabels.length})`
+              : "")
+        );
+      }
+      if (unknownDecision.action === "leave_pending") {
+        const reason =
+          "Campo(s) required desconocidos — pendiente (EA Strategy #156); siguiente aviso";
+        const notes =
+          unknownDecision.notes ||
+          formatFailedFieldsNotes(unknownDecision.pendingLabels) ||
+          reason;
+        console.log(`   ⏭ ${reason}`);
+        return leavePendingCloseContinue(page, job, record, reason, notes);
       }
 
       // Borrador atascado: solo "Select language" → descartar y reabrir (1 vez).

@@ -30,3 +30,6 @@ Hoy `gmail-fetch`, `pipeline-match` y `gmail-reconcile` **delegan** al proyecto 
 Easy Apply y excel-bridge viven en este repo (`src/easy-apply*.ts`, `src/apply/post-run.ts`).
 
 Taxonomía de labels Gmail: `docs/gmail-labels.md` en applied-list hasta migrar el código completo aquí.
+
+B-31 (Indeed + split sitios): hunter `docs/b31-indeed-gmail.md` · applied-list `docs/b31-gmail-sitios-inventory.md`.
+`npm run discover:indeed` / `npm run smoke:indeed` en este repo; `npm run gmail:ensure-sitios` en applied-list.

@@ -12,6 +12,9 @@ export interface JobListing {
   url: string;
   description: string;
   searchTerm: string;     // Qué búsqueda lo encontró
+  /** Origen multi-fuente (B-13 / B-31). Opcional en scrape LinkedIn legacy. */
+  source?: string;
+  externalId?: string;
 }
 
 export interface JobMatch extends JobListing {

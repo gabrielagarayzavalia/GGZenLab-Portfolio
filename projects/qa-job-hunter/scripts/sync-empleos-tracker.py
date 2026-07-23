@@ -88,6 +88,21 @@ def ensure_notas_column(ws) -> int:
     return col
 
 
+def ensure_mis_comentarios_column(ws) -> int:
+    """Columna solo-usuaria (#168). Crea header si falta; nunca escribe celdas de datos."""
+    headers = header_map(ws)
+    if "mis comentarios" in headers:
+        return headers["mis comentarios"]
+    # Preferir col 11 si está libre / es la siguiente tras Notas
+    notas_col = headers.get("notas") or 10
+    col = max(notas_col + 1, 11)
+    # Si otra columna ya usa ese índice con otro nombre, append al final
+    if col in headers.values() and "mis comentarios" not in headers:
+        col = (ws.max_column or 0) + 1
+    ws.cell(1, col).value = "Mis comentarios"
+    return col
+
+
 def notes_cell_value(text: str):
     """Si menciona assessment/honeypot, dejar esa palabra en negrita (rich text)."""
     if not text:
@@ -240,6 +255,7 @@ def cmd_export(xlsx: Path) -> None:
     wb = openpyxl.load_workbook(xlsx)
     ws = wb["Empleos"]
     notas_col = ensure_notas_column(ws)
+    ensure_mis_comentarios_column(ws)  # schema only; never write data cells
     headers = header_map(ws)
     proximo_col = headers.get("próximo paso") or headers.get("proximo paso")
 

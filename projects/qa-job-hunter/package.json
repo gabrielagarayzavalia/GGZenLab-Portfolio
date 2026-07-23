@@ -27,7 +27,10 @@
     "test:timing": "npx tsx --test tests/apply/timing.test.ts",
     "test:prefill-fast": "npx tsx --test tests/apply/prefill-fast-path.test.ts",
     "test:resume-contract": "npx tsx --test tests/apply/resume-contract.test.ts",
-    "smoke:resume": "npx tsx --test tests/apply/resume-contract.test.ts && npx tsx scripts/smoke-resume.ts"
+    "smoke:resume": "npx tsx --test tests/apply/resume-contract.test.ts && npx tsx scripts/smoke-resume.ts",
+    "test:indeed": "npx tsx --test tests/adapters/indeed-adapter.test.ts",
+    "smoke:indeed": "npx tsx scripts/smoke-indeed.ts",
+    "discover:indeed": "npx tsx scripts/discover-indeed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

@@ -26,6 +26,7 @@ import {
 } from "./apply/detect-apply.js";
 import {
   captureRequiredFields,
+  ensureResumeForRole,
   fillExpectedCompensation,
   fillPseudoAnswers,
   handleSaveDiscardModal,
@@ -39,7 +40,6 @@ import {
   shouldSkipHeavyFillForPrefill,
   uploadCoverLetterPdf,
   fillApplicationSummary,
-  selectResumeForRole,
   type CapturedField,
 } from "./apply/fill-answers.js";
 import {
@@ -185,16 +185,26 @@ async function maybeFillOptionalTexts(
   page: Page,
   jobTitle = "",
   company = ""
-): Promise<void> {
+): Promise<"ok" | "resume_timeout"> {
   // CV una sola vez; cover después (nunca dejar intro-GGZ como resume)
-  const resumeOk = await selectResumeForRole(page, jobTitle, company);
+  const resume = await ensureResumeForRole(page, jobTitle, company, "dry_run");
+  if (resume.outcome === "timeout_dry") {
+    console.log("   ✗ Resume timeout 30s (dry-run) — soft stop");
+    return "resume_timeout";
+  }
   await uploadCoverLetterPdf(page);
-  if (!resumeOk) await selectResumeForRole(page, jobTitle, company);
+  if (resume.outcome !== "ok") {
+    const resume2 = await ensureResumeForRole(page, jobTitle, company, "dry_run");
+    if (resume2.outcome === "timeout_dry") {
+      console.log("   ✗ Resume timeout 30s (dry-run) — soft stop");
+      return "resume_timeout";
+    }
+  }
   await fillApplicationSummary(page, jobTitle, company);
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
     .first();
-  if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return;
+  if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return "ok";
   const areas = root.locator("textarea");
   const n = await areas.count();
   const summary = resolveApplicationSummary(jobTitle, company);
@@ -213,6 +223,7 @@ async function maybeFillOptionalTexts(
       continue;
     }
   }
+  return "ok";
 }
 
 async function maybeAnswerYesNo(page: Page): Promise<void> {
@@ -325,11 +336,16 @@ async function tryAdvanceNext(
   jobTitle = "",
   company = "",
   opts: { skipFill?: boolean } = {}
-): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit"> {
+): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit" | "resume_timeout"> {
   await scrollEasyApplyFormToEnd(page);
   // 1) Rellenar lo conocido ANTES de cualquier Next/Review (salvo paso ya precargado)
   if (!opts.skipFill) {
-    await fillPseudoAnswers(page, { jobTitle, company });
+    const fill = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fill.resumeOutcome === "timeout_dry") return "resume_timeout";
     // Remuneración a menudo bajo "top choice": segundo pase dedicado
     await fillExpectedCompensation(page);
   }
@@ -393,7 +409,14 @@ async function tryAdvanceNext(
 
   // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos)
   await scrollEasyApplyFormToEnd(page);
-  await fillPseudoAnswers(page, { jobTitle, company });
+  {
+    const fillAfter = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fillAfter.resumeOutcome === "timeout_dry") return "resume_timeout";
+  }
   await fillExpectedCompensation(page);
 
   if (await isNextDisabled(page)) return "blocked";
@@ -405,14 +428,24 @@ async function tryAdvanceNext(
   ) {
     // Tras Next/Review LinkedIn revela remuneración / textareas debajo del fold
     await fillExpectedCompensation(page);
-    await fillPseudoAnswers(page, { jobTitle, company });
+    const fillRetry = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fillRetry.resumeOutcome === "timeout_dry") return "resume_timeout";
     fields = await captureRequiredFields(page);
     hasErrors = fields.some((f) => f.errorText);
   }
   if (hasErrors && page.url() === beforeUrl) return "blocked";
   let blockingAfter = await hasBlockingEmptyFields(page);
   if (blockingAfter.length > 0) {
-    await fillPseudoAnswers(page, { jobTitle, company });
+    const fillBlock = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fillBlock.resumeOutcome === "timeout_dry") return "resume_timeout";
     blockingAfter = await hasBlockingEmptyFields(page);
   }
   if (blockingAfter.length > 0) return "blocked";
@@ -434,7 +467,8 @@ async function tryAdvanceNext(
     );
     if (await needResume.isVisible({ timeout: 600 }).catch(() => false)) {
       console.log("   ↳ Next stuck + error currículum — re-fill resume y Next 1×");
-      await selectResumeForRole(page, jobTitle, company);
+      const resumeRetry = await ensureResumeForRole(page, jobTitle, company, "dry_run");
+      if (resumeRetry.outcome === "timeout_dry") return "resume_timeout";
       await sleep(TIMING.modalStepMs);
       const next2 =
         (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
@@ -450,7 +484,14 @@ async function tryAdvanceNext(
       }
     }
     // Re-fill + recheck Submit (Review a veces no avanza si faltaba remuneración)
-    await fillPseudoAnswers(page, { jobTitle, company });
+    {
+      const fillStuck = await fillPseudoAnswers(page, {
+        jobTitle,
+        company,
+        mode: "dry_run",
+      });
+      if (fillStuck.resumeOutcome === "timeout_dry") return "resume_timeout";
+    }
     if (
       (await findButtonOrLink(scope, MODAL_LABELS.submit, 600)) ||
       (await findButtonOrLink(page, MODAL_LABELS.submit, 500))
@@ -567,10 +608,45 @@ async function dryRunThroughModal(
     if (skipHeavy) {
       console.log("   ⚡ Paso precargado / CV OK / sin vacíos — Next sin fill pesado");
     } else {
-      await maybeFillOptionalTexts(page, jobTitle, company);
+      const optFill = await maybeFillOptionalTexts(page, jobTitle, company);
+      if (optFill === "resume_timeout") {
+        perf?.end();
+        const notes = [
+          "Falla selección CV Easy Apply (timeout 30s):",
+          `- job ${jobId}`,
+          "- dry-run soft stop (no avanzar wizard a ciegas)",
+        ].join("\n");
+        updateQueueRow(jobId, {
+          status: "pendiente",
+          easyApply: "yes",
+          reason: "Dry-run: timeout selección CV 30s — pendiente",
+          notes,
+        });
+        unansweredAcc.push("Resume/CV (timeout 30s contrato #208)");
+        await saveDebugScreenshot(page, jobId, "resume-timeout");
+        await dismissEasyApplyModal(page);
+        return { outcome: "unanswered", unansweredLabels: unansweredAcc };
+      }
       await maybeAnswerYesNo(page);
-      const { filled } = await fillPseudoAnswers(page, { jobTitle, company });
-      if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
+      const fill = await fillPseudoAnswers(page, {
+        jobTitle,
+        company,
+        mode: "dry_run",
+      });
+      if (fill.resumeOutcome === "timeout_dry") {
+        perf?.end();
+        updateQueueRow(jobId, {
+          status: "pendiente",
+          easyApply: "yes",
+          reason: fill.skipPending?.reason ?? "Dry-run: timeout selección CV 30s",
+          notes: fill.skipPending?.notes ?? "",
+        });
+        unansweredAcc.push("Resume/CV (timeout 30s contrato #208)");
+        await saveDebugScreenshot(page, jobId, "resume-timeout");
+        await dismissEasyApplyModal(page);
+        return { outcome: "unanswered", unansweredLabels: unansweredAcc };
+      }
+      if (fill.filled > 0) console.log(`   Pseudo-fill: ${fill.filled} campo(s)`);
       await scrollEasyApplyFormToEnd(page);
     }
 
@@ -601,6 +677,25 @@ async function dryRunThroughModal(
         reason: "Dry-run: Save/Discard → Discard; salió sin guardar ni enviar",
       });
       throw new DryRunDiscardExitError(jobId, jobUrl);
+    }
+
+    if (step === "resume_timeout") {
+      perf?.end();
+      unansweredAcc.push("Resume/CV (timeout 30s contrato #208)");
+      const { labels } = await recordUnansweredAndStayPending(
+        page,
+        jobId,
+        jobUrl,
+        "resume_timeout",
+        unansweredAcc
+      );
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        easyApply: "yes",
+        reason: "Dry-run: timeout selección CV 30s — pendiente",
+        notes: "Falla selección CV Easy Apply (timeout 30s) — soft stop dry-run",
+      });
+      return { outcome: "unanswered", unansweredLabels: labels };
     }
 
     // blocked / stuck / no_next → registrar campos, pendiente, NO show-stopper

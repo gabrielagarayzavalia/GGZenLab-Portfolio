@@ -28,6 +28,14 @@ Suma fija solo en orquestación EA (sin fill): ~**19s** de `sleep()` por corrida
 
 Constantes: `src/apply/timing.ts`.
 
+## Contrato CV (#208) vs timer de página
+
+El budget **25s** / fail **45s** por página del modal (`PERF_TEST`) mide wall-clock del paso, **no** redefine el contrato de selección CV:
+
+- Insistir CV del rol: **30s** (`RESUME_INSIST_MS` en `resume-contract.ts`).
+- Si el paso resume incluye esos 30s, el timer de página puede fallar (>45s) aunque el contrato haya hecho soft-stop correcto.
+- DoD de #208: `npm run smoke:resume` + dry-run con outcome acorde; perf se reporta aparte.
+
 ## Qué queda holgado a propósito
 
 - Delays de tipeo (40–100ms/char).

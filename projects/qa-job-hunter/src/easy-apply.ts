@@ -48,7 +48,7 @@ import {
   hasPrefillValue,
   uploadCoverLetterPdf,
   fillApplicationSummary,
-  selectResumeForRole,
+  ensureResumeForRole,
 } from "./apply/fill-answers.js";
 import {
   COVER_LETTER_DEFAULT,
@@ -569,10 +569,42 @@ async function tryEasyApply(
         );
       }
 
-      // CV correcto primero; cover letter solo en su input; summary según rol
-      await selectResumeForRole(page, job.title, job.company);
+      // CV correcto primero (contrato #208); cover solo en su input; summary según rol
+      {
+        const resume = await ensureResumeForRole(
+          page,
+          job.title,
+          job.company,
+          "productive"
+        );
+        if (resume.outcome === "timeout_prod") {
+          return leavePendingCloseContinue(
+            page,
+            job,
+            record,
+            "Falla selección CV Easy Apply (timeout 30s) — pendiente",
+            resume.notes
+          );
+        }
+      }
       await uploadCoverLetterPdf(page);
-      await selectResumeForRole(page, job.title, job.company);
+      {
+        const resume2 = await ensureResumeForRole(
+          page,
+          job.title,
+          job.company,
+          "productive"
+        );
+        if (resume2.outcome === "timeout_prod") {
+          return leavePendingCloseContinue(
+            page,
+            job,
+            record,
+            "Falla selección CV Easy Apply (timeout 30s) — pendiente",
+            resume2.notes
+          );
+        }
+      }
       await fillApplicationSummary(page, job.title, job.company);
 
       if (openTextareas > 0) {

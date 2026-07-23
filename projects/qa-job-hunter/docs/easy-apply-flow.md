@@ -60,7 +60,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
 - **Cover letter:** upload `intro-GGZ.pdf` (`COVER_LETTER_PDF` / path en `canonical-text.ts`).
 - **Summary:** borrar default y pegar texto **QA Analyst** o **QA Automation** según el título del aviso (`resolveApplicationSummary`).
-- **CV:** si el default es la cover (`intro-GGZ`) o el CV incorrecto → click **`Show N more resumes`**, luego radio `QA_Analyst` / `QA_Automation`. Nunca subir la cover letter al input de resume.
+- **CV (contrato #208):** siempre un CV válido seleccionado. No deseleccionar a ciegas; cambiar = click en el deseado. Si está cover/`intro-GGZ` → forzar cambio. Preferir CV del rol (`Show N more` si hace falta). Si no queda seleccionado → insistir **30s**. Timeout: **dry-run** soft stop; **prod** → Notas + `pendiente` + siguiente. Código: `src/apply/resume-contract.ts` + `ensureResumeForRole`. Smoke: `npm run smoke:resume`. El timer de perf por página modal ([`easy-apply-perf.md`](./easy-apply-perf.md)) no redefine este contrato.
 - **Country** = Argentina; **City (dropdown LinkedIn)** = Liniers, Comuna 9 (CABA no está en lista); **City texto** = `Ciudad Autónoma de Buenos Aires, Argentina`.
 - **(Country, city)** / preferred location = `Argentina, Ciudad Autónoma de Buenos Aires`.
 - **Dónde vivís/trabajar (texto):** EN `Buenos Aires city, Argentina` · ES `Ciudad Autonoma de Buenos Aires, Argentina`.

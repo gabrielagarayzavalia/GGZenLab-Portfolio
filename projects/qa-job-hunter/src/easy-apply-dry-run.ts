@@ -186,10 +186,10 @@ async function maybeFillOptionalTexts(
   jobTitle = "",
   company = ""
 ): Promise<void> {
-  // CV antes que cover upload (nunca dejar intro-GGZ como resume)
-  await selectResumeForRole(page, jobTitle, company);
+  // CV una sola vez; cover después (nunca dejar intro-GGZ como resume)
+  const resumeOk = await selectResumeForRole(page, jobTitle, company);
   await uploadCoverLetterPdf(page);
-  await selectResumeForRole(page, jobTitle, company);
+  if (!resumeOk) await selectResumeForRole(page, jobTitle, company);
   await fillApplicationSummary(page, jobTitle, company);
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
@@ -560,9 +560,12 @@ async function dryRunThroughModal(
       .map(labelFromCaptured);
     unansweredAcc.push(...emptyRequired);
 
-    const skipHeavy = shouldSkipHeavyFillForPrefill(inventory);
+    const skipHeavy = shouldSkipHeavyFillForPrefill(inventory, {
+      jobTitle,
+      company,
+    });
     if (skipHeavy) {
-      console.log("   ⚡ Paso precargado / sin vacíos — Next sin fill pesado");
+      console.log("   ⚡ Paso precargado / CV OK / sin vacíos — Next sin fill pesado");
     } else {
       await maybeFillOptionalTexts(page, jobTitle, company);
       await maybeAnswerYesNo(page);

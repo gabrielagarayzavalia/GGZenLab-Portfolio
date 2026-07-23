@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PERF,
+  SCRAPE,
   TIMING,
   ModalPageTimer,
   betweenJobsDelayMs,
@@ -33,10 +34,15 @@ test("verdictForModalPageMs: budget 25s / fail 45s", () => {
   assert.equal(PERF.modalPageFailMs, 45_000);
 });
 
+test("SCRAPE waits más cortos que baseline histórico", () => {
+  assert.ok(SCRAPE.afterGotoMs < 3000);
+  assert.ok(SCRAPE.scrollSettleMs < 1500);
+  assert.ok(SCRAPE.afterCardClickMs < 2000);
+});
+
 test("ModalPageTimer acumula samples sin failHard", () => {
   const t = new ModalPageTimer({ failHard: false });
   t.start("a");
-  // forzar duración sintética vía end inmediato (pass)
   t.end();
   assert.ok(t.samples.length >= 1);
   assert.equal(t.samples[0].label, "a");

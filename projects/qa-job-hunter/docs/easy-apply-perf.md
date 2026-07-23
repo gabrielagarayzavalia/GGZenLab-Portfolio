@@ -37,7 +37,16 @@ Constantes: `src/apply/timing.ts`.
 
 ## Scrape/discover (B24-02)
 
-Fuera de esta ola EA. Inventario rápido: `2-scrape-jobs.ts` / discover tienen sleeps propios — calibrar en PR aparte.
+Constantes `SCRAPE` en `src/apply/timing.ts` + waits condicionados en `2-scrape-jobs.ts`:
+
+| Zona | Antes | Después |
+|------|-------|---------|
+| Tras goto search | 3000ms | wait cards + **1200ms** |
+| Scroll lista | 1500ms | **600ms** |
+| Click card → detalle | 2000ms | wait título + **800ms** |
+| See more JD | 500ms | **300ms** |
+
+Jitter anti-ban entre avisos en applied-list scrape queda holgado a propósito.
 
 ## Cómo medir
 

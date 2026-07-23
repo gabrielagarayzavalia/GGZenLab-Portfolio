@@ -214,6 +214,9 @@ export function hasPrefillValue(value: string): boolean {
 export const CONTACT_FIELD_LABEL_RE =
   /e-?mail|correo|tel[eé]fono|phone|mobile|m[oó]vil|c[oó]digo del pa[ií]s|country\s*code|phone\s*country/i;
 
+const COVER_AS_RESUME_LABEL_RE =
+  /intro-GGZ|intro\s*letter|cover\s*letter|introduction\s*letter/i;
+
 /**
  * Paso contact con todo precargado → dry-run/prod pueden ir a Next sin fill pesado
  * (evita timeouts de resume/location en un paso que no los tiene).
@@ -229,11 +232,34 @@ export function looksLikeContactPrefillStep(fields: CapturedField[]): boolean {
 }
 
 /**
- * ¿Conviene saltar fillPseudoAnswers / optional texts?
- * Solo contact precargado, o required todos con valor y sin señales de CV.
+ * Inventario con "Deselect resume &lt;CV del rol&gt;" = ya seleccionado → no re-bind.
  */
-export function shouldSkipHeavyFillForPrefill(fields: CapturedField[]): boolean {
+export function resumeAlreadyOkInInventory(
+  fields: CapturedField[],
+  jobTitle = "",
+  company = ""
+): boolean {
+  const kind = detectApplyRoleKind(jobTitle, company);
+  const deselect = fields.filter((f) => /deselect\s+resume/i.test(f.label));
+  if (deselect.length === 0) return false;
+  return deselect.some((f) => {
+    if (COVER_AS_RESUME_LABEL_RE.test(f.label)) return false;
+    return scoreResumeForRole(f.label, kind) >= 70;
+  });
+}
+
+/**
+ * ¿Conviene saltar fillPseudoAnswers / optional texts?
+ * Contact precargado, CV ya OK para el rol, o required todos con valor sin CV pendiente.
+ */
+export function shouldSkipHeavyFillForPrefill(
+  fields: CapturedField[],
+  ctx?: { jobTitle?: string; company?: string }
+): boolean {
   if (looksLikeContactPrefillStep(fields)) return true;
+  if (resumeAlreadyOkInInventory(fields, ctx?.jobTitle ?? "", ctx?.company ?? "")) {
+    return true;
+  }
   const hasResume = fields.some((f) =>
     /resume|curr[ií]culum|\.pdf|cover letter|carta de present/i.test(f.label)
   );
@@ -2101,7 +2127,7 @@ export async function fillHowDidYouHear(page: Page): Promise<boolean> {
   return false;
 }
 
-const COVER_AS_RESUME_RE = /intro-GGZ|intro\s*letter|cover\s*letter|introduction\s*letter/i;
+const COVER_AS_RESUME_RE = COVER_AS_RESUME_LABEL_RE;
 const DOWNLOAD_RESUME_RE = /download\s+resume/i;
 /** Link LinkedIn EN/ES: "Show 3 more resumes" / "Mostrar N currículums más". */
 const SHOW_MORE_RESUMES_RE =
@@ -2186,14 +2212,14 @@ async function clickDocumentCardToggle(page: Page, toggleId: string): Promise<bo
   const pierced = modal.locator("#interop-outlet").locator(`[id="${toggleId}"]`);
   if ((await pierced.count().catch(() => 0)) > 0) {
     if (await clickSafeInEasyApply(pierced, { timeoutMs: 4000 })) {
-      await sleep(400);
+      await sleep(250);
       return true;
     }
   }
   const inModal = modal.locator(`[id="${toggleId}"]`);
   if ((await inModal.count().catch(() => 0)) > 0) {
     if (await clickSafeInEasyApply(inModal.first(), { timeoutMs: 4000 })) {
-      await sleep(400);
+      await sleep(250);
       return true;
     }
   }
@@ -2284,19 +2310,21 @@ async function clickShowMoreResumes(root: Locator): Promise<boolean> {
     .filter({ hasText: SHOW_MORE_RESUMES_RE })
     .first();
   let target = showMore;
-  if (!(await target.isVisible({ timeout: 1200 }).catch(() => false))) {
+  if (!(await target.isVisible({ timeout: 500 }).catch(() => false))) {
     target = root.getByText(SHOW_MORE_RESUMES_RE).first();
-    if (!(await target.isVisible({ timeout: 800 }).catch(() => false))) return false;
+    if (!(await target.isVisible({ timeout: 400 }).catch(() => false))) return false;
   }
   const text = ((await target.innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
   console.log(`   ↳ Resume: click "${text}" para desplegar CVs`);
-  if (!(await clickSafeInEasyApply(target, { timeoutMs: 4000 }))) return false;
-  await sleep(1000);
+  if (!(await clickSafeInEasyApply(target, { timeoutMs: 3000 }))) return false;
+  await sleep(400);
   return true;
 }
 
-async function isRoleResumeSelected(page: Page, kind: ApplyRoleKind): Promise<boolean> {
-  const toggles = await listDocumentCardToggles(page);
+function roleResumeSelectedInToggles(
+  toggles: DocumentCardToggle[],
+  kind: ApplyRoleKind
+): boolean {
   return toggles.some(
     (t) =>
       t.selected &&
@@ -2304,6 +2332,11 @@ async function isRoleResumeSelected(page: Page, kind: ApplyRoleKind): Promise<bo
       !COVER_AS_RESUME_RE.test(t.title) &&
       !DOWNLOAD_RESUME_RE.test(t.aria)
   );
+}
+
+async function isRoleResumeSelected(page: Page, kind: ApplyRoleKind): Promise<boolean> {
+  const toggles = await listDocumentCardToggles(page);
+  return roleResumeSelectedInToggles(toggles, kind);
 }
 
 /**
@@ -2361,7 +2394,7 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
       console.log(
         `   ↳ Resume: click TOGGLE (aria) ${kind} (score=${fbScore}) → ${fbTitle.slice(0, 90)}`
       );
-      await sleep(600);
+      await sleep(300);
       return isRoleResumeSelected(page, kind);
     }
     return false;
@@ -2467,7 +2500,7 @@ async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
     const ok = await clickDocumentCardToggle(page, t.id);
     if (ok) {
       console.log(`   ↳ Resume: fallback (sin match rol) → ${t.title.slice(0, 90)}`);
-      await sleep(600);
+      await sleep(300);
       return true;
     }
   }
@@ -2484,7 +2517,7 @@ async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
       .click({ timeout: 4000, noWaitAfter: true })
       .catch(() => el.click({ force: true, timeout: 4000, noWaitAfter: true }));
     console.log(`   ↳ Resume: fallback (aria) → ${RESUME_FALLBACK_FILENAME}`);
-    await sleep(600);
+    await sleep(300);
     return true;
   }
 
@@ -2512,7 +2545,7 @@ export async function selectResumeForRole(
   const kind = detectApplyRoleKind(jobTitle, company);
   // Solo modal Easy Apply (nunca <main>: evita falsos .pdf del JD)
   const root = page.locator(".jobs-easy-apply-modal").first();
-  if (!(await root.isVisible({ timeout: 800 }).catch(() => false))) return false;
+  if (!(await root.isVisible({ timeout: 400 }).catch(() => false))) return false;
 
   // Review/Submit: no hay paso CV — no buscar toggles ni clickear detrás del modal
   const submitVisible = await root
@@ -2521,36 +2554,41 @@ export async function selectResumeForRole(
     )
     .or(root.getByRole("button", { name: /Submit application|^Submit$|Enviar solicitud|^Enviar$/i }))
     .first()
-    .isVisible({ timeout: 500 })
+    .isVisible({ timeout: 250 })
     .catch(() => false);
   if (submitVisible) return false;
 
-  const toggles0 = await listDocumentCardToggles(page);
-  const pdfVisible = await root
-    .getByText(/\.pdf/i)
-    .first()
-    .isVisible({ timeout: 800 })
-    .catch(() => false);
-  const showLinkVisible = await root
-    .getByText(SHOW_MORE_RESUMES_RE)
-    .first()
-    .isVisible({ timeout: 800 })
-    .catch(() => false);
-  const curriculumStep = await root
-    .getByText(/curr[ií]culum|be sure to include an updated resume/i)
-    .first()
-    .isVisible({ timeout: 600 })
-    .catch(() => false);
-  if (toggles0.length === 0 && !pdfVisible && !showLinkVisible && !curriculumStep) {
-    return false;
+  // Una sola pasada de toggles (+ checks cortos) para decidir si hay UI de CV
+  let toggles = await listDocumentCardToggles(page);
+  if (toggles.length === 0) {
+    const pdfVisible = await root
+      .getByText(/\.pdf/i)
+      .first()
+      .isVisible({ timeout: 300 })
+      .catch(() => false);
+    const showLinkVisible = await root
+      .getByText(SHOW_MORE_RESUMES_RE)
+      .first()
+      .isVisible({ timeout: 300 })
+      .catch(() => false);
+    const curriculumStep = await root
+      .getByText(/curr[ií]culum|be sure to include an updated resume/i)
+      .first()
+      .isVisible({ timeout: 300 })
+      .catch(() => false);
+    if (!pdfVisible && !showLinkVisible && !curriculumStep) return false;
   }
 
-  if (await isRoleResumeSelected(page, kind)) {
+  if (roleResumeSelectedInToggles(toggles, kind)) {
     console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — no es cover letter`);
     return true;
   }
 
-  const selectedBlob = await selectedResumeLabel(page, root);
+  const selectedBlob =
+    toggles
+      .filter((t) => t.selected)
+      .map((t) => t.title)
+      .join(" | ") || (await selectedResumeLabel(page, root));
   if (COVER_AS_RESUME_RE.test(selectedBlob) || /intro-GGZ/i.test(selectedBlob)) {
     console.log(
       `   ↳ Resume: ⚠ default es cover letter ("${selectedBlob.slice(0, 60)}") — cambiar a ${kind}`
@@ -2561,30 +2599,23 @@ export async function selectResumeForRole(
     );
   }
 
-  const roleCvVisibleInDefault = async (): Promise<boolean> => {
-    const toggles = await listDocumentCardToggles(page);
-    for (const t of toggles) {
-      if (COVER_AS_RESUME_RE.test(t.title)) continue;
-      if (scoreResumeForRole(t.title, kind) >= 70) return true;
-    }
-    const pdfHits = root.getByText(/\.pdf/i);
-    const pn = await pdfHits.count().catch(() => 0);
-    for (let i = 0; i < pn; i++) {
-      const t = ((await pdfHits.nth(i).innerText().catch(() => "")) ?? "").trim();
-      if (COVER_AS_RESUME_RE.test(t)) continue;
-      if (scoreResumeForRole(t, kind) >= 70) return true;
-    }
-    return false;
-  };
-
-  if (!(await roleCvVisibleInDefault())) {
+  const roleVisible = toggles.some(
+    (t) => !COVER_AS_RESUME_RE.test(t.title) && scoreResumeForRole(t.title, kind) >= 70
+  );
+  if (!roleVisible) {
     console.log(`   ↳ Resume: CV ${kind} no visible en default → Show more + toggle`);
     await clickShowMoreResumes(root);
+    toggles = await listDocumentCardToggles(page);
   } else {
     console.log(`   ↳ Resume: CV ${kind} visible → click TOGGLE (no Download)`);
   }
 
-  // Un intento (+ Show more si falla). clickBestResumeToggle ya evita re-click si OK.
+  if (roleResumeSelectedInToggles(toggles, kind)) {
+    console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — no re-click`);
+    return true;
+  }
+
+  // Un intento (+ Show more 1× si falla). Evita 3× Show more + sleeps.
   if (await clickBestResumeToggle(page, kind)) return true;
   await clickShowMoreResumes(root);
   if (await clickBestResumeToggle(page, kind)) return true;
@@ -2593,7 +2624,6 @@ export async function selectResumeForRole(
   console.log(
     `   ↳ Resume: sin match ${kind} → fallback ${RESUME_FALLBACK_FILENAME}`
   );
-  await clickShowMoreResumes(root);
   if (await clickResumeFallbackDefault(page)) return true;
 
   if (COVER_AS_RESUME_RE.test(await selectedResumeLabel(page, root))) {
@@ -3124,7 +3154,8 @@ export async function fillPseudoAnswers(
   if (skipEarly) return { filled: 0, skipPending: skipEarly };
 
   // CV primero (nunca dejar intro-GGZ / cover como resume) — solo si hay paso currículum
-  if (await selectResumeForRole(page, jobTitle, company)) filled++;
+  let resumeOk = await selectResumeForRole(page, jobTitle, company);
+  if (resumeOk) filled++;
   if (await fillLocationLiniers(page)) filled++;
   if (await fillCountrySelect(page)) filled++;
   if (await fillPhoneCountryCode(page)) filled++;
@@ -3156,8 +3187,8 @@ export async function fillPseudoAnswers(
 
   // Cover letter solo en input de cover (no el de resume)
   if (await uploadCoverLetterPdf(page)) filled++;
-  // Re-chequear CV solo si el paso de currículum sigue visible (no en Review/Follow)
-  if (await selectResumeForRole(page, jobTitle, company)) filled++;
+  // Re-chequear CV solo si el primero falló (evita 2× listDocumentCardToggles)
+  if (!resumeOk && (await selectResumeForRole(page, jobTitle, company))) filled++;
   if (await fillApplicationSummary(page, jobTitle, company)) filled++;
   if (
     await fillTextByFieldMatch(

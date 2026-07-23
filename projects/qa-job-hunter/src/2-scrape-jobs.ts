@@ -11,11 +11,9 @@ import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH, TITLE_KEYWORDS } from "./config.js";
+import { SCRAPE, sleep } from "./apply/timing.js";
 import type { JobListing } from "./types.js";
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+import type { Page } from "playwright";
 
 function sanitize(text: string | null | undefined): string {
   return (text ?? "").replace(/\s+/g, " ").trim();
@@ -29,6 +27,30 @@ function isRelevantTitle(title: string): boolean {
   const lower = title.toLowerCase();
   return TITLE_KEYWORDS.some((kw) => lower.includes(kw));
 }
+
+/** Espera cards de resultados (condicionado) + settle corto. */
+async function waitForSearchResults(page: Page): Promise<void> {
+  await page
+    .locator(
+      ".jobs-search__results-list > li, .scaffold-layout__list-container li, [data-occludable-job-id]"
+    )
+    .first()
+    .waitFor({ state: "visible", timeout: SCRAPE.resultsVisibleMs })
+    .catch(() => {});
+  await sleep(SCRAPE.afterGotoMs);
+}
+
+async function waitForJobDetailPanel(page: Page): Promise<void> {
+  await page
+    .locator(
+      ".jobs-unified-top-card__job-title, .job-details-jobs-unified-top-card__job-title, h1.t-24, h2.t-24"
+    )
+    .first()
+    .waitFor({ state: "visible", timeout: 6000 })
+    .catch(() => {});
+  await sleep(SCRAPE.afterCardClickMs);
+}
+
 
 async function scrapeLinkedInJobs(): Promise<void> {
   const discovery = (process.env.DISCOVERY ?? "").trim().toLowerCase();
@@ -79,14 +101,14 @@ async function scrapeLinkedInJobs(): Promise<void> {
     try {
       const collUrl = `https://www.linkedin.com/jobs/collections/remote/?keywords=QA`;
       await page.goto(collUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-      await sleep(3000);
+      await waitForSearchResults(page);
 
       if (!page.url().includes("/login") && !page.url().includes("/authwall")) {
         await page.screenshot({ path: "./session/search-remote-collection.png" });
 
         for (let s = 0; s < 4; s++) {
           await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-          await sleep(1500);
+          await sleep(SCRAPE.scrollSettleMs);
         }
 
         let cards = await page.$$(".jobs-search__results-list > li");
@@ -99,7 +121,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
         for (let i = 0; i < count; i++) {
           try {
             await cards[i].click();
-            await sleep(2000);
+            await waitForJobDetailPanel(page);
 
             const title = sanitize(await page.evaluate(() => {
               const sels = [".jobs-unified-top-card__job-title", ".job-details-jobs-unified-top-card__job-title", "h1.t-24", "h2.t-24"];
@@ -134,7 +156,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
             }));
 
             const seeMoreBtn = await page.$(".jobs-description__footer-button");
-            if (seeMoreBtn) { await seeMoreBtn.click(); await sleep(500); }
+            if (seeMoreBtn) { await seeMoreBtn.click(); await sleep(SCRAPE.afterSeeMoreMs); }
 
             const description = sanitize(await page.evaluate(() => {
               const sels = [".jobs-description__content", ".jobs-box__html-content", "#job-details", ".jobs-description"];
@@ -182,7 +204,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
       console.log(`   URL: ${url}`);
 
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-      await sleep(3000);
+      await waitForSearchResults(page);
 
       if (page.url().includes("/login") || page.url().includes("/authwall")) {
         console.log("⚠️  Sesión expirada. Ejecutá: npx tsx src\\1-login.ts");
@@ -194,7 +216,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
 
       for (let s = 0; s < 4; s++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        await sleep(1500);
+        await sleep(SCRAPE.scrollSettleMs);
       }
 
       let jobCards = await page.$$(".jobs-search__results-list > li");
@@ -217,7 +239,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
       for (let i = 0; i < count; i++) {
         try {
           await jobCards[i].click();
-          await sleep(2000);
+          await waitForJobDetailPanel(page);
 
           const title = sanitize(await page.evaluate(() => {
             const selectors = [
@@ -289,7 +311,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
           const seeMoreBtn = await page.$(".jobs-description__footer-button");
           if (seeMoreBtn) {
             await seeMoreBtn.click();
-            await sleep(500);
+            await sleep(SCRAPE.afterSeeMoreMs);
           }
 
           const description = sanitize(await page.evaluate(() => {

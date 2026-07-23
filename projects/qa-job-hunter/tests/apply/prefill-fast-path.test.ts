@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   looksLikeContactPrefillStep,
+  resumeAlreadyOkInInventory,
   shouldSkipHeavyFillForPrefill,
   type CapturedField,
 } from "../../src/apply/fill-answers.js";
@@ -41,7 +42,7 @@ test("looksLikeContactPrefillStep: false si falta teléfono", () => {
   assert.equal(shouldSkipHeavyFillForPrefill(fields), false);
 });
 
-test("shouldSkipHeavyFillForPrefill: no salta paso CV aunque required llenos", () => {
+test("shouldSkipHeavyFillForPrefill: no salta si solo Select (aún no elegido)", () => {
   const fields = [
     field({
       label: "Select resume CV_Gabriela_Garay_Zavalia_QA_Automation.pdf",
@@ -52,4 +53,32 @@ test("shouldSkipHeavyFillForPrefill: no salta paso CV aunque required llenos", (
     }),
   ];
   assert.equal(shouldSkipHeavyFillForPrefill(fields), false);
+});
+
+test("resumeAlreadyOkInInventory: Deselect automation → skip heavy", () => {
+  const fields = [
+    field({
+      label: "Select resume CV_Gabriela_Garay_QA_Analyst.pdf",
+      value: "on",
+      required: false,
+      optional: true,
+    }),
+    field({
+      label: "Deselect resume CV_Gabriela_Garay_Zavalia_QA_Automation.pdf",
+      value: "on",
+      required: false,
+      optional: true,
+    }),
+  ];
+  assert.equal(
+    resumeAlreadyOkInInventory(fields, "QA Automation Engineer", "Forced"),
+    true
+  );
+  assert.equal(
+    shouldSkipHeavyFillForPrefill(fields, {
+      jobTitle: "QA Automation Engineer",
+      company: "Forced",
+    }),
+    true
+  );
 });

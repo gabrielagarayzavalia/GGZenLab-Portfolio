@@ -74,6 +74,7 @@ import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.j
 import { exportQueueToExcel } from "./apply/post-run.js";
 import {
   collectUnknownQuestions,
+  formatFailedFieldsNotes,
   logRunUnknownQuestions,
   recordJobUnknownQuestions,
   resetRunUnknownQuestions,
@@ -231,6 +232,12 @@ async function saveDebugScreenshot(
   }
 }
 
+function emptyOrPlaceholderValue(value: string): boolean {
+  const v = (value || "").trim();
+  if (!v) return true;
+  return /selecciona|select an option|choose an option|select\b/i.test(v);
+}
+
 async function stopForRequiredFields(
   page: Page,
   jobId: string,
@@ -244,11 +251,24 @@ async function stopForRequiredFields(
   console.error(`   Dump → ${dumpPath}`);
   console.error(`   Screenshots → ${SCREENSHOTS_DIR}`);
   console.error("   Completá opciones en src/apply/fill-answers.ts (PSEUDO_ANSWERS) y reintentá.");
+  const failedLabels = fields
+    .filter((f) => emptyOrPlaceholderValue(f.value))
+    .map((f) => (f.label || f.ariaLabel || f.placeholder || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const fallbackLabels = fields
+    .map((f) => (f.label || f.ariaLabel || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const fieldNotes =
+    formatFailedFieldsNotes(failedLabels.length ? failedLabels : fallbackLabels) ||
+    `STOP dry-run: required fields (${fields.length}) — ver dump`;
   updateQueueRow(jobId, {
     status: "pendiente",
     easyApply: "yes",
     reason: `STOP: required fields (${fields.length}) — ver required-fields-${jobId}.json + screenshot`,
+    notes: fieldNotes,
   });
+  // Sync inmediato: process.exit en el caller salta el export del finally
+  exportQueueToExcel();
   throw new RequiredFieldsBlockedError(jobId, url, fields, dumpPath);
 }
 

@@ -3002,9 +3002,19 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
         // Hay mapa → no bloquear; fillSkillYearsOfExperience lo rellena
         continue;
       }
+      const label = blob
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(/\bSelect an option\b|\bChoose an option\b|\bSeleccionar\b/i)[0]
+        ?.trim()
+        .slice(0, 160) || "years of experience";
       return {
         reason: "Pregunta years of experience (skill sin mapa) — pendiente",
-        notes: `Pendiente: years of experience — skill no mapeada en skills-years.ts ("${blob.slice(0, 120)}")`,
+        notes: [
+          "Campos que fallaron / faltaron completar:",
+          `- ${label}`,
+          "(skill no mapeada en skills-years.ts)",
+        ].join("\n"),
       };
     }
 
@@ -3042,9 +3052,19 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
       // Sí/No genérico sin skill mapeada
       const optsText = ((await sel.innerText().catch(() => "")) ?? "").slice(0, 200);
       if (/Yes|Sí|Si|\bNo\b/i.test(optsText) && !resolveSkillYesNo(blob)) {
+        const label = blob
+          .replace(/\s+/g, " ")
+          .trim()
+          .split(/\bSelect an option\b|\bChoose an option\b|\bYes\b|\bNo\b|\bSí\b/i)[0]
+          ?.trim()
+          .slice(0, 160) || "dropdown Sí/No";
         return {
           reason: "Dropdown Sí/No sin regla definida — pendiente",
-          notes: `Pendiente dropdown sin definir: "${blob.slice(0, 100)}"`,
+          notes: [
+            "Campos que fallaron / faltaron completar:",
+            `- ${label}`,
+            "(dropdown sin regla definida)",
+          ].join("\n"),
         };
       }
     }
@@ -3092,7 +3112,11 @@ export async function fillPseudoAnswers(
       consentFailed: true,
       skipPending: {
         reason: "Consent checkbox no quedó marcado — pendiente",
-        notes: "Pendiente: I consent / checkbox to proceed — no se marcó solo; revisar manual",
+        notes: [
+          "Campos que fallaron / faltaron completar:",
+          "- I consent / checkbox to proceed",
+          "(no se marcó solo; revisar manual)",
+        ].join("\n"),
       },
     };
   }

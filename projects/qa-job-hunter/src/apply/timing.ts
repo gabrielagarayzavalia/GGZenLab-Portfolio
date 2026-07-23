@@ -34,6 +34,20 @@ export const TIMING = {
   afterTextareaFillMs: 350,
 } as const;
 
+/** Waits scrape/discover (B24-02) — LinkedIn search opt-in. */
+export const SCRAPE = {
+  /** Tras goto search/collection — antes 3000ms */
+  afterGotoMs: 1200,
+  /** Entre scrolls de lista — antes 1500ms */
+  scrollSettleMs: 600,
+  /** Tras click card → panel detalle — antes 2000ms */
+  afterCardClickMs: 800,
+  /** Tras "see more" descripción — antes 500ms */
+  afterSeeMoreMs: 300,
+  /** Timeout wait cards visibles */
+  resultsVisibleMs: 8000,
+} as const;
+
 /** Umbrales de performance testing (página de modal Easy Apply). */
 export const PERF = {
   /** Meta: máximo aceptable por página de modal */

@@ -55,7 +55,9 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - Sin Easy Apply (y no closed/applied) → **sigue pendiente** → siguiente.
 - Dry-run + Easy Apply → ver Submit, no clickear → **pendiente**.
 - Si hay Easy Apply y **no entra al modal** → **STOP** de toda la corrida (exit 2); no seguir al siguiente.
-- Si **Next no avanza** (required) → captura campos a `output/apply/required-fields-*.json`, **cierra sesión** (exit 3). Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
+- Si **Next no avanza** (required) en **dry-run** → registra campos en dump + **Notas**, estado **pendiente**, resume limpio (no exit 3). En productivo: captura + pendiente según Strategy.
+- Contact precargado (email/tel/código) → dry-run hace **Next sin fill pesado**.
+- Pseudo-fill: Location/comuna 9 → tipar **Liniers**; Country → **Argentina**; remuneración → **2750** USD / **3500000** ARS; start → **Immediately** / **Inmediatamente**; ciudad libre → **Buenos Aires city** / **Ciudad Autonoma de Buenos Aires**.
 - **Cover letter:** upload `intro-GGZ.pdf` (`COVER_LETTER_PDF` / path en `canonical-text.ts`).
 - **Summary:** borrar default y pegar texto **QA Analyst** o **QA Automation** según el título del aviso (`resolveApplicationSummary`).
 - **CV:** si el default es la cover (`intro-GGZ`) o el CV incorrecto → click **`Show N more resumes`**, luego radio `QA_Analyst` / `QA_Automation`. Nunca subir la cover letter al input de resume.
@@ -80,7 +82,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
   - **Dry-run (prueba):** → **Discard** y **salir** (cerrar sin guardar ni enviar).
   - **Productivo:** → **Save** → buscar **Submit** → click → Excel `enviada` **aunque no haya Done** → intentar Done si aparece → siguiente puesto. Al terminar la cola: **export Excel + abrir Excel** (sin mailto / sin abrir Gmail; reintenta si Excel está abierto).
   - **Typeahead mandatorio** (Location, etc.): si falla validación → click en el campo + reescribir hasta ver dropdown, **hasta 3 veces**; si sigue fallando → cerrar modal y dejar para otra estrategia.
-- **Sin reintentos:** si falla el primer intento de un paso → **STOP** y debug (exit 3/4); no seguir al siguiente aviso.
+- **Sin reintentos hard:** modal que no abre → STOP (exit 2). Dry-run con campos sin respuesta → soft (Notas + pendiente). Stuck/no-Submit tras N pasos → STOP (exit 4).
 - **Capturas de error (dry-run):** `output/apply/screenshots/<jobId>-dryrun-<tag>.png` (+ dump JSON en `output/apply/required-fields-*.json`).
 - **Fingerprint de paso:** solo modal Easy Apply (nunca `<main>` del aviso); si no, Next válido se marca `stuck` en falso.
 - Productivo + Easy Apply → Submit → **Done** → **enviada**.

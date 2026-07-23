@@ -210,6 +210,39 @@ export function hasPrefillValue(value: string): boolean {
   return true;
 }
 
+/** Labels típicos del paso "Información de contacto" (email / teléfono / código país). */
+export const CONTACT_FIELD_LABEL_RE =
+  /e-?mail|correo|tel[eé]fono|phone|mobile|m[oó]vil|c[oó]digo del pa[ií]s|country\s*code|phone\s*country/i;
+
+/**
+ * Paso contact con todo precargado → dry-run/prod pueden ir a Next sin fill pesado
+ * (evita timeouts de resume/location en un paso que no los tiene).
+ */
+export function looksLikeContactPrefillStep(fields: CapturedField[]): boolean {
+  if (fields.length === 0) return false;
+  const withLabels = fields.filter((f) => (f.label || "").trim().length >= 2);
+  if (withLabels.length === 0) return false;
+  if (!withLabels.every((f) => CONTACT_FIELD_LABEL_RE.test(f.label))) return false;
+  const required = withLabels.filter((f) => f.required || /\*/.test(f.label));
+  const check = required.length > 0 ? required : withLabels;
+  return check.every((f) => hasPrefillValue(f.value));
+}
+
+/**
+ * ¿Conviene saltar fillPseudoAnswers / optional texts?
+ * Solo contact precargado, o required todos con valor y sin señales de CV.
+ */
+export function shouldSkipHeavyFillForPrefill(fields: CapturedField[]): boolean {
+  if (looksLikeContactPrefillStep(fields)) return true;
+  const hasResume = fields.some((f) =>
+    /resume|curr[ií]culum|\.pdf|cover letter|carta de present/i.test(f.label)
+  );
+  if (hasResume) return false;
+  const required = fields.filter((f) => f.required || /\*/.test(f.label));
+  if (required.length === 0) return false;
+  return required.every((f) => hasPrefillValue(f.value));
+}
+
 function prefersSpanish(blob: string): boolean {
   return /[áéíóúñ¿¡]|\b(d[oó]nde|cu[aá]ndo|ciudad|disponib|empezar|viv[ií]|gustar[ií]a|pretendid|salario|pa[ií]s)\b/i.test(
     blob

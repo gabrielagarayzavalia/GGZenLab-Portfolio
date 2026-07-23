@@ -65,8 +65,9 @@ Excel canónico: `OneDrive\Escritorio\Empleos_Tracker.xlsx`. Applied-list no pis
 | Flag | Efecto |
 |------|--------|
 | `--from=fetch\|pipeline\|excel\|apply\|reconcile` | Empieza desde ese paso |
-| `--apply-max=N` | Limita Easy Apply (`APPLY_MAX`) |
+| `--apply-max=N` | Limita Easy Apply / dry-run (`APPLY_MAX` / `DRY_RUN_MAX`) |
 | `--skip-apply` | Omite Easy Apply |
+| `--dry-run` | Sin abrir Excel mid; `easy-apply:dry-run`; Excel solo al final post-reconcile |
 | `--yes` / `-y` | Sin pausa interactiva tras Excel (CI). En uso humano preferí **sin** `--yes` para revisar Excel. |
 
 ## Env
@@ -76,6 +77,7 @@ Excel canónico: `OneDrive\Escritorio\Empleos_Tracker.xlsx`. Applied-list no pis
 | `APPLIED_LIST_ROOT` | Path a `qa-job-applied-list` (fetch/pipeline/reconcile) |
 | `EMPLEOS_TRACKER_XLSX` | Path al Excel (default OneDrive Escritorio) |
 | `APPLY_MAX` | Tope de avisos en Easy Apply productivo |
+| `CAMPAIGN_DRY_RUN` | `1` = mismo que `--dry-run` |
 | `DISCOVERY` | `gmail` (default) \| `linkedin_search` (opt-in; imprime aviso de calidad) |
 
 ## Criterios done (MVP)

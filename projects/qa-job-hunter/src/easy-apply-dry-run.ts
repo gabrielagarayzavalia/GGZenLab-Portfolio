@@ -76,7 +76,10 @@ import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.j
 import { exportQueueToExcel } from "./apply/post-run.js";
 import {
   TIMING,
+  ModalPagePerfError,
+  ModalPageTimer,
   betweenJobsDelayMs,
+  isPerfFailHardEnabled,
   sleep,
   waitForEasyApplyStepSettle,
 } from "./apply/timing.js";
@@ -482,12 +485,30 @@ async function tryAdvanceNext(
   return "advanced";
 }
 
+function pageLabelFromInventory(stepIndex: number, inventory: CapturedField[]): string {
+  const first = inventory
+    .map((f) => labelFromCaptured(f))
+    .find((l) => l.length >= 2);
+  if (first && /e-?mail|tel[eé]fono|c[oó]digo del pa[ií]s/i.test(first)) {
+    return `paso${stepIndex}-contact`;
+  }
+  if (inventory.some((f) => /resume|curr[ií]culum|\.pdf/i.test(f.label))) {
+    return `paso${stepIndex}-resume`;
+  }
+  if (inventory.some((f) => /top choice|primera opci[oó]n/i.test(f.label))) {
+    return `paso${stepIndex}-top-choice`;
+  }
+  if (first) return `paso${stepIndex}-${first.slice(0, 28).replace(/\s+/g, "_")}`;
+  return `paso${stepIndex}`;
+}
+
 async function dryRunThroughModal(
   page: Page,
   jobId: string,
   jobUrl: string,
   jobTitle = "",
-  company = ""
+  company = "",
+  perf?: ModalPageTimer
 ): Promise<{ outcome: "ok" | "no_modal" | "unanswered"; unansweredLabels: string[] }> {
   if (!(await waitForEasyApplyModalReady(page))) {
     console.error("   ✗ Modal Easy Apply no terminó de cargar");
@@ -515,6 +536,7 @@ async function dryRunThroughModal(
       (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) ||
       (await findButtonOrLink(page, MODAL_LABELS.submit, 800))
     ) {
+      perf?.end();
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return { outcome: "ok", unansweredLabels: unansweredAcc };
     }
@@ -523,6 +545,8 @@ async function dryRunThroughModal(
     const inventory = await inventoryEasyApplyFields(page);
     saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
     logFieldInventory(inventory);
+    perf?.start(pageLabelFromInventory(i + 1, inventory));
+
     const unknowns = collectUnknownQuestions(inventory);
     if (unknowns.length > 0) {
       const notes = recordJobUnknownQuestions(jobId, company, jobTitle, unknowns);
@@ -552,6 +576,7 @@ async function dryRunThroughModal(
       (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
       (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
     ) {
+      perf?.end();
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
       return { outcome: "ok", unansweredLabels: unansweredAcc };
     }
@@ -559,9 +584,13 @@ async function dryRunThroughModal(
     const step = await tryAdvanceNext(page, scope, jobTitle, company, {
       skipFill: skipHeavy,
     });
-    if (step === "advanced") continue;
+    if (step === "advanced") {
+      perf?.end();
+      continue;
+    }
 
     if (step === "discarded_exit") {
+      perf?.end();
       await saveDebugScreenshot(page, jobId, "discard-exit");
       updateQueueRow(jobId, {
         status: "pendiente",
@@ -573,6 +602,7 @@ async function dryRunThroughModal(
 
     // blocked / stuck / no_next → registrar campos, pendiente, NO show-stopper
     console.log(`   ✗ Paso ${i + 1}: ${step} — registro campos sin respuesta (sigue pendiente)`);
+    perf?.end();
     const { labels } = await recordUnansweredAndStayPending(
       page,
       jobId,
@@ -583,6 +613,7 @@ async function dryRunThroughModal(
     return { outcome: "unanswered", unansweredLabels: labels };
   }
 
+  perf?.end();
   await saveDebugScreenshot(page, jobId, "no-submit");
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, jobUrl, fields);
@@ -600,7 +631,11 @@ type ProcessJobResult = {
   unansweredLabels?: string[];
 };
 
-async function processJob(page: Page, row: QueueRow): Promise<ProcessJobResult> {
+async function processJob(
+  page: Page,
+  row: QueueRow,
+  perf: ModalPageTimer
+): Promise<ProcessJobResult> {
   if (isFinalStatus(row.status)) {
     console.log(`\n↷ Skip ${row.jobId} (estado final: ${row.status})`);
     return { outcome: "skip_final" };
@@ -671,8 +706,10 @@ async function processJob(page: Page, row: QueueRow): Promise<ProcessJobResult> 
   });
 
   console.log("   Easy Apply visible — abriendo modal…");
+  perf.start("open-modal");
   const clicked = await clickEasyApply(page);
   if (!clicked) {
+    perf.end();
     await saveDebugScreenshot(page, row.jobId, "click-failed");
     updateQueueRow(row.jobId, {
       status: "pendiente",
@@ -687,9 +724,11 @@ async function processJob(page: Page, row: QueueRow): Promise<ProcessJobResult> 
     row.jobId,
     job.url,
     row.title,
-    row.company
+    row.company,
+    perf
   );
   if (result.outcome === "no_modal") {
+    perf.end();
     await saveDebugScreenshot(page, row.jobId, "no-modal");
     updateQueueRow(row.jobId, {
       status: "pendiente",
@@ -763,6 +802,7 @@ async function main() {
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
   const forceJobId = (process.env.DRY_RUN_JOB_ID ?? "").trim();
   const seen = new Set<string>();
+  const perf = new ModalPageTimer();
   resetRunUnknownQuestions();
 
   try {
@@ -802,8 +842,14 @@ async function main() {
 
       let result: ProcessJobResult;
       try {
-        result = await processJob(page, row);
+        result = await processJob(page, row, perf);
       } catch (err) {
+        if (err instanceof ModalPagePerfError) {
+          console.error(`\n🛑 ${err.message}`);
+          perf.logSummary();
+          await closeSession("perf fail >45s por página modal");
+          process.exit(6);
+        }
         if (err instanceof EasyApplyModalNotOpenedError) {
           console.error(`\n🛑 ${err.message}`);
           await closeSession("modal no abrió — debug");
@@ -860,6 +906,15 @@ async function main() {
     for (const u of unansweredByJob) {
       console.log(`  · job ${u.jobId}:`);
       for (const l of u.labels.slice(0, 20)) console.log(`      - ${l}`);
+    }
+  }
+  perf.logSummary();
+  if (perf.hasFails()) {
+    console.error(
+      "\n✗ PERF: una o más páginas de modal >45s. Con PERF_TEST=1 el dry-run falla (exit 6)."
+    );
+    if (isPerfFailHardEnabled()) {
+      process.exit(6);
     }
   }
   saveRunUnknownQuestionsReport();

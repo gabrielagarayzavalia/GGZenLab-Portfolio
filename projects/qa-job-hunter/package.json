@@ -17,6 +17,7 @@
     "apply:sync": "npx tsx agents/excel-bridge/sync-only.ts",
     "tracker:sync": "npx tsx agents/excel-bridge/sync-only.ts",
     "campaign": "npx tsx src/campaign/run-campaign.ts",
+    "campaign:dry-run": "npx tsx src/campaign/run-campaign.ts --dry-run",
     "agent:gmail-fetch": "npx tsx agents/gmail-fetch/run.ts",
     "agent:pipeline": "npx tsx agents/pipeline-match/run.ts",
     "agent:excel": "npx tsx agents/excel-bridge/run.ts",

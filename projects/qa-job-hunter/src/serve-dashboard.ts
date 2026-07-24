@@ -201,7 +201,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  if (pathname === "/styles.css" || pathname === "/app.js") {
+  if (pathname === "/config" || pathname === "/config.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "config.html"));
+    return;
+  }
+
+  if (
+    pathname === "/styles.css" ||
+    pathname === "/app.js" ||
+    pathname === "/config.js"
+  ) {
     serveStatic(res, path.join(DASHBOARD_DIR, pathname.slice(1)));
     return;
   }

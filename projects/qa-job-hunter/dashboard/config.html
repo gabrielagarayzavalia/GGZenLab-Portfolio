@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Job Hunter — Configuración</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top-bar">
+    <div class="top-bar__brand">
+      <span class="logo">QA Job Hunter</span>
+      <span class="subtitle">Configuración</span>
+    </div>
+    <div class="top-bar__right">
+      <nav class="site-nav" aria-label="Principal">
+        <a class="site-nav__link" href="/">Dashboard</a>
+        <a class="site-nav__link" href="/config" aria-current="page">Configuración</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="config-layout">
+    <aside class="config-sidebar" aria-label="Subsecciones de configuración">
+      <p class="config-sidebar__title">Secciones</p>
+      <button type="button" class="config-tab" role="tab" id="tab-preguntas" aria-controls="panel-preguntas" aria-selected="true" data-panel="preguntas">Preguntas</button>
+      <button type="button" class="config-tab" role="tab" id="tab-cvs" aria-controls="panel-cvs" aria-selected="false" data-panel="cvs">CVs</button>
+      <button type="button" class="config-tab" role="tab" id="tab-empleo" aria-controls="panel-empleo" aria-selected="false" data-panel="empleo">Empleo buscado</button>
+      <button type="button" class="config-tab" role="tab" id="tab-fuentes" aria-controls="panel-fuentes" aria-selected="false" data-panel="fuentes">Fuentes</button>
+      <button type="button" class="config-tab" role="tab" id="tab-sitios" aria-controls="panel-sitios" aria-selected="false" data-panel="sitios">Sitios de empleo</button>
+      <button type="button" class="config-tab" role="tab" id="tab-puestos" aria-controls="panel-puestos" aria-selected="false" data-panel="puestos">Puestos a aplicar</button>
+    </aside>
+
+    <main class="config-main" aria-label="Contenido de configuración">
+      <section class="config-panel" id="panel-preguntas" role="tabpanel" aria-labelledby="tab-preguntas">
+        <h1>Preguntas de formularios</h1>
+        <p class="config-panel__lead">Respuestas Easy Apply: captura automática + alta manual.</p>
+        <div class="config-placeholder">
+          <strong>Placeholder B18-02</strong> — CRUD + captura desde apply.
+          <ul>
+            <li>Listar preguntas capturadas en apply</li>
+            <li>Agregar / editar / archivar a mano</li>
+            <li>Task: <code>#97</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="config-panel" id="panel-cvs" role="tabpanel" aria-labelledby="tab-cvs" hidden>
+        <h1>CVs</h1>
+        <p class="config-panel__lead">Subir, listar, marcar default y asociar a perfil.</p>
+        <div class="config-placeholder">
+          <strong>Placeholder B18-03</strong> — Upload y gestión de CVs.
+          <ul>
+            <li>Al menos un CV default</li>
+            <li>Task: <code>#98</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="config-panel" id="panel-empleo" role="tabpanel" aria-labelledby="tab-empleo" hidden>
+        <h1>Empleo buscado</h1>
+        <p class="config-panel__lead">Perfiles de búsqueda: título, keywords, seniority, remote/location.</p>
+        <div class="config-placeholder">
+          <strong>Placeholder B18-04</strong> — CRUD + archivar perfiles.
+          <ul>
+            <li>Task: <code>#99</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="config-panel" id="panel-fuentes" role="tabpanel" aria-labelledby="tab-fuentes" hidden>
+        <h1>Fuentes de búsqueda</h1>
+        <p class="config-panel__lead">Activar LinkedIn, Indeed, GetOnBoard… sin redeploy.</p>
+        <div class="config-placeholder">
+          <strong>Placeholder B18-05</strong> — Toggle + alta de fuentes.
+          <ul>
+            <li>Engancha IndeedAdapter (B-31)</li>
+            <li>Task: <code>#100</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="config-panel" id="panel-sitios" role="tabpanel" aria-labelledby="tab-sitios" hidden>
+        <h1>Sitios de empleo</h1>
+        <p class="config-panel__lead">Alta libre de sitios (nombre + URL/id), editar / archivar / activar.</p>
+        <div class="config-placeholder">
+          <strong>Placeholder B18-07</strong> — UI alta libre de sitios.
+          <ul>
+            <li>Relacionado Gmail Sitios (B-31)</li>
+            <li>Task: <code>#196</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="config-panel" id="panel-puestos" role="tabpanel" aria-labelledby="tab-puestos" hidden>
+        <h1>Puestos a los que se aplica</h1>
+        <p class="config-panel__lead">ABM de puestos objetivo para el pipeline de apply.</p>
+        <div class="config-placeholder">
+          <strong>Placeholder B18-08</strong> — UI puestos a aplicar.
+          <ul>
+            <li>Task: <code>#197</code></li>
+          </ul>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/config.js" type="module"></script>
+</body>
+</html>

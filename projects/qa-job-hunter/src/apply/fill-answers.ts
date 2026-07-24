@@ -27,6 +27,8 @@ import {
   scoreResumeForRole,
   type ApplyRoleKind,
 } from "./canonical-text.js";
+import { fillConfigBankAnswers } from "./fill-config-bank.js";
+import { matchConfigAnswer } from "../config/questions-store.js";
 import {
   RESUME_INSIST_MS,
   isCoverAsResumeLabel,
@@ -3218,6 +3220,7 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
         PSEUDO_ANSWERS.phoneCountryCode.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.startAvailability.fieldMatch.test(blob) ||
         PSEUDO_ANSWERS.howDidYouHear.fieldMatch.test(blob) ||
+        matchConfigAnswer(blob) != null ||
         resolveSkillYesNo(blob) != null ||
         resolveSkillYears(blob) != null;
       if (known) continue;
@@ -3292,6 +3295,7 @@ export async function fillPseudoAnswers(
   if (await fillHowDidYouHear(page)) filled++;
   if (await fillStartAvailability(page)) filled++;
   if (await fillEnglishProficiency(page)) filled++;
+  filled += await fillConfigBankAnswers(page);
   filled += await answerSkillYesNoQuestions(page);
   filled += await answerHybridAndProgramming(page);
 

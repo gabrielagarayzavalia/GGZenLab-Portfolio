@@ -79,6 +79,7 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
   - **Prod:** required desconocido vacío → Excel **pendiente** + **Notas** + alta en banco Config **sin respuesta** → cerrar EA → **siguiente**. Optional desconocido → Notas + banco, seguir (salvo Follow/top choice → no tocar). Typeahead → reintentos; si falla → pendiente.
   - **Dry-run:** misma evaluación → banco + **pendiente** + **continuar cola**; al final informe en consola/chat (`new-questions-latest.json` + lista unanswered). No Stand-by por default (pendiente = revisar Config y reintentar).
   - UI: `/config#preguntas` · API `GET/POST/PATCH /api/config/questions`.
+  - **Consumo en apply:** si la pregunta está **answered** en banco → `fill-config-bank.ts` rellena select/text/radio en cada paso (después de inglés); `isKnownFieldLabel` la trata como conocida → no pendiente.
 - Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**

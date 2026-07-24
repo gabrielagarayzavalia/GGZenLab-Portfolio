@@ -36,7 +36,8 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 - **Prod:** no inventar; no postular si falta respuesta required → `pendiente` (revisar y reintentar; no Stand-by por default).
 - **Dry-run:** banco + pendiente + continuar; informe final unanswered en chat/consola.
 - **Siempre** alta en banco Config sin respuesta (`config-questions.json`) + Notas Excel.
-- Código: `unknown-field-strategy.ts`, `questions-store.ts`, runners `easy-apply` / `easy-apply-dry-run`.
+- **Consumo:** preguntas **answered** en Config → `fill-config-bank.ts` en cada paso EA (select/text/radio).
+- Código: `unknown-field-strategy.ts`, `questions-store.ts`, `fill-config-bank.ts`, runners `easy-apply` / `easy-apply-dry-run`.
 
 ## Backlog — execution order
 

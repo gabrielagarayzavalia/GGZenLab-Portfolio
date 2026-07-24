@@ -20,6 +20,13 @@ import {
   type ApplicationStatus,
   type ApplicationStatusStore,
 } from "./application-status.js";
+import {
+  loadSourcesConfig,
+  listSources,
+  patchSource,
+  upsertSource,
+  type ConfigSourceKind,
+} from "./config/sources-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
 
@@ -80,7 +87,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });
     res.end();
@@ -192,6 +199,67 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       sendJson(res, 200, store);
     } catch {
       sendJson(res, 400, { error: "JSON inválido" });
+    }
+    return;
+  }
+
+  // --- Config: Fuentes + Sitios (B18-05 / B18-07) ---
+  if (pathname === "/api/config/sources" && method === "GET") {
+    const kind = url.searchParams.get("kind") as ConfigSourceKind | null;
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadSourcesConfig();
+    const sources = listSources({
+      kind: kind === "adapter" || kind === "site" ? kind : undefined,
+      includeArchived,
+    });
+    sendJson(res, 200, { updatedAt: store.updatedAt, sources });
+    return;
+  }
+
+  if (pathname === "/api/config/sources" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        name?: string;
+        kind?: ConfigSourceKind;
+        adapterId?: string;
+        url?: string;
+        enabled?: boolean;
+      };
+      if (!body.name?.trim() || (body.kind !== "adapter" && body.kind !== "site")) {
+        sendJson(res, 400, { error: "Faltan name o kind (adapter|site)" });
+        return;
+      }
+      const store = upsertSource({
+        name: body.name,
+        kind: body.kind,
+        adapterId: body.adapterId,
+        url: body.url,
+        enabled: body.enabled,
+      });
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/sources/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/sources/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        name?: string;
+        url?: string;
+        adapterId?: string;
+        enabled?: boolean;
+        archived?: boolean;
+      };
+      const store = patchSource(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrada") ? 404 : 400;
+      sendJson(res, status, { error: message });
     }
     return;
   }

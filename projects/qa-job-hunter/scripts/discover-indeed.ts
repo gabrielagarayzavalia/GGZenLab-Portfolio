@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { indeedAdapter } from "../src/adapters/indeed-adapter.js";
+import { isSourceEnabled } from "../src/config/sources-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -15,6 +16,13 @@ const OUT_DIR = path.join(ROOT, "output");
 const OUT_FILE = path.join(OUT_DIR, "jobs-indeed-raw.json");
 
 async function main() {
+  const force = (process.env.FORCE_SOURCE ?? "").trim() === "1";
+  if (!force && !isSourceEnabled("indeed")) {
+    console.error(
+      "Indeed está desactivado en Config (Fuentes). Activá el toggle o usá FORCE_SOURCE=1."
+    );
+    process.exit(2);
+  }
   const keywords = (process.env.INDEED_KEYWORDS ?? "QA Automation").trim();
   const limit = Number(process.env.INDEED_LIMIT ?? "15");
   console.log(`Indeed AR discover: q="${keywords}" limit=${limit}`);

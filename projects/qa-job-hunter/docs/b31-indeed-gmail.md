@@ -19,4 +19,5 @@ Docs labels (canónico): applied-list `docs/gmail-labels.md` + `docs/b31-gmail-s
 - Live discover: `npm run discover:indeed` → `output/jobs-indeed-raw.json`
 - Nota: Indeed puede servir captcha; 0 resultados = documentar, no inventar jobs.
 
-UI de fuentes (toggle/alta sitios) = B-18 [#94](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/94) — **después** de cablear este B-31.
+UI de fuentes/sitios (Config B-18): `dashboard` → `/config#fuentes` / `#sitios`.
+Persistencia MVP: `output/config-sources.json` (`isSourceEnabled` en discover).

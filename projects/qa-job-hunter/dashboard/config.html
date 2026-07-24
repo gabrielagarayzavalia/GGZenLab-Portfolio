@@ -128,13 +128,27 @@
 
       <section class="config-panel" id="panel-puestos" role="tabpanel" aria-labelledby="tab-puestos" hidden>
         <h1>Puestos a los que se aplica</h1>
-        <p class="config-panel__lead">ABM de puestos objetivo para el pipeline de apply.</p>
-        <div class="config-placeholder">
-          <strong>Placeholder B18-08</strong> — UI puestos a aplicar.
-          <ul>
-            <li>Task: <code>#197</code></li>
-          </ul>
-        </div>
+        <p class="config-panel__lead">
+          Roles objetivo (título + keywords). Distinto de “Empleo buscado” (#99): acá = a qué roles aplicás.
+        </p>
+        <p class="config-status" id="puestos-status" hidden></p>
+        <ul class="config-list" id="puestos-list" aria-live="polite"></ul>
+        <form class="config-form" id="puestos-form" autocomplete="off">
+          <h2 class="config-form__title">Alta de puesto</h2>
+          <label class="config-field">
+            <span>Título / rol</span>
+            <input name="title" type="text" required maxlength="100" placeholder="Ej. QA Automation Engineer" />
+          </label>
+          <label class="config-field">
+            <span>Keywords (opcional)</span>
+            <input name="keywords" type="text" maxlength="200" placeholder="automation, playwright, selenium" />
+          </label>
+          <button type="submit" class="config-btn">Agregar puesto</button>
+        </form>
+        <label class="config-check">
+          <input type="checkbox" id="puestos-show-archived" />
+          Mostrar archivados
+        </label>
       </section>
     </main>
   </div>

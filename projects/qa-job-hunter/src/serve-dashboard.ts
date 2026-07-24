@@ -34,6 +34,12 @@ import {
   patchQuestion,
   type ConfigQuestionStatus,
 } from "./config/questions-store.js";
+import {
+  listPuestos,
+  loadPuestosConfig,
+  patchPuesto,
+  upsertPuesto,
+} from "./config/puestos-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
 
@@ -327,6 +333,60 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     } catch (err) {
       const message = err instanceof Error ? err.message : "JSON inválido";
       const status = message.includes("no encontrada") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: Puestos objetivo (B18-08 / #197) ---
+  if (pathname === "/api/config/puestos" && method === "GET") {
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadPuestosConfig();
+    sendJson(res, 200, {
+      updatedAt: store.updatedAt,
+      puestos: listPuestos({ includeArchived }),
+    });
+    return;
+  }
+
+  if (pathname === "/api/config/puestos" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        enabled?: boolean;
+      };
+      if (!body.title?.trim()) {
+        sendJson(res, 400, { error: "Falta title" });
+        return;
+      }
+      const store = upsertPuesto({
+        title: body.title,
+        keywords: body.keywords,
+        enabled: body.enabled,
+      });
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/puestos/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/puestos/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        enabled?: boolean;
+        archived?: boolean;
+      };
+      const store = patchPuesto(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
       sendJson(res, status, { error: message });
     }
     return;

@@ -11,6 +11,7 @@ import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH, TITLE_KEYWORDS } from "./config.js";
+import { listActivePuestoTitles } from "./config/puestos-store.js";
 import { SCRAPE, sleep } from "./apply/timing.js";
 import type { JobListing } from "./types.js";
 import type { Page } from "playwright";
@@ -70,8 +71,11 @@ async function scrapeLinkedInJobs(): Promise<void> {
     process.exit(1);
   }
 
+  const searchTerms =
+    listActivePuestoTitles().length > 0 ? listActivePuestoTitles() : SEARCH_TERMS;
+
   console.log("🚀 Iniciando scraping de empleos QA en LinkedIn...");
-  console.log(`📋 Términos: ${SEARCH_TERMS.join(", ")}\n`);
+  console.log(`📋 Términos: ${searchTerms.join(", ")}\n`);
 
   const browser = await chromium.launch({
     headless: false, // Visible para detectar problemas
@@ -188,7 +192,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
   }
 
   // ── PASADAS POR KEYWORD (búsqueda tradicional) ───────────────
-  for (const term of SEARCH_TERMS) {
+  for (const term of searchTerms) {
     console.log(`\n🔍 Buscando: "${term}"...`);
     const page = await context.newPage();
 

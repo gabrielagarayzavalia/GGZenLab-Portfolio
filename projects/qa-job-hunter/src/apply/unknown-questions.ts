@@ -44,6 +44,8 @@ export type UnknownQuestionHit = {
   kind: string;
   required: boolean;
   value: string;
+  /** Opciones de select/listbox si se capturaron. */
+  options?: string[];
 };
 
 export type RunUnknownJob = {
@@ -215,11 +217,11 @@ export function logRunUnknownQuestions(): void {
     console.log("\n📝 Preguntas nuevas: ninguna (todas conocidas o sin form).");
     return;
   }
-  console.log("\n📝 Preguntas nuevas de esta corrida (también en Excel → Notas):");
+  console.log("\n📝 Preguntas nuevas de esta corrida (Excel Notas + banco Config):");
   for (const job of runAccumulator) {
     console.log(`   · ${job.company} — ${job.title} (${job.jobId})`);
     for (const n of job.extraNotes) console.log(`      ! ${n}`);
     for (const q of job.questions) console.log(`      - ${q}`);
   }
-  console.log("   → Decime cómo contestarlas para hardcodearlas.");
+  console.log("   → Completá respuestas en Config → Preguntas (o decime acá para hardcodear).");
 }

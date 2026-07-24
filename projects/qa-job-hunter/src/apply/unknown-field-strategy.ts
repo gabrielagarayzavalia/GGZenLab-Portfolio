@@ -10,7 +10,9 @@ import {
   cleanFieldLabel,
   formatFailedFieldsNotes,
   isKnownFieldLabel,
+  type UnknownQuestionHit,
 } from "./unknown-questions.js";
+import { upsertUnansweredFromHits } from "../config/questions-store.js";
 
 const EMPTY_PLACEHOLDER_RE =
   /^(select|seleccion|choose|eleg[ií]|pick\b)/i;
@@ -200,6 +202,8 @@ export type UnknownFieldsDecision = {
   pendingLabels: string[];
   /** Notas agregadas (optional + pending). */
   notes: string;
+  /** Hits para banco Config (#154 / #97). */
+  hits: UnknownQuestionHit[];
   /** Resultados crudos (tests / debug). */
   results: UnknownFieldHandleResult[];
   /** Hay typeahead req vacío → runner puede intentar recover. */
@@ -212,32 +216,45 @@ export type UnknownFieldsDecision = {
  * - Optional desconocido → notes_only.
  * - Checkbox Follow/top choice → defer.
  * - Typeahead req vacío → retry_typeahead (no corta aún).
+ * - Siempre acumula `hits` para banco Config sin respuesta (#154).
  */
 export function evaluateUnknownFields(fields: CapturedField[]): UnknownFieldsDecision {
   const ctx = new UnknownFieldContext();
   const results: UnknownFieldHandleResult[] = [];
   const pendingLabels: string[] = [];
   const noteLines: string[] = [];
+  const hits: UnknownQuestionHit[] = [];
   let typeaheadRetry = false;
 
   for (const field of fields) {
     const label = fieldDisplayLabel(field);
     if (!label || label === "(campo sin label)") continue;
     if (isKnownFieldLabel(label)) continue;
-    // Ya respondido con valor usable → no aplicar leave_pending
     const empty = isEmptyField(field);
+    const widget = classifyWidget(field);
+
+    const pushHit = (required: boolean) => {
+      hits.push({
+        label,
+        kind: widget,
+        required,
+        value: (field.value || "").slice(0, 80),
+      });
+    };
+
+    // Ya respondido con valor usable → no aplicar leave_pending
     if (!empty && !field.required) {
-      // optional con valor: igual registrar como pregunta vista
       const r = optionalUnknownStrategy.handle(field, { empty: false });
       results.push(r);
       if (r.note) noteLines.push(r.note);
+      pushHit(false);
       continue;
     }
     if (!empty && field.required) {
-      // required ya lleno (aunque desconocido) → solo nota, no cortar
       const r = requiredUnknownStrategy.handle(field, { empty: false });
       results.push(r);
       if (r.note) noteLines.push(r.note);
+      pushHit(true);
       continue;
     }
 
@@ -248,15 +265,18 @@ export function evaluateUnknownFields(fields: CapturedField[]): UnknownFieldsDec
     if (result.action === "retry_typeahead") {
       typeaheadRetry = true;
       if (result.note) noteLines.push(result.note);
+      pushHit(!!field.required);
       continue;
     }
     if (result.action === "leave_pending") {
       pendingLabels.push(result.fieldLabel);
       if (result.note) noteLines.push(result.note);
+      pushHit(true);
       continue;
     }
     if (result.action === "notes_only" && result.note) {
       noteLines.push(result.note);
+      pushHit(!!field.required);
     }
   }
 
@@ -272,11 +292,48 @@ export function evaluateUnknownFields(fields: CapturedField[]): UnknownFieldsDec
         ? [header, ...noteLines].join("\n")
         : "";
 
+  // Dedup hits por label
+  const seen = new Set<string>();
+  const uniqueHits = hits.filter((h) => {
+    const k = h.label.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
   return {
     action: uniquePending.length > 0 ? "leave_pending" : "continue",
     pendingLabels: uniquePending,
     notes: notesBody.slice(0, 1800),
+    hits: uniqueHits,
     results,
     typeaheadRetry,
   };
+}
+
+/**
+ * Aplica política #154 al job: Notas + banco Config (sin inventar respuesta).
+ * Devuelve texto de Notas mergeado.
+ */
+export function applyUnknownPolicyToJob(
+  job: { jobId: string; company: string; title: string },
+  decision: UnknownFieldsDecision,
+  recordNotes: (
+    jobId: string,
+    company: string,
+    title: string,
+    hits: UnknownQuestionHit[],
+    extraNotes?: string[]
+  ) => string
+): string {
+  const extras = decision.notes ? [decision.notes] : [];
+  const notes = recordNotes(job.jobId, job.company, job.title, decision.hits, extras);
+  if (decision.hits.length > 0) {
+    upsertUnansweredFromHits(decision.hits, {
+      jobId: job.jobId,
+      company: job.company,
+      title: job.title,
+    });
+  }
+  return notes;
 }

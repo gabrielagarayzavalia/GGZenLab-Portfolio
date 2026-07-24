@@ -27,6 +27,13 @@ import {
   upsertSource,
   type ConfigSourceKind,
 } from "./config/sources-store.js";
+import {
+  addManualQuestion,
+  listQuestions,
+  loadQuestionsConfig,
+  patchQuestion,
+  type ConfigQuestionStatus,
+} from "./config/questions-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
 
@@ -255,6 +262,67 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         archived?: boolean;
       };
       const store = patchSource(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrada") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: Preguntas Easy Apply (#97 / #154) ---
+  if (pathname === "/api/config/questions" && method === "GET") {
+    const status = url.searchParams.get("status") as ConfigQuestionStatus | null;
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadQuestionsConfig();
+    const questions = listQuestions({
+      status:
+        status === "unanswered" || status === "answered" || status === "archived"
+          ? status
+          : undefined,
+      includeArchived,
+    });
+    sendJson(res, 200, { updatedAt: store.updatedAt, questions });
+    return;
+  }
+
+  if (pathname === "/api/config/questions" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        label?: string;
+        kind?: string;
+        required?: boolean;
+        answer?: string;
+      };
+      if (!body.label?.trim()) {
+        sendJson(res, 400, { error: "Falta label" });
+        return;
+      }
+      const q = addManualQuestion({
+        label: body.label,
+        kind: body.kind,
+        required: body.required,
+        answer: body.answer,
+      });
+      sendJson(res, 200, { question: q, ...loadQuestionsConfig() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/questions/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/questions/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        answer?: string;
+        status?: ConfigQuestionStatus;
+        label?: string;
+        kind?: string;
+      };
+      const store = patchQuestion(id, body);
       sendJson(res, 200, store);
     } catch (err) {
       const message = err instanceof Error ? err.message : "JSON inválido";

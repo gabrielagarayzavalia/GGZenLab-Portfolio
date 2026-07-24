@@ -75,7 +75,10 @@ npm run easy-apply           # productivo: Submit + Done → Excel enviada
 - **Assessment/honeypot:** pendiente + Notas con **assessment** en negrita; siguiente.
 - **Preguntas nuevas / dropdown sin regla:** se acumulan en Excel columna **Notas** + `output/apply/new-questions-latest.json` al cerrar la corrida.
 - **Performance waits (B24 / #143):** constantes en `src/apply/timing.ts`; doc [`easy-apply-perf.md`](./easy-apply-perf.md). Preferir settle condicionado (loader) a sleeps 1.5–2.5s.
-- **Campos desconocidos (EA-SPIKE-04 / #156 Strategy):** política en [#154](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/154); código `src/apply/unknown-field-strategy.ts` (patrón [Strategy](https://refactoring.guru/es/design-patterns/strategy)). Required desconocido vacío → **pendiente + Notas + siguiente** (no quemar 8 pasos); optional → solo Notas; Follow/top choice → no tocar; typeahead → reintentos existentes. **Nunca inventar** respuestas.
+- **Campos desconocidos (EA-SPIKE-04 / #154 confirmada 2026-07-24):** código `src/apply/unknown-field-strategy.ts` + banco `src/config/questions-store.ts` (`output/config-questions.json`). **Nunca inventar.**
+  - **Prod:** required desconocido vacío → Excel **pendiente** + **Notas** + alta en banco Config **sin respuesta** → cerrar EA → **siguiente**. Optional desconocido → Notas + banco, seguir (salvo Follow/top choice → no tocar). Typeahead → reintentos; si falla → pendiente.
+  - **Dry-run:** misma evaluación → banco + **pendiente** + **continuar cola**; al final informe en consola/chat (`new-questions-latest.json` + lista unanswered). No Stand-by por default (pendiente = revisar Config y reintentar).
+  - UI: `/config#preguntas` · API `GET/POST/PATCH /api/config/questions`.
 - Cierre productivo: export Excel **sin abrir** el archivo (salvo `OPEN_EXCEL=1`).
 - **Antes de Next/Review**: si hay campos obligatorios vacíos → **no clickear** (evita modal Save/Discard).
 - **Save this application?**

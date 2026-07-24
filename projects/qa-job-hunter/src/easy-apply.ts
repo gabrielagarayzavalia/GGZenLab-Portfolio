@@ -88,7 +88,10 @@ import {
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
-import { evaluateUnknownFields } from "./apply/unknown-field-strategy.js";
+import {
+  applyUnknownPolicyToJob,
+  evaluateUnknownFields,
+} from "./apply/unknown-field-strategy.js";
 import { handleFailures } from "./apply/failure-handler.js";
 import type { ApplicationRecord, ApplyJob } from "./apply/types.js";
 import type { AnalysisResult, JobMatch } from "./types.js";
@@ -462,27 +465,25 @@ async function tryEasyApply(
       if (inventory.length > 0) {
         console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
       }
-      // #156 Strategy: required desconocido → pendiente+Notas (no quemar 8 pasos)
+      // #154 / #156: required desconocido → pendiente+Notas+banco; no quemar 8 pasos
       const unknownDecision = evaluateUnknownFields(inventory);
-      if (unknownDecision.notes) {
-        const notes = recordJobUnknownQuestions(
-          job.jobId,
-          job.company,
-          job.title,
-          [],
-          [unknownDecision.notes]
+      if (unknownDecision.hits.length > 0 || unknownDecision.notes) {
+        const notes = applyUnknownPolicyToJob(
+          { jobId: job.jobId, company: job.company, title: job.title },
+          unknownDecision,
+          recordJobUnknownQuestions
         );
         updateQueueRow(job.jobId, { notes: notes || unknownDecision.notes });
         console.log(
-          `   📝 Strategy unknown-fields → Notas` +
+          `   📝 Strategy unknown-fields → Notas + banco Config` +
             (unknownDecision.pendingLabels.length
               ? ` (pending: ${unknownDecision.pendingLabels.length})`
-              : "")
+              : ` (hits: ${unknownDecision.hits.length})`)
         );
       }
       if (unknownDecision.action === "leave_pending") {
         const reason =
-          "Campo(s) required desconocidos — pendiente (EA Strategy #156); siguiente aviso";
+          "Campo(s) required desconocidos — pendiente (#154); completar en Config → siguiente aviso";
         const notes =
           unknownDecision.notes ||
           formatFailedFieldsNotes(unknownDecision.pendingLabels) ||

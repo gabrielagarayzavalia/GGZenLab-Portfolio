@@ -48,8 +48,57 @@ function emptyStore(): ConfigQuestionsStore {
   return { updatedAt: nowIso(), questions: [] };
 }
 
-function normalizeKey(label: string): string {
+export function normalizeQuestionKey(label: string): string {
   return cleanFieldLabel(label).toLowerCase().replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+function normalizeKey(label: string): string {
+  return normalizeQuestionKey(label);
+}
+
+export type ConfigAnswerMatch = {
+  label: string;
+  answer: string;
+  kind: string;
+};
+
+let answeredCache: Map<string, ConfigAnswerMatch> | null = null;
+
+/** Invalida cache tras patch/save (apply lee respuestas frescas). */
+export function resetAnsweredQuestionsCache(): void {
+  answeredCache = null;
+}
+
+function loadAnsweredCache(): Map<string, ConfigAnswerMatch> {
+  if (!answeredCache) {
+    answeredCache = new Map();
+    for (const q of loadQuestionsConfig().questions) {
+      if (q.status !== "answered") continue;
+      const answer = q.answer.trim();
+      if (!answer) continue;
+      answeredCache.set(normalizeKey(q.label), {
+        label: q.label,
+        answer,
+        kind: q.kind,
+      });
+    }
+  }
+  return answeredCache;
+}
+
+/**
+ * Busca respuesta del banco Config para un label/blob de campo EA.
+ * Match por clave normalizada (exacta o substring).
+ */
+export function matchConfigAnswer(blob: string): ConfigAnswerMatch | null {
+  const b = normalizeKey(blob);
+  if (!b || b.length < 4) return null;
+  const cache = loadAnsweredCache();
+  for (const [key, entry] of cache) {
+    if (key.length < 4) continue;
+    if (b === key || b.includes(key) || key.includes(b)) return entry;
+  }
+  return null;
 }
 
 function slugId(label: string): string {
@@ -78,6 +127,7 @@ export function saveQuestionsConfig(store: ConfigQuestionsStore): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   store.updatedAt = nowIso();
   fs.writeFileSync(CONFIG_QUESTIONS_PATH, JSON.stringify(store, null, 2), "utf-8");
+  resetAnsweredQuestionsCache();
 }
 
 export function listQuestions(opts?: {

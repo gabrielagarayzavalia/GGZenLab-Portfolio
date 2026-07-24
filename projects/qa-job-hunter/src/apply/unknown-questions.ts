@@ -9,6 +9,7 @@ import { APPLY_DIR, ensureDirs } from "./paths.js";
 import type { CapturedField } from "./fill-answers.js";
 import { PSEUDO_ANSWERS, isCoverOrSummaryLabel } from "./fill-answers.js";
 import { resolveSkillYesNo } from "./my-skills.js";
+import { matchConfigAnswer } from "../config/questions-store.js";
 
 /** Campos que ya contestamos o ignoramos a propósito (no pedir reglas). */
 const KNOWN_FIELD_RE: RegExp[] = [
@@ -67,6 +68,7 @@ export function isKnownFieldLabel(blob: string): boolean {
   if (!t || t.length < 2) return true;
   if (isCoverOrSummaryLabel(t)) return true;
   if (resolveSkillYesNo(t)) return true;
+  if (matchConfigAnswer(t)) return true;
   return KNOWN_FIELD_RE.some((re) => re.test(t));
 }
 

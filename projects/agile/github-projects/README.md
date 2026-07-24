@@ -21,7 +21,7 @@ Tool chosen for **B-05 Agile PM**: [GitHub Projects](https://docs.github.com/en/
 | **QA** | `track:qa` | Epic, User Story (Gherkin), QA Task | [SEED_ISSUES.md](SEED_ISSUES.md) |
 | **Product Owner** | `track:po` | Epic (PO), User Story (PO), PO Task | [SEED_ISSUES_JOB_HUNTER.md](SEED_ISSUES_JOB_HUNTER.md) |
 
-Filter the project by `track:po` or `mini-project:job-hunter` for QA Job Hunter backlog.
+Filter the project by field **Proyecto** (preferred) or by label `track:po` / `mini-project:job-hunter` for QA Job Hunter backlog.
 
 ---
 
@@ -122,15 +122,35 @@ Optional **Table** view for QA traceability: columns Title, Status, AC-ID, Tool,
 
 ---
 
-## Step 5 — Custom fields (optional)
+## Step 5 — Custom field **Proyecto** (required)
 
-Project → **Settings** → **Fields** → New field:
+Field **Proyecto** (single select) is the product dimension on the board. Keep it in sync with repo labels `mini-project:*`.
 
-| Field | Type | Example |
-|-------|------|---------|
-| AC-ID | Text | AC-001 |
-| Mini-project | Single select | api-testing, performance-jmeter |
-| Tool | Single select | Postman, Rest-Assured, JMeter |
+| Proyecto (option) | Label | Scope |
+|-------------------|-------|-------|
+| `job-hunter` | `mini-project:job-hunter` | `projects/qa-job-hunter` |
+| `mapa-corrupcion` | `mini-project:mapa-corrupcion` | `projects/mapa-corrupcion-tierras` |
+| `api-testing` | `mini-project:api` | `projects/api-testing` |
+| `performance` | `mini-project:perf` | `projects/performance-jmeter` |
+| `sql-lab` | `mini-project:sql-lab` | `projects/sql-lab` |
+| `labs` | `mini-project:labs` | `projects/labs` |
+| `portfolio-skills` | `mini-project:portfolio` | Skills B-01…B-05, site, agile, monorepo docs |
+
+Optional extras: **AC-ID** (text), **Tool** (single select: Postman, Rest-Assured, JMeter).
+
+Backfill existing items: `powershell -File scripts/backfill-proyecto-field.ps1`
+
+### Views by Proyecto (UI — API cannot create views)
+
+GitHub Projects API does **not** support creating/updating views. Configure manually:
+
+1. Open [GGZenLab QA Portfolio](https://github.com/users/gabrielagarayzavalia/projects/2).
+2. Rename or delete **View 6** if unused.
+3. New table view **All by Proyecto** → Group by **Proyecto**.
+4. New table view **Proyecto — Job Hunter** → Filter: `Proyecto:job-hunter`.
+5. New table view **Proyecto — Portfolio Skills** → Filter: `Proyecto:portfolio-skills`.
+6. Add more filtered views on demand (mapa, api, …) when the first item appears.
+7. On view **Backlog**, show the **Proyecto** column.
 
 ---
 
@@ -143,8 +163,13 @@ Repo → **Issues** → **Labels**:
 | `epic` | Mini-project / skill |
 | `user-story` | Gherkin story |
 | `task` | Manual or automation work |
+| `mini-project:job-hunter` | QA Job Hunter |
+| `mini-project:mapa-corrupcion` | Mapa corrupción tierras |
 | `mini-project:api` | API testing |
 | `mini-project:perf` | Performance |
+| `mini-project:sql-lab` | SQL lab |
+| `mini-project:labs` | Practice labs |
+| `mini-project:portfolio` | Portfolio skills / site / agile |
 | `qa-manual` | Manual test task |
 | `qa-automation` | Automation task |
 

@@ -57,6 +57,11 @@ import {
 } from "./config/cvs-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
+import {
+  refreshApplyRunState,
+  startApplyRun,
+  type ApplyRunMode,
+} from "./run/apply-runner.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -132,8 +137,36 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         configPuestos: true,
         configEmpleo: true,
         configCvs: true,
+        runApply: true,
       },
     });
+    return;
+  }
+
+  if (pathname === "/api/run/apply/status" && method === "GET") {
+    sendJson(res, 200, refreshApplyRunState());
+    return;
+  }
+
+  if (pathname === "/api/run/apply" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        mode?: ApplyRunMode;
+        applyMax?: number;
+        jobId?: string;
+      };
+      const mode = body.mode === "productive" ? "productive" : "dry_run";
+      const state = startApplyRun({
+        mode,
+        applyMax: body.applyMax,
+        jobId: body.jobId,
+      });
+      sendJson(res, 202, state);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("en curso") ? 409 : 400;
+      sendJson(res, status, { error: message });
+    }
     return;
   }
 
@@ -583,7 +616,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  // Assets del dashboard (evita 404 al agregar módulos .js sin whitelist manual)
+  if (pathname === "/run" || pathname === "/run.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "run.html"));
+    return;
+  }
+
+  // Assets del dashboard
   const assetName = pathname.replace(/^\//, "");
   if (/^[a-zA-Z0-9._-]+$/.test(assetName)) {
     const assetPath = path.resolve(DASHBOARD_DIR, assetName);
@@ -630,6 +668,7 @@ createServer((req, res) => {
   }
 
   console.log("\n  Ctrl+C para detener");
-  console.log("  Config: http://localhost:" + PORT + "/config#preguntas\n");
+  console.log("  Config: http://localhost:" + PORT + "/config#preguntas");
+  console.log("  Run:    http://localhost:" + PORT + "/run\n");
   openBrowser(url);
 });

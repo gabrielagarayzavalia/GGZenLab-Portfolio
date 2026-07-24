@@ -71,13 +71,54 @@
 
       <section class="config-panel" id="panel-empleo" role="tabpanel" aria-labelledby="tab-empleo" hidden>
         <h1>Empleo buscado</h1>
-        <p class="config-panel__lead">Perfiles de búsqueda: título, keywords, seniority, remote/location.</p>
-        <div class="config-placeholder">
-          <strong>Placeholder B18-04</strong> — CRUD + archivar perfiles.
-          <ul>
-            <li>Task: <code>#99</code></li>
-          </ul>
-        </div>
+        <p class="config-panel__lead">
+          Perfiles de búsqueda (título, keywords, seniority, remote/location). Distinto de Puestos (#197).
+        </p>
+        <p class="config-status" id="empleo-status" hidden></p>
+        <ul class="config-list" id="empleo-list" aria-live="polite"></ul>
+        <form class="config-form" id="empleo-form" autocomplete="off">
+          <h2 class="config-form__title">Alta de perfil</h2>
+          <label class="config-field">
+            <span>Título / rol buscado</span>
+            <input name="title" type="text" required maxlength="100" placeholder="Ej. QA Automation LATAM" />
+          </label>
+          <label class="config-field">
+            <span>Keywords</span>
+            <input name="keywords" type="text" maxlength="200" placeholder="playwright, selenium, API" />
+          </label>
+          <label class="config-field">
+            <span>Seniority</span>
+            <select name="seniority">
+              <option value="any">Any</option>
+              <option value="junior">Junior</option>
+              <option value="semi" selected>Semi</option>
+              <option value="senior">Senior</option>
+              <option value="lead">Lead</option>
+            </select>
+          </label>
+          <label class="config-field">
+            <span>Modalidad</span>
+            <select name="remote">
+              <option value="any">Any</option>
+              <option value="remote" selected>Remote</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="onsite">Onsite</option>
+            </select>
+          </label>
+          <label class="config-field">
+            <span>Location</span>
+            <input name="location" type="text" maxlength="120" placeholder="Argentina / LATAM" />
+          </label>
+          <label class="config-field">
+            <span>Notas</span>
+            <input name="notes" type="text" maxlength="300" placeholder="Opcional" />
+          </label>
+          <button type="submit" class="config-btn">Agregar perfil</button>
+        </form>
+        <label class="config-check">
+          <input type="checkbox" id="empleo-show-archived" />
+          Mostrar archivados
+        </label>
       </section>
 
       <section class="config-panel" id="panel-fuentes" role="tabpanel" aria-labelledby="tab-fuentes" hidden>

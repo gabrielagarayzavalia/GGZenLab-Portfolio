@@ -12,9 +12,20 @@ import fs from "fs";
 import path from "path";
 import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH, TITLE_KEYWORDS } from "./config.js";
 import { listActivePuestoTitles } from "./config/puestos-store.js";
+import { listActiveEmpleoProfiles } from "./config/empleo-store.js";
 import { SCRAPE, sleep } from "./apply/timing.js";
 import type { JobListing } from "./types.js";
 import type { Page } from "playwright";
+
+function resolveSearchTerms(): string[] {
+  const puestos = listActivePuestoTitles();
+  if (puestos.length > 0) return puestos;
+  const empleoTitles = listActiveEmpleoProfiles()
+    .map((p) => p.title.trim())
+    .filter(Boolean);
+  if (empleoTitles.length > 0) return empleoTitles;
+  return SEARCH_TERMS;
+}
 
 function sanitize(text: string | null | undefined): string {
   return (text ?? "").replace(/\s+/g, " ").trim();
@@ -71,8 +82,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
     process.exit(1);
   }
 
-  const searchTerms =
-    listActivePuestoTitles().length > 0 ? listActivePuestoTitles() : SEARCH_TERMS;
+  const searchTerms = resolveSearchTerms();
 
   console.log("🚀 Iniciando scraping de empleos QA en LinkedIn...");
   console.log(`📋 Términos: ${searchTerms.join(", ")}\n`);

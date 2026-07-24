@@ -23,6 +23,7 @@ function activate(panelId) {
   if (panelId === "sitios") void loadSitios();
   if (panelId === "preguntas") void loadPreguntas();
   if (panelId === "puestos") void loadPuestos();
+  if (panelId === "empleo") void loadEmpleo();
 }
 
 function panelFromHash() {
@@ -491,6 +492,162 @@ document.getElementById("puestos-form")?.addEventListener("submit", async (ev) =
 
 document.getElementById("puestos-show-archived")?.addEventListener("change", () => {
   void loadPuestos();
+});
+
+function rowEmpleo(p) {
+  const archived = p.archived ? " config-row--archived" : "";
+  const meta = [
+    p.keywords || "—",
+    p.seniority,
+    p.remote,
+    p.location || null,
+    p.enabled ? "activo" : "off",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const notes = p.notes
+    ? `<p class="config-row__meta">${esc(p.notes)}</p>`
+    : "";
+  return `<li class="config-row${archived}" data-id="${esc(p.id)}">
+    <label class="config-toggle">
+      <input type="checkbox" data-action="toggle" ${p.enabled ? "checked" : ""} ${p.archived ? "disabled" : ""} />
+      <span class="config-row__name">${esc(p.title)}</span>
+    </label>
+    <p class="config-row__meta">${esc(meta)}</p>
+    ${notes}
+    <div class="config-row__actions">
+      <button type="button" class="config-btn config-btn--ghost" data-action="edit">Editar</button>
+      <button type="button" class="config-btn config-btn--ghost" data-action="archive">
+        ${p.archived ? "Restaurar" : "Archivar"}
+      </button>
+    </div>
+  </li>`;
+}
+
+async function loadEmpleo() {
+  const list = document.getElementById("empleo-list");
+  const status = document.getElementById("empleo-status");
+  const showArchived = document.getElementById("empleo-show-archived")?.checked;
+  if (!list) return;
+  setStatus(status, "Cargando…");
+  try {
+    const q = showArchived ? "?archived=1" : "";
+    const data = await apiJson(`/api/config/empleo${q}`);
+    const items = showArchived
+      ? data.profiles
+      : data.profiles.filter((p) => !p.archived);
+    list.innerHTML =
+      items.map(rowEmpleo).join("") ||
+      "<li class=\"config-row\">Sin perfiles. Agregá el primero abajo.</li>";
+    setStatus(status, "");
+  } catch (err) {
+    setStatus(status, err.message || "Error al cargar", true);
+  }
+}
+
+document.getElementById("empleo-list")?.addEventListener("change", async (ev) => {
+  const input = ev.target;
+  if (!(input instanceof HTMLInputElement) || input.dataset.action !== "toggle") return;
+  const row = input.closest("[data-id]");
+  const id = row?.dataset.id;
+  const status = document.getElementById("empleo-status");
+  if (!id) return;
+  try {
+    await apiJson(`/api/config/empleo/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled: input.checked }),
+    });
+    setStatus(status, "Guardado.");
+  } catch (err) {
+    input.checked = !input.checked;
+    setStatus(status, err.message || "No se pudo guardar", true);
+  }
+});
+
+document.getElementById("empleo-list")?.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-action]");
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const row = btn.closest("[data-id]");
+  const id = row?.dataset.id;
+  const status = document.getElementById("empleo-status");
+  if (!id) return;
+
+  if (btn.dataset.action === "edit") {
+    const title = prompt("Título", row.querySelector(".config-row__name")?.textContent || "");
+    if (title == null) return;
+    const keywords = prompt("Keywords", "");
+    if (keywords == null) return;
+    const seniority = prompt("Seniority (junior|semi|senior|lead|any)", "semi");
+    if (seniority == null) return;
+    const remote = prompt("Modalidad (remote|hybrid|onsite|any)", "remote");
+    if (remote == null) return;
+    const location = prompt("Location", "Argentina / LATAM");
+    if (location == null) return;
+    const notes = prompt("Notas", "");
+    if (notes == null) return;
+    try {
+      await apiJson(`/api/config/empleo/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: title.trim(),
+          keywords: keywords.trim(),
+          seniority: seniority.trim(),
+          remote: remote.trim(),
+          location: location.trim(),
+          notes: notes.trim(),
+        }),
+      });
+      setStatus(status, "Perfil actualizado.");
+      await loadEmpleo();
+    } catch (err) {
+      setStatus(status, err.message || "No se pudo editar", true);
+    }
+    return;
+  }
+
+  if (btn.dataset.action === "archive") {
+    const archived = !row.classList.contains("config-row--archived");
+    try {
+      await apiJson(`/api/config/empleo/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ archived, enabled: archived ? false : undefined }),
+      });
+      setStatus(status, archived ? "Archivado." : "Restaurado.");
+      await loadEmpleo();
+    } catch (err) {
+      setStatus(status, err.message || "No se pudo archivar", true);
+    }
+  }
+});
+
+document.getElementById("empleo-form")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const status = document.getElementById("empleo-status");
+  const fd = new FormData(form);
+  try {
+    await apiJson("/api/config/empleo", {
+      method: "POST",
+      body: JSON.stringify({
+        title: String(fd.get("title") || ""),
+        keywords: String(fd.get("keywords") || ""),
+        seniority: String(fd.get("seniority") || "any"),
+        remote: String(fd.get("remote") || "any"),
+        location: String(fd.get("location") || ""),
+        notes: String(fd.get("notes") || ""),
+        enabled: true,
+      }),
+    });
+    form.reset();
+    setStatus(status, "Perfil agregado.");
+    await loadEmpleo();
+  } catch (err) {
+    setStatus(status, err.message || "No se pudo agregar", true);
+  }
+});
+
+document.getElementById("empleo-show-archived")?.addEventListener("change", () => {
+  void loadEmpleo();
 });
 
 activate(panelFromHash());

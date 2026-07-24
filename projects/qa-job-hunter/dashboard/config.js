@@ -5,6 +5,48 @@
 const tabs = [...document.querySelectorAll(".config-tab")];
 const panels = [...document.querySelectorAll(".config-panel")];
 
+const DASHBOARD_HINT =
+  "Reiniciá el dashboard: cd projects/qa-job-hunter && npm run dashboard (http://localhost:3847/config)";
+
+function showApiBanner(message) {
+  let el = document.getElementById("config-api-banner");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "config-api-banner";
+    el.className = "config-status config-status--error";
+    el.style.margin = "0 1.5rem 1rem";
+    document.querySelector(".config-layout")?.prepend(el);
+  }
+  el.hidden = !message;
+  el.textContent = message || "";
+}
+
+async function ensureDashboardApi() {
+  if (location.protocol === "file:") {
+    showApiBanner(
+      `Abrí Config desde el servidor local (${DASHBOARD_HINT}). file:// no tiene API.`
+    );
+    return false;
+  }
+  try {
+    const res = await fetch("/api/health");
+    if (!res.ok) {
+      showApiBanner(`API no disponible (HTTP ${res.status}). ${DASHBOARD_HINT}`);
+      return false;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!data?.features?.configQuestions) {
+      showApiBanner(`Dashboard desactualizado (falta API Preguntas). ${DASHBOARD_HINT}`);
+      return false;
+    }
+    showApiBanner("");
+    return true;
+  } catch {
+    showApiBanner(`No se pudo conectar al API. ${DASHBOARD_HINT}`);
+    return false;
+  }
+}
+
 function activate(panelId) {
   for (const tab of tabs) {
     const selected = tab.dataset.panel === panelId;
@@ -52,7 +94,12 @@ async function apiJson(url, options) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 404 && String(url).includes("/api/config/")) {
+      throw new Error(`API Config no encontrada (404). ${DASHBOARD_HINT}`);
+    }
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
   return data;
 }
 
@@ -834,3 +881,6 @@ document.getElementById("cvs-show-archived")?.addEventListener("change", () => {
 });
 
 activate(panelFromHash());
+void ensureDashboardApi().then((ok) => {
+  if (ok && panelFromHash() === "preguntas") void loadPreguntas();
+});

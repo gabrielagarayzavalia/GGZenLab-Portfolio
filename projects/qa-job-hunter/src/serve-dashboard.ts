@@ -122,6 +122,21 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  if (pathname === "/api/health" && method === "GET") {
+    sendJson(res, 200, {
+      ok: true,
+      service: "qa-job-hunter-dashboard",
+      features: {
+        configQuestions: true,
+        configSources: true,
+        configPuestos: true,
+        configEmpleo: true,
+        configCvs: true,
+      },
+    });
+    return;
+  }
+
   if (pathname === "/api/jobs" && method === "GET") {
     try {
       await connect();
@@ -613,6 +628,7 @@ createServer((req, res) => {
     console.log("\n  ⚠️  No hay output/jobs-result.json — ejecutá el análisis primero.");
   }
 
-  console.log("\n  Ctrl+C para detener\n");
+  console.log("\n  Ctrl+C para detener");
+  console.log("  Config: http://localhost:" + PORT + "/config#preguntas\n");
   openBrowser(url);
 });

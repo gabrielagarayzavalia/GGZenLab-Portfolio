@@ -25,7 +25,7 @@
 import { spawnSync } from "child_process";
 import { createInterface } from "readline/promises";
 import { stdin as input, stdout as output } from "process";
-import { exportQueueToExcel, openTrackerExcel } from "../apply/post-run.js";
+import { exportQueueToExcel, importQueueFromExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
 
 type Step = "fetch" | "pipeline" | "excel" | "apply" | "reconcile";
@@ -203,6 +203,7 @@ async function main(): Promise<void> {
         console.log("\n⏭  Easy Apply omitido (--skip-apply)");
         continue;
       }
+      importQueueFromExcel();
       runHunterEasyApply(applyMax, dryRun);
       continue;
     }

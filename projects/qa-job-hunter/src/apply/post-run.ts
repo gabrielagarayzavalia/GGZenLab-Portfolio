@@ -25,6 +25,40 @@ function sleepSync(ms: number): void {
   }
 }
 
+/** Importa Excel (Easy Apply + Pendiente) → cola antes de apply. */
+export function importQueueFromExcel(maxAttempts = 3): boolean {
+  const xlsx = resolveTrackerXlsx();
+  if (!fs.existsSync(SYNC_SCRIPT)) {
+    console.error(`   ✗ No está ${SYNC_SCRIPT}`);
+    return false;
+  }
+  if (!fs.existsSync(xlsx)) {
+    console.error(`   ✗ No se encontró Excel: ${xlsx}`);
+    return false;
+  }
+  console.log(`\n📥 Importando Excel → cola (Easy Apply + Pendiente)…`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      execFileSync("python", [SYNC_SCRIPT, "import", xlsx], {
+        cwd: ROOT,
+        stdio: "inherit",
+        shell: false,
+      });
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const locked = /Permission denied|EPERM|EBUSY|being used by another/i.test(msg);
+      console.error(
+        `   ✗ Import Excel falló (intento ${attempt}/${maxAttempts})${
+          locked ? " — cerrá Empleos_Tracker.xlsx si está abierto" : ""
+        }`
+      );
+      if (attempt < maxAttempts) sleepSync(2000);
+    }
+  }
+  return false;
+}
+
 /** Exporta cola → Empleos_Tracker.xlsx (reintenta si el archivo está bloqueado). */
 export function exportQueueToExcel(maxAttempts = 3): boolean {
   const xlsx = resolveTrackerXlsx();

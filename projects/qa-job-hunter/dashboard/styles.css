@@ -218,6 +218,54 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 }
 .config-placeholder ul { margin: 0.75rem 0 0; padding-left: 1.2rem; }
 .config-placeholder li { margin-bottom: 0.35rem; }
+.config-status {
+  margin: 0 0 0.75rem; font-size: 0.85rem; color: var(--match-high);
+}
+.config-status--error { color: var(--danger); }
+.config-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.config-row {
+  display: grid; gap: 0.25rem 1rem; padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+.config-row--archived { opacity: 0.55; }
+.config-toggle {
+  display: flex; align-items: center; gap: 0.6rem; cursor: pointer;
+  grid-column: 1 / -1;
+}
+.config-row__name { font-weight: 600; font-size: 0.95rem; }
+.config-row__meta {
+  margin: 0; grid-column: 1; font-size: 0.8rem; color: var(--text-muted);
+  word-break: break-all;
+}
+.config-row__actions {
+  grid-column: 2; grid-row: 2; display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end;
+}
+.config-form {
+  display: grid; gap: 0.75rem; max-width: 28rem;
+  padding: 1rem 0 0; border-top: 1px solid var(--border);
+}
+.config-form__title { margin: 0; font-size: 1rem; }
+.config-field { display: grid; gap: 0.25rem; font-size: 0.85rem; color: var(--text-muted); }
+.config-field input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.45rem 0.6rem; font-size: 0.9rem;
+}
+.config-btn {
+  justify-self: start; background: var(--accent); color: #fff; border: none;
+  border-radius: var(--radius); padding: 0.45rem 0.9rem; font-weight: 600;
+  font-size: 0.85rem; cursor: pointer;
+}
+.config-btn:hover { filter: brightness(1.08); }
+.config-btn--ghost {
+  background: transparent; color: var(--text-muted); border: 1px solid var(--border);
+}
+.config-btn--ghost:hover { color: var(--text); background: var(--surface-hover); }
+.config-check {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem;
+  font-size: 0.85rem; color: var(--text-muted); cursor: pointer;
+}
 @media (max-width: 720px) {
   .config-layout { grid-template-columns: 1fr; }
   .config-sidebar {
@@ -226,4 +274,6 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   }
   .config-sidebar__title { width: 100%; margin: 0 0 0.35rem; }
   .config-tab { width: auto; }
+  .config-row { grid-template-columns: 1fr; }
+  .config-row__actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
 }

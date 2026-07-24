@@ -22,6 +22,7 @@ function activate(panelId) {
   if (panelId === "fuentes") void loadFuentes();
   if (panelId === "sitios") void loadSitios();
   if (panelId === "preguntas") void loadPreguntas();
+  if (panelId === "puestos") void loadPuestos();
 }
 
 function panelFromHash() {
@@ -364,6 +365,132 @@ document.getElementById("preguntas-list")?.addEventListener("click", async (ev) 
       setStatus(status, err.message || "No se pudo archivar", true);
     }
   }
+});
+
+function rowPuesto(p) {
+  const archived = p.archived ? " config-row--archived" : "";
+  const meta = [p.keywords || "—", p.enabled ? "activo" : "off"].join(" · ");
+  return `<li class="config-row${archived}" data-id="${esc(p.id)}">
+    <label class="config-toggle">
+      <input type="checkbox" data-action="toggle" ${p.enabled ? "checked" : ""} ${p.archived ? "disabled" : ""} />
+      <span class="config-row__name">${esc(p.title)}</span>
+    </label>
+    <p class="config-row__meta">${esc(meta)}</p>
+    <div class="config-row__actions">
+      <button type="button" class="config-btn config-btn--ghost" data-action="edit">Editar</button>
+      <button type="button" class="config-btn config-btn--ghost" data-action="archive">
+        ${p.archived ? "Restaurar" : "Archivar"}
+      </button>
+    </div>
+  </li>`;
+}
+
+async function loadPuestos() {
+  const list = document.getElementById("puestos-list");
+  const status = document.getElementById("puestos-status");
+  const showArchived = document.getElementById("puestos-show-archived")?.checked;
+  if (!list) return;
+  setStatus(status, "Cargando…");
+  try {
+    const q = showArchived ? "?archived=1" : "";
+    const data = await apiJson(`/api/config/puestos${q}`);
+    const items = showArchived ? data.puestos : data.puestos.filter((p) => !p.archived);
+    list.innerHTML =
+      items.map(rowPuesto).join("") ||
+      "<li class=\"config-row\">Sin puestos. Agregá el primero abajo.</li>";
+    setStatus(status, "");
+  } catch (err) {
+    setStatus(status, err.message || "Error al cargar", true);
+  }
+}
+
+document.getElementById("puestos-list")?.addEventListener("change", async (ev) => {
+  const input = ev.target;
+  if (!(input instanceof HTMLInputElement) || input.dataset.action !== "toggle") return;
+  const row = input.closest("[data-id]");
+  const id = row?.dataset.id;
+  const status = document.getElementById("puestos-status");
+  if (!id) return;
+  try {
+    await apiJson(`/api/config/puestos/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled: input.checked }),
+    });
+    setStatus(status, "Guardado.");
+  } catch (err) {
+    input.checked = !input.checked;
+    setStatus(status, err.message || "No se pudo guardar", true);
+  }
+});
+
+document.getElementById("puestos-list")?.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-action]");
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const row = btn.closest("[data-id]");
+  const id = row?.dataset.id;
+  const status = document.getElementById("puestos-status");
+  if (!id) return;
+
+  if (btn.dataset.action === "edit") {
+    const title = prompt("Título / rol", row.querySelector(".config-row__name")?.textContent || "");
+    if (title == null) return;
+    const keywords = prompt(
+      "Keywords",
+      (row.querySelector(".config-row__meta")?.textContent || "").split(" · ")[0] || ""
+    );
+    if (keywords == null) return;
+    try {
+      await apiJson(`/api/config/puestos/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title: title.trim(), keywords: keywords.trim() }),
+      });
+      setStatus(status, "Puesto actualizado.");
+      await loadPuestos();
+    } catch (err) {
+      setStatus(status, err.message || "No se pudo editar", true);
+    }
+    return;
+  }
+
+  if (btn.dataset.action === "archive") {
+    const archived = !row.classList.contains("config-row--archived");
+    try {
+      await apiJson(`/api/config/puestos/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ archived, enabled: archived ? false : undefined }),
+      });
+      setStatus(status, archived ? "Archivado." : "Restaurado.");
+      await loadPuestos();
+    } catch (err) {
+      setStatus(status, err.message || "No se pudo archivar", true);
+    }
+  }
+});
+
+document.getElementById("puestos-form")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const status = document.getElementById("puestos-status");
+  const fd = new FormData(form);
+  try {
+    await apiJson("/api/config/puestos", {
+      method: "POST",
+      body: JSON.stringify({
+        title: String(fd.get("title") || ""),
+        keywords: String(fd.get("keywords") || "") || undefined,
+        enabled: true,
+      }),
+    });
+    form.reset();
+    setStatus(status, "Puesto agregado.");
+    await loadPuestos();
+  } catch (err) {
+    setStatus(status, err.message || "No se pudo agregar", true);
+  }
+});
+
+document.getElementById("puestos-show-archived")?.addEventListener("change", () => {
+  void loadPuestos();
 });
 
 activate(panelFromHash());

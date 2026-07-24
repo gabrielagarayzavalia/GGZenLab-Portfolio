@@ -52,6 +52,8 @@ export interface CapturedField {
   optional?: boolean;
   /** radio / checkbox / text / select / combobox / textarea / unknown */
   scenarioKind?: string;
+  /** Opciones de <select> si aplica (banco Config / #97). */
+  options?: string[];
 }
 
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
@@ -404,6 +406,20 @@ async function collectVisibleFields(
     const required = ariaRequired || htmlRequired || starred || Boolean(errorText);
     const optional = !required;
 
+    let options: string[] | undefined;
+    if (tag === "select") {
+      const optionEls = el.locator("option");
+      const oc = await optionEls.count().catch(() => 0);
+      const opts: string[] = [];
+      for (let o = 0; o < oc; o++) {
+        const text = ((await optionEls.nth(o).innerText().catch(() => "")) ?? "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (text && !/^(select an option|seleccion)/i.test(text)) opts.push(text);
+      }
+      if (opts.length > 0) options = opts.slice(0, 40);
+    }
+
     // Modo legacy: solo obligatorios / error / vacíos relevantes
     if (opts.onlyBlockingCandidates) {
       if (!ariaRequired && !htmlRequired && !errorText && !starred && value) continue;
@@ -422,6 +438,7 @@ async function collectVisibleFields(
       ariaLabel,
       placeholder,
       errorText,
+      ...(options ? { options } : {}),
     });
   }
 

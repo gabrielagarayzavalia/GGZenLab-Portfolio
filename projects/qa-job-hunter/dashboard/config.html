@@ -43,6 +43,18 @@
           Solo sin respuesta
         </label>
         <ul class="config-list" id="preguntas-list" aria-live="polite"></ul>
+        <dialog id="pregunta-answer-dialog" class="config-dialog" aria-labelledby="pregunta-answer-title">
+          <form id="pregunta-answer-form" method="dialog" class="config-dialog__form">
+            <h2 class="config-dialog__title" id="pregunta-answer-title">Responder pregunta</h2>
+            <p class="config-row__meta" id="pregunta-answer-meta"></p>
+            <p class="config-dialog__hint" id="pregunta-answer-hint"></p>
+            <div id="pregunta-answer-field"></div>
+            <div class="config-dialog__actions">
+              <button type="button" class="config-btn config-btn--ghost" id="pregunta-answer-cancel">Cancelar</button>
+              <button type="submit" class="config-btn">Guardar respuesta</button>
+            </div>
+          </form>
+        </dialog>
         <form class="config-form" id="preguntas-form" autocomplete="off">
           <h2 class="config-form__title">Alta manual</h2>
           <label class="config-field">

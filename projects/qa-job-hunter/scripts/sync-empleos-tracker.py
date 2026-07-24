@@ -10,6 +10,8 @@ from __future__ import annotations
 import csv
 import re
 import sys
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -164,6 +166,35 @@ PROTECTED_ESTADOS = frozenset(
         "a-realizado",
     }
 )
+
+
+def fix_absolute_table_targets(xlsx_path: Path) -> bool:
+    """openpyxl → Target='/xl/tables/…'; ExcelJS necesita '../tables/…'."""
+    tmp = Path(tempfile.mkdtemp())
+    with zipfile.ZipFile(xlsx_path, "r") as z:
+        z.extractall(tmp)
+    changed = False
+    sheets = tmp / "xl" / "worksheets"
+    if sheets.exists():
+        for rels in sheets.rglob("*.rels"):
+            txt = rels.read_text(encoding="utf-8")
+            new = re.sub(
+                r'Target="/xl/tables/(table\d+\.xml)"',
+                r'Target="../tables/\1"',
+                txt,
+            )
+            if new != txt:
+                rels.write_text(new, encoding="utf-8")
+                changed = True
+    if not changed:
+        return False
+    out = xlsx_path.with_suffix(".xlsx.tmp")
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        for p in tmp.rglob("*"):
+            if p.is_file():
+                z.write(p, p.relative_to(tmp).as_posix())
+    out.replace(xlsx_path)
+    return True
 
 
 def cmd_import(xlsx: Path) -> None:
@@ -325,6 +356,8 @@ def cmd_export(xlsx: Path) -> None:
                     )
 
     wb.save(xlsx)
+    if fix_absolute_table_targets(xlsx):
+        print("   (Target tabla normalizado para ExcelJS)")
     print(
         f"Export OK: {updated} estados, {notes_updated} notas en {xlsx} "
         f"(estados protegidos omitidos: {skipped_final})"

@@ -583,13 +583,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  if (
-    pathname === "/styles.css" ||
-    pathname === "/app.js" ||
-    pathname === "/config.js"
-  ) {
-    serveStatic(res, path.join(DASHBOARD_DIR, pathname.slice(1)));
-    return;
+  // Assets del dashboard (evita 404 al agregar módulos .js sin whitelist manual)
+  const assetName = pathname.replace(/^\//, "");
+  if (/^[a-zA-Z0-9._-]+$/.test(assetName)) {
+    const assetPath = path.resolve(DASHBOARD_DIR, assetName);
+    if (assetPath.startsWith(DASHBOARD_DIR) && fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
+      serveStatic(res, assetPath);
+      return;
+    }
   }
 
   send(res, 404, "Not found");

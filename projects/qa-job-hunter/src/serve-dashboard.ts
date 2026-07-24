@@ -40,6 +40,12 @@ import {
   patchPuesto,
   upsertPuesto,
 } from "./config/puestos-store.js";
+import {
+  listEmpleoProfiles,
+  loadEmpleoConfig,
+  patchEmpleoProfile,
+  upsertEmpleoProfile,
+} from "./config/empleo-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
 
@@ -383,6 +389,64 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         archived?: boolean;
       };
       const store = patchPuesto(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: Empleo buscado (B18-04 / #99) ---
+  if (pathname === "/api/config/empleo" && method === "GET") {
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadEmpleoConfig();
+    sendJson(res, 200, {
+      updatedAt: store.updatedAt,
+      profiles: listEmpleoProfiles({ includeArchived }),
+    });
+    return;
+  }
+
+  if (pathname === "/api/config/empleo" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        seniority?: string;
+        remote?: string;
+        location?: string;
+        notes?: string;
+        enabled?: boolean;
+      };
+      if (!body.title?.trim()) {
+        sendJson(res, 400, { error: "Falta title" });
+        return;
+      }
+      const store = upsertEmpleoProfile(body as { title: string });
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/empleo/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/empleo/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        seniority?: string;
+        remote?: string;
+        location?: string;
+        notes?: string;
+        enabled?: boolean;
+        archived?: boolean;
+      };
+      const store = patchEmpleoProfile(id, body as Parameters<typeof patchEmpleoProfile>[1]);
       sendJson(res, 200, store);
     } catch (err) {
       const message = err instanceof Error ? err.message : "JSON inválido";

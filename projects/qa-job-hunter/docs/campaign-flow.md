@@ -65,7 +65,7 @@ Excel canónico: `OneDrive\Escritorio\Empleos_Tracker.xlsx`. Applied-list no pis
 | Flag | Efecto |
 |------|--------|
 | `--from=fetch\|pipeline\|excel\|apply\|reconcile` | Empieza desde ese paso |
-| `--apply-max=N` | Limita Easy Apply / dry-run (`APPLY_MAX` / `DRY_RUN_MAX`) |
+| `--apply-max=N` | Hasta **N intentos** de apply/dry-run (sin EA → sigue; si no hay más pendientes, termina antes) |
 | `--skip-apply` | Omite Easy Apply |
 | `--dry-run` | Sin abrir Excel mid; `easy-apply:dry-run`; Excel solo al final post-reconcile |
 | `--yes` / `-y` | Sin pausa interactiva tras Excel (CI). En uso humano preferí **sin** `--yes` para revisar Excel. |

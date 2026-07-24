@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sync Empleos_Tracker.xlsx <-> output/apply/apply-queue.csv
 
-  python scripts/sync-empleos-tracker.py import   # Excel Easy Apply+Pendiente → cola
+  python scripts/sync-empleos-tracker.py import   # Excel Pendiente (todos los canales) → cola
   python scripts/sync-empleos-tracker.py export   # cola → Excel Estado + Notas
 """
 
@@ -197,38 +197,83 @@ def fix_absolute_table_targets(xlsx_path: Path) -> bool:
     return True
 
 
+def easy_apply_from_canal(canal: str) -> str:
+    c = (canal or "").strip().lower()
+    if c == "easy apply":
+        return "yes"
+    if c == "externo":
+        return "no"
+    return ""
+
+
 def cmd_import(xlsx: Path) -> None:
+    existing = load_queue()
     wb = openpyxl.load_workbook(xlsx, read_only=True, data_only=True)
     ws = wb["Empleos"]
-    rows = []
+    pending_rows: list[dict] = []
+    ea_n = ext_n = 0
     for r in ws.iter_rows(min_row=2, values_only=True):
         if not r or not r[3]:
             continue
-        canal = (r[4] or "").strip()
         estado = (r[5] or "").strip()
-        if canal.lower() != "easy apply":
-            continue
         if estado.lower() != "pendiente":
             continue
         url = str(r[3]).strip()
         jid = job_id_from_url(url)
         if not jid:
             continue
-        rows.append(
+        canal = (r[4] or "").strip()
+        ea = easy_apply_from_canal(canal)
+        if ea == "yes":
+            ea_n += 1
+        elif ea == "no":
+            ext_n += 1
+        pending_rows.append(
             {
                 "jobId": jid,
                 "matchPercent": match_percent(r[0]),
                 "title": (r[1] or "").strip(),
                 "company": (r[2] or "").strip(),
                 "url": f"https://www.linkedin.com/jobs/view/{jid}/",
-                "easyApply": "yes",
+                "easyApply": ea,
                 "status": "pendiente",
                 "reason": "Importado desde Empleos_Tracker.xlsx",
                 "notes": "",
                 "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
         )
-    rows.sort(key=lambda x: -x["matchPercent"])
+    pending_rows.sort(key=lambda x: -x["matchPercent"])
+
+    # Conservar filas finales de la cola; refrescar todos los Pendiente desde Excel.
+    by_id: dict[str, dict] = {}
+    for jid, row in existing.items():
+        st = (row.get("ApplyStatus") or "pendiente").strip().lower()
+        if st in ("pendiente", "pending", ""):
+            continue
+        by_id[jid] = row
+
+    for p in pending_rows:
+        jid = p["jobId"]
+        prev = existing.get(jid, {})
+        notes = (prev.get("Notes") or prev.get("notes") or "").strip()
+        by_id[jid] = {
+            "JobId": jid,
+            "Match%": str(p["matchPercent"]),
+            "Title": p["title"],
+            "Company": p["company"],
+            "URL": p["url"],
+            "EasyApply": p["easyApply"],
+            "ApplyStatus": "pendiente",
+            "Reason": p["reason"],
+            "Notes": notes,
+            "UpdatedAt": p["updatedAt"],
+        }
+
+    merged = sorted(
+        by_id.values(),
+        key=lambda row: -match_percent(row.get("Match%")),
+    )
+
     QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with QUEUE_PATH.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f, delimiter=";")
@@ -246,22 +291,25 @@ def cmd_import(xlsx: Path) -> None:
                 "UpdatedAt",
             ]
         )
-        for r in rows:
+        for row in merged:
             w.writerow(
                 [
-                    r["jobId"],
-                    r["matchPercent"],
-                    r["title"],
-                    r["company"],
-                    r["url"],
-                    r["easyApply"],
-                    r["status"],
-                    r["reason"],
-                    r["notes"],
-                    r["updatedAt"],
+                    row.get("JobId", ""),
+                    row.get("Match%", ""),
+                    row.get("Title", ""),
+                    row.get("Company", ""),
+                    row.get("URL", ""),
+                    row.get("EasyApply", ""),
+                    row.get("ApplyStatus", ""),
+                    row.get("Reason", ""),
+                    row.get("Notes", ""),
+                    row.get("UpdatedAt", ""),
                 ]
             )
-    print(f"Import OK: {len(rows)} Easy Apply + Pendiente → {QUEUE_PATH}")
+    print(
+        f"Import OK: {len(pending_rows)} Pendiente desde Excel "
+        f"({ea_n} Easy Apply, {ext_n} externo) · cola total {len(merged)} → {QUEUE_PATH}"
+    )
 
 
 def load_queue() -> dict[str, dict]:

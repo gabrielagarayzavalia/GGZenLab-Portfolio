@@ -120,6 +120,8 @@ function runHunterEasyApply(applyMax: number | null, dryRun: boolean): void {
   const env = { ...process.env };
   const script = dryRun ? "easy-apply:dry-run" : "easy-apply";
   if (dryRun) {
+    // Hasta N intentos por corrida (sin cortar tras el primer dry_ok).
+    env.DRY_RUN_ALL = "1";
     if (applyMax != null && applyMax > 0) {
       env.DRY_RUN_MAX = String(applyMax);
     } else if (!env.DRY_RUN_MAX) {

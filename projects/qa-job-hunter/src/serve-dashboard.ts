@@ -46,6 +46,15 @@ import {
   patchEmpleoProfile,
   upsertEmpleoProfile,
 } from "./config/empleo-store.js";
+import {
+  addCvFromBuffer,
+  deleteCv,
+  getCvById,
+  getCvFilePath,
+  listCvs,
+  loadCvsConfig,
+  patchCv,
+} from "./config/cvs-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
 
@@ -447,6 +456,99 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         archived?: boolean;
       };
       const store = patchEmpleoProfile(id, body as Parameters<typeof patchEmpleoProfile>[1]);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: CVs (B18-03 / #98) ---
+  if (pathname === "/api/config/cvs" && method === "GET") {
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadCvsConfig();
+    sendJson(res, 200, {
+      updatedAt: store.updatedAt,
+      cvs: listCvs({ includeArchived }),
+    });
+    return;
+  }
+
+  if (pathname === "/api/config/cvs" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        originalName?: string;
+        contentBase64?: string;
+        label?: string;
+        empleoProfileId?: string;
+        setDefault?: boolean;
+      };
+      if (!body.originalName?.trim() || !body.contentBase64) {
+        sendJson(res, 400, { error: "Faltan originalName o contentBase64" });
+        return;
+      }
+      const buffer = Buffer.from(body.contentBase64, "base64");
+      const cv = addCvFromBuffer({
+        originalName: body.originalName,
+        buffer,
+        label: body.label,
+        empleoProfileId: body.empleoProfileId,
+        setDefault: body.setDefault,
+      });
+      sendJson(res, 200, { cv, ...loadCvsConfig() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.match(/^\/api\/config\/cvs\/[^/]+\/file$/) && method === "GET") {
+    const id = decodeURIComponent(pathname.replace("/api/config/cvs/", "").replace(/\/file$/, ""));
+    const cv = getCvById(id);
+    if (!cv) {
+      sendJson(res, 404, { error: "CV no encontrado" });
+      return;
+    }
+    const fp = getCvFilePath(cv);
+    if (!fs.existsSync(fp)) {
+      sendJson(res, 404, { error: "Archivo no encontrado en disco" });
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${cv.originalName.replace(/"/g, "")}"`,
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(fs.readFileSync(fp));
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/cvs/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/cvs/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        label?: string;
+        empleoProfileId?: string;
+        isDefault?: boolean;
+        archived?: boolean;
+      };
+      const store = patchCv(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/cvs/") && method === "DELETE") {
+    const id = decodeURIComponent(pathname.replace("/api/config/cvs/", ""));
+    try {
+      const store = deleteCv(id);
       sendJson(res, 200, store);
     } catch (err) {
       const message = err instanceof Error ? err.message : "JSON inválido";

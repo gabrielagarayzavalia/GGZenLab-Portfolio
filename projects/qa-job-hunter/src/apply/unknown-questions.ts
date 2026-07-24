@@ -12,33 +12,39 @@ import { resolveSkillYesNo } from "./my-skills.js";
 import { matchConfigAnswer } from "../config/questions-store.js";
 
 /** Campos que ya contestamos o ignoramos a propósito (no pedir reglas). */
-const KNOWN_FIELD_RE: RegExp[] = [
-  PSEUDO_ANSWERS.locationCity.fieldMatch,
-  PSEUDO_ANSWERS.locationCity.hintMatch,
-  PSEUDO_ANSWERS.country.fieldMatch,
-  PSEUDO_ANSWERS.linkedinProfile.fieldMatch,
-  PSEUDO_ANSWERS.portfolio.fieldMatch,
-  PSEUDO_ANSWERS.expectedCompensation.fieldMatch,
-  PSEUDO_ANSWERS.startAvailability.fieldMatch,
-  PSEUDO_ANSWERS.workOrLiveCityFreeText.fieldMatch,
-  PSEUDO_ANSWERS.preferredWorkLocation.fieldMatch,
-  PSEUDO_ANSWERS.citySelect.fieldMatch,
-  PSEUDO_ANSWERS.howDidYouHear.fieldMatch,
-  /^(first|last|full)\s*name|nombre|apellido|email|e-?mail|phone|tel[eé]fono|mobile|celular/i,
-  /resume|curriculum|cv\b|cover\s*letter|carta de presentaci[oó]n|summary|resumen/i,
-  /select language|idioma|language\s*proficiency|english\s*(level|proficiency)|nivel de ingl[eé]s/i,
-  /i consent|consent|autorizo|acepto (los |las )?(t[eé]rminos|condiciones)|privacy|privacidad/i,
-  /follow (the )?company|seguir (a la )?empresa|mark .+ top choice|top choice/i,
-  /years?\s+of\s+experience|a[nñ]os?\s+de\s+experiencia|how many years/i,
-  /deequ|great expectations|data quality framework/i,
-  /skills assessment|online assessment|coding assessment|honeypot|\bquiz\b/i,
-  PSEUDO_ANSWERS.hybridWorkOk.fieldMatch,
-  PSEUDO_ANSWERS.programmingScripting.fieldMatch,
-  PSEUDO_ANSWERS.manualAutomationMix.fieldMatch,
-  PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch,
-  PSEUDO_ANSWERS.backendSqlTesting.fieldMatch,
-  PSEUDO_ANSWERS.phoneCountryCode.fieldMatch,
-];
+let knownFieldReCache: RegExp[] | null = null;
+
+function getKnownFieldRe(): RegExp[] {
+  if (knownFieldReCache) return knownFieldReCache;
+  knownFieldReCache = [
+    PSEUDO_ANSWERS.locationCity.fieldMatch,
+    PSEUDO_ANSWERS.locationCity.hintMatch,
+    PSEUDO_ANSWERS.country.fieldMatch,
+    PSEUDO_ANSWERS.linkedinProfile.fieldMatch,
+    PSEUDO_ANSWERS.portfolio.fieldMatch,
+    PSEUDO_ANSWERS.expectedCompensation.fieldMatch,
+    PSEUDO_ANSWERS.startAvailability.fieldMatch,
+    PSEUDO_ANSWERS.workOrLiveCityFreeText.fieldMatch,
+    PSEUDO_ANSWERS.preferredWorkLocation.fieldMatch,
+    PSEUDO_ANSWERS.citySelect.fieldMatch,
+    PSEUDO_ANSWERS.howDidYouHear.fieldMatch,
+    /^(first|last|full)\s*name|nombre|apellido|email|e-?mail|phone|tel[eé]fono|mobile|celular/i,
+    /resume|curriculum|cv\b|cover\s*letter|carta de presentaci[oó]n|summary|resumen/i,
+    /select language|idioma|language\s*proficiency|english\s*(level|proficiency)|nivel de ingl[eé]s/i,
+    /i consent|consent|autorizo|acepto (los |las )?(t[eé]rminos|condiciones)|privacy|privacidad/i,
+    /follow (the )?company|seguir (a la )?empresa|mark .+ top choice|top choice/i,
+    /years?\s+of\s+experience|a[nñ]os?\s+de\s+experiencia|how many years/i,
+    /deequ|great expectations|data quality framework/i,
+    /skills assessment|online assessment|coding assessment|honeypot|\bquiz\b/i,
+    PSEUDO_ANSWERS.hybridWorkOk.fieldMatch,
+    PSEUDO_ANSWERS.programmingScripting.fieldMatch,
+    PSEUDO_ANSWERS.manualAutomationMix.fieldMatch,
+    PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch,
+    PSEUDO_ANSWERS.backendSqlTesting.fieldMatch,
+    PSEUDO_ANSWERS.phoneCountryCode.fieldMatch,
+  ];
+  return knownFieldReCache;
+}
 
 export type UnknownQuestionHit = {
   label: string;
@@ -69,7 +75,7 @@ export function isKnownFieldLabel(blob: string): boolean {
   if (isCoverOrSummaryLabel(t)) return true;
   if (resolveSkillYesNo(t)) return true;
   if (matchConfigAnswer(t)) return true;
-  return KNOWN_FIELD_RE.some((re) => re.test(t));
+  return getKnownFieldRe().some((re) => re.test(t));
 }
 
 /** Preguntas / campos sin matcher propio (excluye vacíos genéricos ruidosos). */

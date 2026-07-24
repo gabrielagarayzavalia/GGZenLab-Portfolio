@@ -5,10 +5,7 @@
 
 import type { Locator, Page } from "playwright";
 import { matchConfigAnswer } from "../config/questions-store.js";
-import { hasPrefillValue } from "./fill-answers.js";
-
-const EMPTY_SELECT_RE =
-  /select an option|seleccion(a|á)|selecciona una opci|choose|eleg[ií]|elegir/i;
+import { EMPTY_SELECT_RE, hasPrefillValue } from "./field-utils.js";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

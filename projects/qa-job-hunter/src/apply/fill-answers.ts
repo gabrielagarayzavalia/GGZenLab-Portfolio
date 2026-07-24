@@ -28,6 +28,7 @@ import {
   type ApplyRoleKind,
 } from "./canonical-text.js";
 import { fillConfigBankAnswers } from "./fill-config-bank.js";
+import { EMPTY_SELECT_RE, hasPrefillValue } from "./field-utils.js";
 import { matchConfigAnswer } from "../config/questions-store.js";
 import {
   RESUME_INSIST_MS,
@@ -191,8 +192,8 @@ export const PSEUDO_ANSWERS = {
   },
 } as const;
 
-const EMPTY_SELECT_RE =
-  /select an option|seleccion(a|á)|selecciona una opci|choose|eleg[ií]|elegir/i;
+export { hasPrefillValue } from "./field-utils.js";
+
 const PLEASE_SELECT_RE = /please make a selection|hac[eé] una selecci[oó]n|seleccion(a|á) una opci[oó]n/i;
 
 export function isSummaryLabel(blob: string): boolean {
@@ -210,15 +211,6 @@ export function isCoverLetterLabel(blob: string): boolean {
 /** Cover letter / summary: sí se pisan (o upload). Resto: respetar prefill. */
 export function isCoverOrSummaryLabel(blob: string): boolean {
   return isSummaryLabel(blob) || isCoverLetterLabel(blob) || /\bmessage\b|\bmensaje\b/i.test(blob);
-}
-
-/** ¿Ya hay respuesta usable? (no placeholder de select vacío). */
-export function hasPrefillValue(value: string): boolean {
-  const v = value.trim();
-  if (!v) return false;
-  if (EMPTY_SELECT_RE.test(v)) return false;
-  // "0" es válido (años Apache/Tosca=0). Placeholder de select suele ser texto, no "0".
-  return true;
 }
 
 /** Labels típicos del paso "Información de contacto" (email / teléfono / código país). */

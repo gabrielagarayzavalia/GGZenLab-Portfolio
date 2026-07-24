@@ -70,26 +70,48 @@
 
       <section class="config-panel" id="panel-fuentes" role="tabpanel" aria-labelledby="tab-fuentes" hidden>
         <h1>Fuentes de búsqueda</h1>
-        <p class="config-panel__lead">Activar LinkedIn, Indeed, GetOnBoard… sin redeploy.</p>
-        <div class="config-placeholder">
-          <strong>Placeholder B18-05</strong> — Toggle + alta de fuentes.
-          <ul>
-            <li>Engancha IndeedAdapter (B-31)</li>
-            <li>Task: <code>#100</code></li>
-          </ul>
-        </div>
+        <p class="config-panel__lead">Adapters de scrape (LinkedIn, Indeed, GetOnBoard…). Toggle sin redeploy.</p>
+        <p class="config-status" id="fuentes-status" hidden></p>
+        <ul class="config-list" id="fuentes-list" aria-live="polite"></ul>
+        <form class="config-form" id="fuentes-form" autocomplete="off">
+          <h2 class="config-form__title">Alta de fuente (adapter)</h2>
+          <label class="config-field">
+            <span>Nombre</span>
+            <input name="name" type="text" required maxlength="80" placeholder="Ej. ZonaJobs" />
+          </label>
+          <label class="config-field">
+            <span>Adapter id</span>
+            <input name="adapterId" type="text" required maxlength="40" placeholder="ej. zonajobs" />
+          </label>
+          <label class="config-field">
+            <span>URL (opcional)</span>
+            <input name="url" type="url" maxlength="200" placeholder="https://…" />
+          </label>
+          <button type="submit" class="config-btn">Agregar fuente</button>
+        </form>
       </section>
 
       <section class="config-panel" id="panel-sitios" role="tabpanel" aria-labelledby="tab-sitios" hidden>
         <h1>Sitios de empleo</h1>
-        <p class="config-panel__lead">Alta libre de sitios (nombre + URL/id), editar / archivar / activar.</p>
-        <div class="config-placeholder">
-          <strong>Placeholder B18-07</strong> — UI alta libre de sitios.
-          <ul>
-            <li>Relacionado Gmail Sitios (B-31)</li>
-            <li>Task: <code>#196</code></li>
-          </ul>
-        </div>
+        <p class="config-panel__lead">Alta libre (nombre + URL). Editar, archivar y activar — útil para Gmail Sitios / B-31.</p>
+        <p class="config-status" id="sitios-status" hidden></p>
+        <ul class="config-list" id="sitios-list" aria-live="polite"></ul>
+        <form class="config-form" id="sitios-form" autocomplete="off">
+          <h2 class="config-form__title">Alta de sitio</h2>
+          <label class="config-field">
+            <span>Nombre</span>
+            <input name="name" type="text" required maxlength="80" placeholder="Ej. Bumeran" />
+          </label>
+          <label class="config-field">
+            <span>URL</span>
+            <input name="url" type="url" required maxlength="200" placeholder="https://www.bumeran.com.ar/" />
+          </label>
+          <button type="submit" class="config-btn">Agregar sitio</button>
+        </form>
+        <label class="config-check">
+          <input type="checkbox" id="sitios-show-archived" />
+          Mostrar archivados
+        </label>
       </section>
 
       <section class="config-panel" id="panel-puestos" role="tabpanel" aria-labelledby="tab-puestos" hidden>

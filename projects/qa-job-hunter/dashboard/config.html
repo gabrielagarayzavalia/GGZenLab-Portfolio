@@ -59,14 +59,35 @@
 
       <section class="config-panel" id="panel-cvs" role="tabpanel" aria-labelledby="tab-cvs" hidden>
         <h1>CVs</h1>
-        <p class="config-panel__lead">Subir, listar, marcar default y asociar a perfil.</p>
-        <div class="config-placeholder">
-          <strong>Placeholder B18-03</strong> — Upload y gestión de CVs.
-          <ul>
-            <li>Al menos un CV default</li>
-            <li>Task: <code>#98</code></li>
-          </ul>
-        </div>
+        <p class="config-panel__lead">Subir PDF, marcar default y asociar a perfil de empleo buscado (#99).</p>
+        <p class="config-status" id="cvs-status" hidden></p>
+        <ul class="config-list" id="cvs-list" aria-live="polite"></ul>
+        <form class="config-form" id="cvs-form" autocomplete="off">
+          <h2 class="config-form__title">Subir CV (PDF, máx. 5 MB)</h2>
+          <label class="config-field">
+            <span>Archivo PDF</span>
+            <input name="file" type="file" accept="application/pdf,.pdf" required />
+          </label>
+          <label class="config-field">
+            <span>Etiqueta (matching LinkedIn)</span>
+            <input name="label" type="text" maxlength="120" placeholder="Ej. CV_Gabriela_QA_Automation.pdf" />
+          </label>
+          <label class="config-field">
+            <span>Perfil empleo buscado (opcional)</span>
+            <select name="empleoProfileId" id="cvs-empleo-select">
+              <option value="">— Ninguno —</option>
+            </select>
+          </label>
+          <label class="config-check">
+            <input type="checkbox" name="setDefault" />
+            Marcar como default al subir
+          </label>
+          <button type="submit" class="config-btn">Subir CV</button>
+        </form>
+        <label class="config-check">
+          <input type="checkbox" id="cvs-show-archived" />
+          Mostrar archivados
+        </label>
       </section>
 
       <section class="config-panel" id="panel-empleo" role="tabpanel" aria-labelledby="tab-empleo" hidden>

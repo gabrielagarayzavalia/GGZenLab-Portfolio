@@ -24,6 +24,7 @@ function activate(panelId) {
   if (panelId === "preguntas") void loadPreguntas();
   if (panelId === "puestos") void loadPuestos();
   if (panelId === "empleo") void loadEmpleo();
+  if (panelId === "cvs") void loadCvs();
 }
 
 function panelFromHash() {
@@ -648,6 +649,188 @@ document.getElementById("empleo-form")?.addEventListener("submit", async (ev) =>
 
 document.getElementById("empleo-show-archived")?.addEventListener("change", () => {
   void loadEmpleo();
+});
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function rowCv(c) {
+  const archived = c.archived ? " config-row--archived" : "";
+  const def = c.isDefault ? " · default" : "";
+  const meta = `${c.label} · ${formatBytes(c.sizeBytes)}${def}`;
+  return `<li class="config-row${archived}" data-id="${esc(c.id)}">
+    <span class="config-row__name">${esc(c.originalName)}</span>
+    <p class="config-row__meta">${esc(meta)}</p>
+    <div class="config-row__actions">
+      <a class="config-btn config-btn--ghost" href="/api/config/cvs/${encodeURIComponent(c.id)}/file" target="_blank" rel="noopener">Ver</a>
+      <button type="button" class="config-btn config-btn--ghost" data-action="default" ${c.isDefault || c.archived ? "disabled" : ""}>Default</button>
+      <button type="button" class="config-btn config-btn--ghost" data-action="edit">Editar</button>
+      <button type="button" class="config-btn config-btn--ghost" data-action="archive">${c.archived ? "Restaurar" : "Archivar"}</button>
+      <button type="button" class="config-btn config-btn--ghost" data-action="delete">Eliminar</button>
+    </div>
+  </li>`;
+}
+
+async function fillCvsEmpleoSelect() {
+  const sel = document.getElementById("cvs-empleo-select");
+  if (!sel) return;
+  try {
+    const data = await apiJson("/api/config/empleo");
+    const current = sel.value;
+    sel.innerHTML =
+      '<option value="">— Ninguno —</option>' +
+      data.profiles
+        .filter((p) => !p.archived)
+        .map((p) => `<option value="${esc(p.id)}">${esc(p.title)}</option>`)
+        .join("");
+    if (current) sel.value = current;
+  } catch {
+    /* ignore */
+  }
+}
+
+async function loadCvs() {
+  const list = document.getElementById("cvs-list");
+  const status = document.getElementById("cvs-status");
+  const showArchived = document.getElementById("cvs-show-archived")?.checked;
+  if (!list) return;
+  setStatus(status, "Cargando…");
+  await fillCvsEmpleoSelect();
+  try {
+    const q = showArchived ? "?archived=1" : "";
+    const data = await apiJson(`/api/config/cvs${q}`);
+    const items = showArchived ? data.cvs : data.cvs.filter((c) => !c.archived);
+    list.innerHTML =
+      items.map(rowCv).join("") ||
+      "<li class=\"config-row\">Sin CVs. Subí un PDF abajo.</li>";
+    setStatus(status, "");
+  } catch (err) {
+    setStatus(status, err.message || "Error al cargar", true);
+  }
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const b64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(b64);
+    };
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById("cvs-form")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const status = document.getElementById("cvs-status");
+  const fd = new FormData(form);
+  const file = fd.get("file");
+  if (!(file instanceof File)) {
+    setStatus(status, "Elegí un PDF", true);
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    setStatus(status, "Máximo 5 MB", true);
+    return;
+  }
+  setStatus(status, "Subiendo…");
+  try {
+    const contentBase64 = await readFileAsBase64(file);
+    await apiJson("/api/config/cvs", {
+      method: "POST",
+      body: JSON.stringify({
+        originalName: file.name,
+        contentBase64,
+        label: String(fd.get("label") || "") || undefined,
+        empleoProfileId: String(fd.get("empleoProfileId") || "") || undefined,
+        setDefault: fd.get("setDefault") === "on",
+      }),
+    });
+    form.reset();
+    setStatus(status, "CV subido.");
+    await loadCvs();
+  } catch (err) {
+    setStatus(status, err.message || "No se pudo subir", true);
+  }
+});
+
+document.getElementById("cvs-list")?.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-action]");
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const row = btn.closest("[data-id]");
+  const id = row?.dataset.id;
+  const status = document.getElementById("cvs-status");
+  if (!id) return;
+
+  if (btn.dataset.action === "default") {
+    try {
+      await apiJson(`/api/config/cvs/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isDefault: true }),
+      });
+      setStatus(status, "Default actualizado.");
+      await loadCvs();
+    } catch (err) {
+      setStatus(status, err.message || "Error", true);
+    }
+    return;
+  }
+
+  if (btn.dataset.action === "edit") {
+    const label = prompt("Etiqueta para matching", row.querySelector(".config-row__meta")?.textContent || "");
+    if (label == null) return;
+    const empleoProfileId = prompt("ID perfil empleo (vacío = ninguno)", "") ?? "";
+    try {
+      await apiJson(`/api/config/cvs/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          label: label.trim(),
+          empleoProfileId: empleoProfileId.trim() || "",
+        }),
+      });
+      setStatus(status, "CV actualizado.");
+      await loadCvs();
+    } catch (err) {
+      setStatus(status, err.message || "Error", true);
+    }
+    return;
+  }
+
+  if (btn.dataset.action === "archive") {
+    const archived = !row.classList.contains("config-row--archived");
+    try {
+      await apiJson(`/api/config/cvs/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ archived }),
+      });
+      setStatus(status, archived ? "Archivado." : "Restaurado.");
+      await loadCvs();
+    } catch (err) {
+      setStatus(status, err.message || "Error", true);
+    }
+    return;
+  }
+
+  if (btn.dataset.action === "delete") {
+    if (!confirm("¿Eliminar este CV del disco?")) return;
+    try {
+      await apiJson(`/api/config/cvs/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setStatus(status, "Eliminado.");
+      await loadCvs();
+    } catch (err) {
+      setStatus(status, err.message || "Error", true);
+    }
+  }
+});
+
+document.getElementById("cvs-show-archived")?.addEventListener("change", () => {
+  void loadCvs();
 });
 
 activate(panelFromHash());

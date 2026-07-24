@@ -17,21 +17,42 @@ alwaysApply: true
   - Repo: `gabrielagarayzavalia/GGZenLab-Portfolio`
   - Sitio live: `https://gabrielagarayzavalia.github.io/GGZenLab-Portfolio/`
 
+## Dimensión Proyecto (obligatoria)
+
+Un solo GitHub Project: **GGZenLab QA Portfolio** ([projects/2](https://github.com/users/gabrielagarayzavalia/projects/2)).
+Todo ítem nuevo (feature / bug / mejora) exige **antes de crear**:
+
+1. **Proyecto** (field del board) + label `mini-project:*` del mismo catálogo
+2. **Tipo** (feature / bug / mejora)
+3. **Prioridad**
+
+| Proyecto | Label | Carpeta |
+|----------|-------|---------|
+| `job-hunter` | `mini-project:job-hunter` | `projects/qa-job-hunter` |
+| `mapa-corrupcion` | `mini-project:mapa-corrupcion` | `projects/mapa-corrupcion-tierras` |
+| `api-testing` | `mini-project:api` | `projects/api-testing` |
+| `performance` | `mini-project:perf` | `projects/performance-jmeter` |
+| `sql-lab` | `mini-project:sql-lab` | `projects/sql-lab` |
+| `labs` | `mini-project:labs` | `projects/labs` |
+| `portfolio-skills` | `mini-project:portfolio` | Skills B-01…B-05, site, agile, docs monorepo |
+
+Backfill: `scripts/backfill-proyecto-field.ps1`. Vistas filtradas se configuran en la UI (la API no crea views).
+
 ## Revisar el backlog antes de arrancar (reutilizar conocimiento)
 
 Antes de investigar, diseñar labs o implementar features/issues, **revisá el backlog** para reutilizar lo ya estudiado/investigado y no repetir trabajo. Fuentes, en orden:
 
-1. **Backlog raíz del monorepo:** [`BACKLOG.md`](../../BACKLOG.md) — estado global (Published / In progress / Planned), IDs `P-*` y `B-*`.
+1. **Backlog raíz (índice):** [`BACKLOG.md`](../../BACKLOG.md) — catálogo Proyecto + skills Published / In progress / Planned.
 2. **Backlog del subproyecto** correspondiente, p. ej.:
    - [`projects/qa-job-hunter/BACKLOG.md`](../../projects/qa-job-hunter/BACKLOG.md)
    - [`projects/qa-job-hunter/BACKLOG-REFINED.md`](../../projects/qa-job-hunter/BACKLOG-REFINED.md) (stories refinadas + IDs de GitHub)
-3. **Issues/Projects en GitHub** del repo canónico (labels, épicas, user stories) cuando la tarea mapea a issues (`#NN`).
+3. **Issues/Projects en GitHub** del repo canónico (field **Proyecto**, labels `mini-project:*`, épicas, user stories) cuando la tarea mapea a issues (`#NN`).
 4. Vista publicada del backlog: `docs/backlog/index.html`.
 
 ### Cómo usarlo
 
 - Buscá el **ID** (`B-06`, `P-JH-…`, `#NN`) o el tema en esos archivos **antes** de empezar; si ya hay decisión, diseño o investigación previa, **continuá desde ahí** en vez de reabrir el análisis.
 - Si trabajás en un subproyecto, priorizá su backlog local; el raíz es el índice general.
-- Al cerrar una tarea, **actualizá el estado** en el backlog correspondiente (mové el ítem a Done / linkeá el PR o issue).
+- Al cerrar una tarea, **actualizá el estado** en el backlog correspondiente (mové el ítem a Done / linkeá el PR o issue) y mantené field **Proyecto** + label coherentes.
 
-> El agente **"Backlog features and issues"** debe apoyarse en estas fuentes como memoria del proyecto: primero leer el backlog, después proponer/implementar.
+> El agente **"Backlog features and issues"** debe apoyarse en estas fuentes como memoria del proyecto: primero leer el backlog, después proponer/implementar. Nunca crear un ítem sin **Proyecto**.

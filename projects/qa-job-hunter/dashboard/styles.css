@@ -270,6 +270,28 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem;
   font-size: 0.85rem; color: var(--text-muted); cursor: pointer;
 }
+.config-dialog {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--text);
+  padding: 0; max-width: min(28rem, calc(100vw - 2rem));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.config-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.config-dialog__form {
+  display: grid; gap: 0.75rem; padding: 1.25rem 1.35rem 1.1rem;
+}
+.config-dialog__title {
+  margin: 0; font-size: 1.05rem; line-height: 1.35;
+}
+.config-dialog__hint {
+  margin: 0; font-size: 0.8rem; color: var(--text-muted);
+}
+.config-dialog__actions {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end;
+  margin-top: 0.25rem;
+}
 @media (max-width: 720px) {
   .config-layout { grid-template-columns: 1fr; }
   .config-sidebar {

@@ -24,6 +24,7 @@
     "agent:gmail-reconcile": "npx tsx agents/gmail-reconcile/run.ts",
     "test:apply-notes": "npx tsx --test tests/apply/failed-fields-notes.test.ts",
     "test:unknown-strategy": "npx tsx --test tests/apply/unknown-field-strategy.test.ts",
+    "test:config-answer-ui": "npx tsx --test tests/dashboard/config-answer-strategies.test.ts",
     "test:timing": "npx tsx --test tests/apply/timing.test.ts",
     "test:prefill-fast": "npx tsx --test tests/apply/prefill-fast-path.test.ts",
     "test:resume-contract": "npx tsx --test tests/apply/resume-contract.test.ts",

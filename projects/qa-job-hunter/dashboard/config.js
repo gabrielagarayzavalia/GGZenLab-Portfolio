@@ -2,6 +2,8 @@
  * Config shell + Fuentes/Sitios (B18-01 / B18-05 / B18-07).
  */
 
+import { resolveAnswerStrategy } from "./config-answer-strategies.js";
+
 const tabs = [...document.querySelectorAll(".config-tab")];
 const panels = [...document.querySelectorAll(".config-panel")];
 
@@ -66,8 +68,69 @@ function activate(panelId) {
   if (panelId === "preguntas") void loadPreguntas();
   if (panelId === "puestos") void loadPuestos();
   if (panelId === "empleo") void loadEmpleo();
-  if (panelId === "cvs") void loadCvs();
+  if (panelId === "cvs")   void loadCvs();
 }
+
+/** Cache de preguntas cargadas (id → objeto completo para Strategy UI). */
+const preguntasById = new Map();
+
+const answerDialog = document.getElementById("pregunta-answer-dialog");
+const answerForm = document.getElementById("pregunta-answer-form");
+const answerTitle = document.getElementById("pregunta-answer-title");
+const answerMeta = document.getElementById("pregunta-answer-meta");
+const answerHint = document.getElementById("pregunta-answer-hint");
+const answerField = document.getElementById("pregunta-answer-field");
+let answerDialogQuestionId = null;
+let answerDialogStrategy = null;
+
+function openAnswerDialog(question) {
+  if (!answerDialog || !answerField) return;
+  answerDialogQuestionId = question.id;
+  answerDialogStrategy = resolveAnswerStrategy(question);
+  if (answerTitle) answerTitle.textContent = question.label;
+  if (answerMeta) {
+    answerMeta.textContent = [question.kind, question.required ? "req" : "opc", question.origin]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (answerHint) answerHint.textContent = answerDialogStrategy.hint || "";
+  answerDialogStrategy.mount(answerField, { currentAnswer: question.answer || "" });
+  answerDialog.showModal();
+  const focusable = answerField.querySelector("select, input");
+  focusable?.focus();
+}
+
+document.getElementById("pregunta-answer-cancel")?.addEventListener("click", () => {
+  answerDialog?.close();
+  answerDialogQuestionId = null;
+  answerDialogStrategy = null;
+});
+
+answerForm?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const status = document.getElementById("preguntas-status");
+  const id = answerDialogQuestionId;
+  const strategy = answerDialogStrategy;
+  if (!id || !strategy || !answerField) return;
+  const answer = strategy.readValue(answerField);
+  if (!answer) {
+    setStatus(status, "Elegí o escribí una respuesta.", true);
+    return;
+  }
+  try {
+    await apiJson(`/api/config/questions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answer }),
+    });
+    answerDialog?.close();
+    answerDialogQuestionId = null;
+    answerDialogStrategy = null;
+    setStatus(status, "Respuesta guardada.");
+    await loadPreguntas();
+  } catch (err) {
+    setStatus(status, err.message || "No se pudo guardar", true);
+  }
+});
 
 function panelFromHash() {
   const raw = (location.hash || "").replace(/^#/, "").trim();
@@ -308,11 +371,13 @@ document.getElementById("sitios-show-archived")?.addEventListener("change", () =
 
 function rowPregunta(q) {
   const badge = q.status === "unanswered" ? "sin respuesta" : q.status;
+  const optCount = Array.isArray(q.options) ? q.options.filter(Boolean).length : 0;
   const meta = [
     q.kind,
     q.required ? "req" : "opc",
     badge,
     q.origin === "auto_apply" ? "auto" : "manual",
+    optCount > 0 ? `${optCount} opts` : null,
     q.lastCompany ? `@ ${q.lastCompany}` : null,
   ]
     .filter(Boolean)
@@ -343,6 +408,8 @@ async function loadPreguntas() {
     const items = onlyUnanswered
       ? data.questions
       : data.questions.filter((x) => x.status !== "archived");
+    preguntasById.clear();
+    for (const q of items) preguntasById.set(q.id, q);
     list.innerHTML =
       items.map(rowPregunta).join("") ||
       "<li class=\"config-row\">Sin preguntas aún. Aparecen solas en apply (#154) o agregá abajo.</li>";
@@ -386,19 +453,12 @@ document.getElementById("preguntas-list")?.addEventListener("click", async (ev) 
   if (!id) return;
 
   if (btn.dataset.action === "answer") {
-    const current = row.querySelector(".config-row__meta + .config-row__meta")?.textContent?.replace(/^→\s*/, "") || "";
-    const answer = prompt("Respuesta para reintentar apply", current);
-    if (answer == null) return;
-    try {
-      await apiJson(`/api/config/questions/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ answer: answer.trim() }),
-      });
-      setStatus(status, "Respuesta guardada.");
-      await loadPreguntas();
-    } catch (err) {
-      setStatus(status, err.message || "No se pudo guardar", true);
+    const question = preguntasById.get(id);
+    if (!question) {
+      setStatus(status, "Recargá la lista (F5).", true);
+      return;
     }
+    openAnswerDialog(question);
     return;
   }
 

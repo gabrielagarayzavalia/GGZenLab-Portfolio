@@ -84,13 +84,16 @@ import {
   waitForEasyApplyStepSettle,
 } from "./apply/timing.js";
 import {
-  collectUnknownQuestions,
   formatFailedFieldsNotes,
   logRunUnknownQuestions,
   recordJobUnknownQuestions,
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import {
+  applyUnknownPolicyToJob,
+  evaluateUnknownFields,
+} from "./apply/unknown-field-strategy.js";
 import { setApplicationStatus } from "./application-status.js";
 
 /** Frena toda la corrida: hay Easy Apply pero no entramos al modal. */
@@ -588,11 +591,52 @@ async function dryRunThroughModal(
     logFieldInventory(inventory);
     perf?.start(pageLabelFromInventory(i + 1, inventory));
 
-    const unknowns = collectUnknownQuestions(inventory);
-    if (unknowns.length > 0) {
-      const notes = recordJobUnknownQuestions(jobId, company, jobTitle, unknowns);
-      updateQueueRow(jobId, { notes });
-      console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+    const unknownDecision = evaluateUnknownFields(inventory);
+    if (unknownDecision.hits.length > 0 || unknownDecision.notes) {
+      const notes = applyUnknownPolicyToJob(
+        { jobId, company, title: jobTitle },
+        unknownDecision,
+        recordJobUnknownQuestions
+      );
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        notes: notes || unknownDecision.notes,
+      });
+      console.log(
+        `   📝 ${unknownDecision.hits.length} pregunta(s) → Notas + banco Config` +
+          (unknownDecision.pendingLabels.length
+            ? ` (pending req: ${unknownDecision.pendingLabels.length})`
+            : "")
+      );
+    }
+
+    if (unknownDecision.action === "leave_pending") {
+      perf?.end();
+      const labels = [
+        ...unansweredAcc,
+        ...unknownDecision.pendingLabels,
+        ...unknownDecision.hits.map((h) => h.label),
+      ];
+      unansweredAcc.push(...unknownDecision.pendingLabels);
+      const notes =
+        unknownDecision.notes ||
+        formatFailedFieldsNotes(unknownDecision.pendingLabels) ||
+        "Required desconocido (dry-run #154)";
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        easyApply: "yes",
+        reason: "Dry-run: required desconocido — pendiente + banco; continuar cola",
+        notes,
+      });
+      await saveDebugScreenshot(page, jobId, "unknown-required");
+      await dismissEasyApplyModal(page);
+      console.log(
+        `   ⏭ Dry-run soft: leave_pending (#154) → pendiente + banco; sigo cola`
+      );
+      return {
+        outcome: "unanswered",
+        unansweredLabels: [...new Set(labels.filter(Boolean))],
+      };
     }
 
     // Vacíos required del inventario → acumular (aunque el paso aún avance)
@@ -1000,7 +1044,7 @@ async function main() {
     `\nResumen dry-run: dry_ok=${dryOk} unanswered=${dryUnanswered} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
   );
   if (unansweredByJob.length > 0) {
-    console.log("\nCampos sin respuesta (dry-run):");
+    console.log("\nCampos sin respuesta (dry-run) — completar en Config → Preguntas:");
     for (const u of unansweredByJob) {
       console.log(`  · job ${u.jobId}:`);
       for (const l of u.labels.slice(0, 20)) console.log(`      - ${l}`);

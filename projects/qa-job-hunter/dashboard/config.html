@@ -34,15 +34,27 @@
     <main class="config-main" aria-label="Contenido de configuración">
       <section class="config-panel" id="panel-preguntas" role="tabpanel" aria-labelledby="tab-preguntas">
         <h1>Preguntas de formularios</h1>
-        <p class="config-panel__lead">Respuestas Easy Apply: captura automática + alta manual.</p>
-        <div class="config-placeholder">
-          <strong>Placeholder B18-02</strong> — CRUD + captura desde apply.
-          <ul>
-            <li>Listar preguntas capturadas en apply</li>
-            <li>Agregar / editar / archivar a mano</li>
-            <li>Task: <code>#97</code></li>
-          </ul>
-        </div>
+        <p class="config-panel__lead">
+          Banco Easy Apply: captura automática sin respuesta (#154) + alta manual. Completá acá para reintentar pendientes.
+        </p>
+        <p class="config-status" id="preguntas-status" hidden></p>
+        <label class="config-check" style="margin-top:0;margin-bottom:0.75rem">
+          <input type="checkbox" id="preguntas-only-unanswered" checked />
+          Solo sin respuesta
+        </label>
+        <ul class="config-list" id="preguntas-list" aria-live="polite"></ul>
+        <form class="config-form" id="preguntas-form" autocomplete="off">
+          <h2 class="config-form__title">Alta manual</h2>
+          <label class="config-field">
+            <span>Pregunta</span>
+            <input name="label" type="text" required maxlength="200" placeholder="Ej. ¿Hablás portugués?" />
+          </label>
+          <label class="config-field">
+            <span>Respuesta (opcional)</span>
+            <input name="answer" type="text" maxlength="400" placeholder="Dejar vacío = unanswered" />
+          </label>
+          <button type="submit" class="config-btn">Agregar</button>
+        </form>
       </section>
 
       <section class="config-panel" id="panel-cvs" role="tabpanel" aria-labelledby="tab-cvs" hidden>

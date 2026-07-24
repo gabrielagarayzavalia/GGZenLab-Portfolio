@@ -21,6 +21,7 @@ function activate(panelId) {
   }
   if (panelId === "fuentes") void loadFuentes();
   if (panelId === "sitios") void loadSitios();
+  if (panelId === "preguntas") void loadPreguntas();
 }
 
 function panelFromHash() {
@@ -253,6 +254,116 @@ document.getElementById("sitios-form")?.addEventListener("submit", async (ev) =>
 
 document.getElementById("sitios-show-archived")?.addEventListener("change", () => {
   void loadSitios();
+});
+
+function rowPregunta(q) {
+  const badge = q.status === "unanswered" ? "sin respuesta" : q.status;
+  const meta = [
+    q.kind,
+    q.required ? "req" : "opc",
+    badge,
+    q.origin === "auto_apply" ? "auto" : "manual",
+    q.lastCompany ? `@ ${q.lastCompany}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const answerPreview = q.answer
+    ? `<p class="config-row__meta">→ ${esc(q.answer)}</p>`
+    : "";
+  return `<li class="config-row" data-id="${esc(q.id)}">
+    <span class="config-row__name">${esc(q.label)}</span>
+    <p class="config-row__meta">${esc(meta)}</p>
+    ${answerPreview}
+    <div class="config-row__actions">
+      <button type="button" class="config-btn config-btn--ghost" data-action="answer">Responder</button>
+      <button type="button" class="config-btn config-btn--ghost" data-action="archive">Archivar</button>
+    </div>
+  </li>`;
+}
+
+async function loadPreguntas() {
+  const list = document.getElementById("preguntas-list");
+  const status = document.getElementById("preguntas-status");
+  const onlyUnanswered = document.getElementById("preguntas-only-unanswered")?.checked;
+  if (!list) return;
+  setStatus(status, "Cargando…");
+  try {
+    const q = onlyUnanswered ? "?status=unanswered" : "?archived=1";
+    const data = await apiJson(`/api/config/questions${q}`);
+    const items = onlyUnanswered
+      ? data.questions
+      : data.questions.filter((x) => x.status !== "archived");
+    list.innerHTML =
+      items.map(rowPregunta).join("") ||
+      "<li class=\"config-row\">Sin preguntas aún. Aparecen solas en apply (#154) o agregá abajo.</li>";
+    setStatus(status, "");
+  } catch (err) {
+    setStatus(status, err.message || "Error al cargar", true);
+  }
+}
+
+document.getElementById("preguntas-only-unanswered")?.addEventListener("change", () => {
+  void loadPreguntas();
+});
+
+document.getElementById("preguntas-form")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const status = document.getElementById("preguntas-status");
+  const fd = new FormData(form);
+  try {
+    await apiJson("/api/config/questions", {
+      method: "POST",
+      body: JSON.stringify({
+        label: String(fd.get("label") || ""),
+        answer: String(fd.get("answer") || "") || undefined,
+      }),
+    });
+    form.reset();
+    setStatus(status, "Pregunta agregada.");
+    await loadPreguntas();
+  } catch (err) {
+    setStatus(status, err.message || "No se pudo agregar", true);
+  }
+});
+
+document.getElementById("preguntas-list")?.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-action]");
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const row = btn.closest("[data-id]");
+  const id = row?.dataset.id;
+  const status = document.getElementById("preguntas-status");
+  if (!id) return;
+
+  if (btn.dataset.action === "answer") {
+    const current = row.querySelector(".config-row__meta + .config-row__meta")?.textContent?.replace(/^→\s*/, "") || "";
+    const answer = prompt("Respuesta para reintentar apply", current);
+    if (answer == null) return;
+    try {
+      await apiJson(`/api/config/questions/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ answer: answer.trim() }),
+      });
+      setStatus(status, "Respuesta guardada.");
+      await loadPreguntas();
+    } catch (err) {
+      setStatus(status, err.message || "No se pudo guardar", true);
+    }
+    return;
+  }
+
+  if (btn.dataset.action === "archive") {
+    try {
+      await apiJson(`/api/config/questions/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "archived" }),
+      });
+      setStatus(status, "Archivada.");
+      await loadPreguntas();
+    } catch (err) {
+      setStatus(status, err.message || "No se pudo archivar", true);
+    }
+  }
 });
 
 activate(panelFromHash());

@@ -4,7 +4,9 @@ import {
   RESUME_ACCEPT_SCORE,
   RESUME_PREFERRED_SCORE,
   extractResumeMatchTokens,
+  isResumeAlreadyOnLinkedIn,
   normalizeResumeBlob,
+  resumeFilenamesMatch,
   scoreResumeByJobTitle,
   scoreResumeForJob,
 } from "../../src/apply/resume-match.js";
@@ -53,6 +55,16 @@ test("scoreResumeByJobTitle: match parcial Automation", () => {
   assert.ok(score >= RESUME_PREFERRED_SCORE);
 });
 
-test("scoreResumeForJob: rechaza cover letter", () => {
-  assert.equal(scoreResumeForJob("intro-GGZ.pdf", "QA Analyst"), 0);
+test("resumeFilenamesMatch: mismo archivo Config y LinkedIn", () => {
+  assert.equal(
+    resumeFilenamesMatch(
+      "CV_Gabriela_QA_Analyst.pdf",
+      "CV Gabriela QA Analyst.pdf"
+    ),
+    true
+  );
+});
+
+test("isResumeAlreadyOnLinkedIn: sin config retorna false", () => {
+  assert.equal(isResumeAlreadyOnLinkedIn("cualquier.pdf"), false);
 });

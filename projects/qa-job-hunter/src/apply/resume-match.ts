@@ -1,6 +1,7 @@
 /**
  * Scoring de CV en LinkedIn por nombre de archivo + título del aviso (#211).
- * Comparación parcial (tokens del puesto) y fallback al CV default de Config.
+ * Comparación parcial (tokens del puesto). Si Config y LinkedIn tienen el mismo
+ * archivo → usar el de LinkedIn (no re-subir; #247).
  */
 
 import {
@@ -9,11 +10,11 @@ import {
   scoreResumeForRole,
   type ApplyRoleKind,
 } from "./canonical-text.js";
-import { getDefaultCv, listCvs } from "../config/cvs-store.js";
+import { getDefaultCv, listCvs, type ConfigCv } from "../config/cvs-store.js";
 
 export const RESUME_ACCEPT_SCORE = 50;
 export const RESUME_PREFERRED_SCORE = 70;
-/** Si top1 y top2 están a menos de esto → usar CV default de Config. */
+/** Dos CVs distintos en LinkedIn con score parecido → preferir el default de Config. */
 export const RESUME_AMBIGUITY_DELTA = 15;
 
 export function normalizeResumeBlob(blob: string): string {
@@ -23,6 +24,26 @@ export function normalizeResumeBlob(blob: string): string {
     .replace(/[_\-.]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Mismo PDF en Config y en LinkedIn (comparación parcial del nombre). */
+export function resumeFilenamesMatch(a: string, b: string): boolean {
+  const na = normalizeResumeBlob(a);
+  const nb = normalizeResumeBlob(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+/** CV de Config que ya está en LinkedIn (mismo filename) — no hace falta upload. */
+export function findConfigCvOnLinkedIn(linkedinFilename: string): ConfigCv | null {
+  for (const cv of listCvs()) {
+    if (resumeFilenamesMatch(linkedinFilename, cv.originalName)) return cv;
+  }
+  return null;
+}
+
+export function isResumeAlreadyOnLinkedIn(linkedinFilename: string): boolean {
+  return findConfigCvOnLinkedIn(linkedinFilename) !== null;
 }
 
 /** Tokens del título del aviso que deben aparecer en el filename (parcial). */
@@ -72,10 +93,7 @@ export function scoreResumeFromConfig(blob: string, jobTitle: string): number {
     const on = normalizeResumeBlob(cv.originalName);
     if (!on) continue;
     const sameFile =
-      file === on ||
-      file.includes(on) ||
-      on.includes(file) ||
-      normalizeResumeBlob(blob).includes(on);
+      resumeFilenamesMatch(blob, cv.originalName);
     if (!sameFile) continue;
     const titleScore = scoreResumeByJobTitle(cv.originalName, jobTitle);
     const boost = cv.isDefault && titleScore < RESUME_ACCEPT_SCORE ? RESUME_ACCEPT_SCORE : titleScore + 5;
@@ -108,7 +126,7 @@ export function isPreferredResumeFilename(
   return RESUME_FALLBACK_MATCH.test(blob || "");
 }
 
-/** Si hay empate/confusión, nombre de archivo del CV default en Config. */
+/** Nombre del CV default en Config (desempate entre CVs distintos en LinkedIn). */
 export function defaultResumeFilenameHint(): string | null {
   const d = getDefaultCv();
   return d?.originalName?.trim() || null;

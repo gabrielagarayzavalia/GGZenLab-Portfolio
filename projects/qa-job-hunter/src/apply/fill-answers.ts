@@ -44,6 +44,7 @@ import {
   RESUME_AMBIGUITY_DELTA,
   defaultResumeFilenameHint,
   normalizeResumeBlob,
+  resumeFilenamesMatch,
   scoreResumeForJob,
 } from "./resume-match.js";
 
@@ -2366,16 +2367,16 @@ function pickBestResumeCandidate(
   if (best.score < RESUME_ACCEPT_SCORE) return null;
 
   const ties = scored.filter((s) => s.score >= RESUME_ACCEPT_SCORE);
-  if (ties.length > 1 && best.score - second < RESUME_AMBIGUITY_DELTA) {
+  // Solo CVs distintos en LinkedIn con score parecido; mismo archivo → ya está en la lista.
+  const distinctTies = ties.filter(
+    (c, i, arr) => arr.findIndex((x) => resumeFilenamesMatch(x.label, c.label)) === i
+  );
+  if (distinctTies.length > 1 && best.score - second < RESUME_AMBIGUITY_DELTA) {
     const hint = defaultResumeFilenameHint();
     if (hint) {
-      const defNorm = normalizeResumeBlob(hint);
-      const defPick = ties.find((s) => {
-        const fn = normalizeResumeBlob(s.label);
-        return fn.includes(defNorm) || defNorm.includes(fn);
-      });
+      const defPick = distinctTies.find((s) => resumeFilenamesMatch(s.label, hint));
       if (defPick) {
-        console.log(`   ↳ Resume: empate → default Config (${hint})`);
+        console.log(`   ↳ Resume: rol ambiguo → default Config (${hint})`);
         return defPick;
       }
     }

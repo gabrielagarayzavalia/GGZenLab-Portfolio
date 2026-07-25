@@ -12,11 +12,24 @@ import {
 const MATCHED_FILE = path.join("data", "matched.json");
 const ALL_MATCHES_FILE = path.join("data", "all-matches.json");
 
-/** `TRACKER_DUAL_WRITE_PIPELINE=0` desactiva sync post-pipeline (default: activo). */
-export function isPipelineDualWriteEnabled(): boolean {
-  const raw = (process.env.TRACKER_DUAL_WRITE_PIPELINE ?? "1").trim().toLowerCase();
+/**
+ * Dual-write pipeline → Mongo tracker (B-38-5).
+ * `TRACKER_DUAL_WRITE=1` (default) | `0` para omitir.
+ * Alias legacy: `TRACKER_DUAL_WRITE_PIPELINE`.
+ */
+export function isTrackerDualWriteEnabled(): boolean {
+  const raw = (
+    process.env.TRACKER_DUAL_WRITE ??
+    process.env.TRACKER_DUAL_WRITE_PIPELINE ??
+    "1"
+  )
+    .trim()
+    .toLowerCase();
   return raw !== "0" && raw !== "false" && raw !== "no";
 }
+
+/** @deprecated Usar isTrackerDualWriteEnabled */
+export const isPipelineDualWriteEnabled = isTrackerDualWriteEnabled;
 
 export function resolveMatchedJsonPath(appliedListRoot = resolveAppliedListRoot()): string {
   const matched = path.join(appliedListRoot, MATCHED_FILE);
@@ -29,17 +42,18 @@ export function resolveMatchedJsonPath(appliedListRoot = resolveAppliedListRoot(
   );
 }
 
+/** Lee MatchResult[] desde applied-list (mismo input que sync-excel.ts). */
 export function loadPipelineMatches(appliedListRoot = resolveAppliedListRoot()): PipelineMatchResult[] {
   const src = resolveMatchedJsonPath(appliedListRoot);
   const all = JSON.parse(fs.readFileSync(src, "utf-8")) as PipelineMatchResult[];
   return all.filter(shouldSyncPipelineMatch);
 }
 
-export async function syncPipelineMatchesToTracker(
+export async function syncPipelineToTracker(
   appliedListRoot = resolveAppliedListRoot()
 ): Promise<PipelineUpsertResult | null> {
-  if (!isPipelineDualWriteEnabled()) {
-    console.log("⏭  Tracker dual-write pipeline omitido (TRACKER_DUAL_WRITE_PIPELINE=0).");
+  if (!isTrackerDualWriteEnabled()) {
+    console.log("⏭  Tracker dual-write omitido (TRACKER_DUAL_WRITE=0).");
     return null;
   }
 
@@ -62,9 +76,16 @@ export async function syncPipelineMatchesToTracker(
   }
 }
 
-const isMain = Boolean(process.argv[1]?.includes("sync-pipeline-matches"));
+/** @deprecated Usar syncPipelineToTracker */
+export const syncPipelineMatchesToTracker = syncPipelineToTracker;
+
+import { fileURLToPath } from "url";
+
+const isMain =
+  process.argv[1] != null &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) {
-  syncPipelineMatchesToTracker().catch((err) => {
+  syncPipelineToTracker().catch((err) => {
     console.error(err);
     process.exit(1);
   });

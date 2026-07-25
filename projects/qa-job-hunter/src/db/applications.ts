@@ -10,6 +10,7 @@ import {
   pipelineMatchToApplicationInput,
   type PipelineMatchResult,
 } from "../tracker/pipeline-match.js";
+import { planAutomationUpsert } from "../tracker/automation-merge.js";
 import { isProtectedEstado } from "../tracker/protected-estado.js";
 import { getDb } from "./client.js";
 
@@ -209,41 +210,53 @@ export async function patchApplication(
 export async function upsertApplicationsBulk(
   inputs: UpsertApplicationInput[],
   source: TrackerWriteSource = "import"
-): Promise<{ upserted: number; modified: number }> {
+): Promise<{ upserted: number; modified: number; skipped: number }> {
   const db = getDb();
+  const col = db.collection<ApplicationDoc>("applications");
   let upserted = 0;
   let modified = 0;
+  let skipped = 0;
   const now = new Date();
 
   for (const input of inputs) {
     const { patch } = applyTrackerPatch(input, source === "import" ? "import" : source);
     const merged = { ...input, ...patch };
     const fields = buildDocFields(merged, now);
-    const { createdAt, ...setFields } = fields;
-    const filter =
-      fields.linkedinUrlNorm
-        ? { linkedinUrlNorm: fields.linkedinUrlNorm }
-        : fields.jobId
-          ? { jobId: fields.jobId }
-          : {
-              puesto: fields.puesto,
-              empresa: fields.empresa,
-            };
+    const filter = applicationFilter(fields);
 
-    const result = await db.collection<ApplicationDoc>("applications").updateOne(
-      filter,
-      {
-        $set: { ...setFields, updatedAt: now },
-        $setOnInsert: { createdAt: now },
-      },
-      { upsert: true }
-    );
+    const existing = await col.findOne(filter);
+    if (existing && isProtectedEstado(existing.estado) && source !== "user") {
+      skipped++;
+      continue;
+    }
 
-    if (result.upsertedCount > 0) upserted++;
-    else if (result.modifiedCount > 0) modified++;
+    if (!existing) {
+      await col.insertOne({
+        _id: new ObjectId(),
+        ...fields,
+        createdAt: now,
+        updatedAt: now,
+      });
+      upserted++;
+      continue;
+    }
+
+    const { createdAt, estado, ...setFields } = fields;
+    const update: Partial<ApplicationDoc> = {
+      ...setFields,
+      updatedAt: now,
+      updatedBy: source === "import" ? "import" : source,
+    };
+    if (!existing.estado?.trim() && estado) {
+      update.estado = estado;
+    }
+
+    const result = await col.updateOne({ _id: existing._id }, { $set: update });
+    if (result.modifiedCount > 0) modified++;
+    else skipped++;
   }
 
-  return { upserted, modified };
+  return { upserted, modified, skipped };
 }
 
 export async function countApplications(): Promise<number> {
@@ -265,7 +278,7 @@ function applicationFilter(fields: ReturnType<typeof buildDocFields>) {
 
 /**
  * Dual-write pipeline → Mongo (B-38-5).
- * Espeja lógica excel/upsert: insert Pendiente; update solo si estado no protegido.
+ * Usa planAutomationUpsert: insert Pendiente; update solo si estado no protegido.
  */
 export async function upsertPipelineMatches(
   matches: PipelineMatchResult[]
@@ -283,46 +296,29 @@ export async function upsertPipelineMatches(
     const filter = applicationFilter(fields);
 
     const existing = await col.findOne(filter);
+    const plan = planAutomationUpsert(existing, fields, "pipeline");
 
-    if (!existing) {
+    if (plan.action === "skip") {
+      skipped++;
+      continue;
+    }
+
+    if (plan.action === "insert") {
       await col.insertOne({
         _id: new ObjectId(),
-        ...fields,
+        ...plan.fields,
         createdAt: now,
         updatedAt: now,
+        updatedBy: "pipeline",
       });
       inserted++;
       continue;
     }
 
-    if (isProtectedEstado(existing.estado)) {
-      skipped++;
-      continue;
-    }
-
-    const update: Partial<ApplicationDoc> = {
-      matchPercent: fields.matchPercent,
-      puesto: fields.puesto,
-      empresa: fields.empresa,
-      linkedinUrl: fields.linkedinUrl,
-      linkedinUrlNorm: fields.linkedinUrlNorm,
-      jobId: fields.jobId,
-      gmailId: fields.gmailId ?? existing.gmailId,
-      canal: fields.canal,
-      cvType: fields.cvType ?? existing.cvType,
-      applyType: fields.applyType ?? existing.applyType,
-      proximoPaso: existing.proximoPaso?.trim()
-        ? existing.proximoPaso
-        : fields.proximoPaso,
-      updatedAt: now,
-      updatedBy: "pipeline",
-    };
-
-    if (!existing.estado?.trim()) {
-      update.estado = "Pendiente";
-    }
-
-    const result = await col.updateOne({ _id: existing._id }, { $set: update });
+    const result = await col.updateOne(
+      { _id: existing!._id },
+      { $set: { ...plan.update, updatedAt: now } }
+    );
     if (result.modifiedCount > 0) updated++;
     else skipped++;
   }

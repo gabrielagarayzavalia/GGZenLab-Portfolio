@@ -1,8 +1,8 @@
 import { runAppliedListScript } from "./applied-list.js";
-import { syncPipelineMatchesToTracker } from "../tracker/sync-pipeline-matches.js";
+import { syncPipelineToTracker } from "../tracker/pipeline-sync.js";
 
 /** run-pipeline (applied-list) + dual-write opcional a Mongo applications. */
 export async function runPipelineWithTrackerDualWrite(): Promise<void> {
   runAppliedListScript("run-pipeline");
-  await syncPipelineMatchesToTracker();
+  await syncPipelineToTracker();
 }

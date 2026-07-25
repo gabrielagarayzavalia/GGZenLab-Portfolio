@@ -23,7 +23,8 @@
  *   NOTIFICATIONS_DISCOVERY  1 (default con gmail) | 0 para omitir post-fetch
  *   NOTIFICATIONS_LOOKBACK_HOURS  default 24 (max 336)
  *   NOTIFICATIONS_MAX_ITEMS       default 5 en campaña
- *   TRACKER_DUAL_WRITE_PIPELINE   1 (default) | 0 omitir sync Mongo post-pipeline
+ *   TRACKER_DUAL_WRITE          1 (default) | 0 omitir sync Mongo post-pipeline
+ *   TRACKER_DUAL_WRITE_PIPELINE alias legacy de TRACKER_DUAL_WRITE
  */
 
 import { spawnSync } from "child_process";

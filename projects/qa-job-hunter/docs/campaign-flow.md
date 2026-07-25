@@ -133,7 +133,11 @@ Detalle flujo apply: [`docs/easy-apply-flow.md`](./easy-apply-flow.md).
 |----------|---------|----------------|
 | `DASHBOARD_PORT` | `3847` | Puerto `serve-dashboard.ts` |
 | `MONGODB_URI` | docker local | Mongo para tracker / jobs |
+| `TRACKER_DUAL_WRITE` | `1` | Tras `run-pipeline` OK: sync `matched.json` → Mongo `applications`. `0` = solo Excel |
+| `TRACKER_DUAL_WRITE_PIPELINE` | — | Alias legacy de `TRACKER_DUAL_WRITE` |
 | `OPEN_DESKTOP_EXCEL` | off (futuro B-38-3) | Abrir Excel mid-campaña; hoy usar `OPEN_EXCEL` al cierre |
+
+**Dual-write pipeline (B-38-5):** lee `APPLIED_LIST_ROOT/data/matched.json` (mismo input que `sync-excel.ts` en applied-list). Umbral sync: **65** (Excel/pipeline). Dashboard match-jobs futuro (#311): **70** — no filtra este sync. Manual: `npm run tracker:sync-pipeline`. Estados protegidos (Enviada, Cerrado, Descartado, Duplicado, Stand-by, Borrador abierto, A-pendiente, A-realizado) no se pisan; bot nunca escribe Descartado.
 
 ### Dashboard `/api/health` — features hardcoded
 

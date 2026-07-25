@@ -1,6 +1,7 @@
 # Spike B38 — Tracker web-first (desktop grid + mobile lite)
 
 **Epic:** [US-JH-B38-0 #264](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264)  
+**Roadmap producto:** [`tracker-web-first-roadmap.md`](./tracker-web-first-roadmap.md)  
 **Rama:** `spike/b38-tracker-web`  
 **Fecha:** 2026-07-25  
 **Repo:** `GGZenLab-Portfolio/projects/qa-job-hunter`

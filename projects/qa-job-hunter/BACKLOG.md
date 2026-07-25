@@ -39,15 +39,35 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 - **Consumo:** preguntas **answered** en Config → `fill-config-bank.ts` en cada paso EA (select/text/radio).
 - Código: `unknown-field-strategy.ts`, `questions-store.ts`, `fill-config-bank.ts`, runners `easy-apply` / `easy-apply-dry-run`.
 
+## Tracker web-first (B-38) — Sprint 2 · High
+
+**Story spike:** [#264 US-JH-B38-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264) · Epic [#125 EPIC-JH-UI](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/125)  
+**Roadmap:** [`docs/tracker-web-first-roadmap.md`](docs/tracker-web-first-roadmap.md) · Spike técnico: [`docs/spike-tracker-web.md`](docs/spike-tracker-web.md)  
+**Línea:** `release/v2` · Rama spike: `spike/b38-tracker-web`
+
+| Fase | ID | GitHub | Notas |
+|------|-----|--------|-------|
+| Spike | B-38-0 | #264 + [#265](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/265)–[#273](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/273) | Inventario, API, PoC grillas, mobile wireframe, migración, go/no-go |
+| MVP desktop | B-38-1 | *(placeholder post-#273)* | `/tracker` + AG Grid CE |
+| Mobile lite | B-38-2 | *(placeholder)* | `/m-lite` cards |
+| Retiro Excel | B-38-3 | *(placeholder)* | Writers applied-list; **supersede futuro** [#131 B-23](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131) |
+
+**Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
+
+**Orden:** B-38 spike **antes** de implementar B-08 / B-14 como listas o stores aparte — tracking y home futura viven en el tracker web.
+
+---
+
 ## Backlog — execution order
 
 | Order | ID | Priority | Scope |
 |-------|-----|----------|--------|
-| 2 | **B-06** | High | MongoDB local + persistence + lab QA database |
+| 1 | **B-38-0** | **High (sprint-2)** | Spike tracker web-first → ver sección arriba |
+| 2 | **B-06** | High | MongoDB local + persistence (**reorientar** a `applications` post B-38) |
 | 3 | **B-13** | **High — priority** | Multi-source jobs (GetOnBoard, Indeed, …) |
 | 4 | B-07 | High | Scheduled agent 3×/day → Mongo (multi-source) |
-| 5 | B-08 | Medium | Application tracking + pipeline dates + dashboard UI |
-| 5b | B-14 | Medium–High | Web site: home + `/run` + `/dashboard` subpages |
+| 5 | B-08 | Medium | Application tracking — **columnas tracker web**, no store aparte (post B-38 spike) |
+| 5b | B-14 | Medium–High | Web site — **home futura puede ser `/tracker`** (post B-38 spike) |
 | 5c | **B-17** | Medium | Página de estadísticas de búsqueda laboral |
 | 6 | B-15 | Medium | CV upload + tailored CV/cover letter (Ollama / Claude / share) |
 | 7 | B-09 | Medium | Generic multi-vertical app (profiles beyond QA) |

@@ -51,11 +51,17 @@ export async function handleTrackerApi(
   const source = isUserRequest(req) ? "user" : "automation";
 
   if (pathname === "/api/tracker/applications" && method === "GET") {
+    const mr = url.searchParams.get("matchRejected");
+    const ila = url.searchParams.get("inLatestAnalysis");
+    const minMatch = url.searchParams.get("minMatchPercent");
     const applications = await listApplications({
       estado: url.searchParams.get("estado") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
       sort: (url.searchParams.get("sort") as "matchPercent" | "updatedAt" | "estado") ?? "matchPercent",
       order: url.searchParams.get("order") === "asc" ? "asc" : "desc",
+      matchRejected: mr === "true" ? true : mr === "false" ? false : undefined,
+      inLatestAnalysis: ila === "true" ? true : ila === "false" ? false : undefined,
+      minMatchPercent: minMatch != null ? Number(minMatch) : undefined,
     });
     sendJson(res, 200, { applications, count: applications.length });
     return true;

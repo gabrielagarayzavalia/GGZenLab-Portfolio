@@ -4,6 +4,8 @@ import type {
   TrackerApplicationPatch,
   TrackerEstado,
 } from "../types/tracker-application.js";
+import type { AnalysisSnapshot } from "../types/dashboard-match.js";
+import { normalizeFeedbackFields } from "../types/dashboard-match.js";
 import { applyTrackerPatch, type TrackerWriteSource } from "../tracker/estado-policy.js";
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import {
@@ -34,6 +36,11 @@ export interface ApplicationDoc {
   misComentarios?: string;
   cvType?: string;
   applyType?: string;
+  analysis?: AnalysisSnapshot;
+  matchRejected?: boolean;
+  matchRejectedReason?: string;
+  matchRejectedAt?: string;
+  inLatestAnalysis?: boolean;
   createdAt: Date;
   updatedAt: Date;
   updatedBy?: string;
@@ -45,12 +52,22 @@ export interface ListApplicationsOptions {
   sort?: "matchPercent" | "updatedAt" | "estado";
   order?: "asc" | "desc";
   limit?: number;
+  /** Filtro dashboard B-38-13 (#311). */
+  matchRejected?: boolean;
+  inLatestAnalysis?: boolean;
+  minMatchPercent?: number;
 }
 
 export interface UpsertApplicationInput
   extends Omit<TrackerApplication, "id" | "createdAt" | "updatedAt"> {}
 
 function toApi(doc: ApplicationDoc): TrackerApplication {
+  const feedback = normalizeFeedbackFields({
+    matchRejected: doc.matchRejected,
+    matchRejectedReason: doc.matchRejectedReason,
+    matchRejectedAt: doc.matchRejectedAt,
+    inLatestAnalysis: doc.inLatestAnalysis,
+  });
   return {
     id: doc._id.toHexString(),
     jobId: doc.jobId,
@@ -68,10 +85,28 @@ function toApi(doc: ApplicationDoc): TrackerApplication {
     misComentarios: doc.misComentarios,
     cvType: doc.cvType,
     applyType: doc.applyType,
+    analysis: doc.analysis,
+    ...feedback,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
     updatedBy: doc.updatedBy,
   };
+}
+
+/** Expuesto para tests B-38-13. */
+export const toTrackerApplication = toApi;
+
+function appendB38Fields(
+  target: Omit<ApplicationDoc, "_id">,
+  input: UpsertApplicationInput
+): void {
+  if (input.analysis !== undefined) target.analysis = input.analysis;
+  if (input.matchRejected !== undefined) target.matchRejected = input.matchRejected;
+  if (input.matchRejectedReason !== undefined) {
+    target.matchRejectedReason = input.matchRejectedReason;
+  }
+  if (input.matchRejectedAt !== undefined) target.matchRejectedAt = input.matchRejectedAt;
+  if (input.inLatestAnalysis !== undefined) target.inLatestAnalysis = input.inLatestAnalysis;
 }
 
 function buildDocFields(
@@ -80,7 +115,7 @@ function buildDocFields(
 ): Omit<ApplicationDoc, "_id"> {
   const linkedinUrl = input.linkedinUrl ?? "";
   const linkedinUrlNorm = normalizeLinkedInUrl(linkedinUrl);
-  return {
+  const doc: Omit<ApplicationDoc, "_id"> = {
     jobId: input.jobId ?? extractJobId(linkedinUrl),
     gmailId: input.gmailId,
     matchPercent: input.matchPercent ?? 0,
@@ -101,6 +136,8 @@ function buildDocFields(
     updatedAt: now,
     updatedBy: input.updatedBy,
   };
+  appendB38Fields(doc, input);
+  return doc;
 }
 
 export async function listApplications(
@@ -111,6 +148,15 @@ export async function listApplications(
 
   if (options.estado) {
     filter.estado = options.estado;
+  }
+  if (options.matchRejected !== undefined) {
+    filter.matchRejected = options.matchRejected;
+  }
+  if (options.inLatestAnalysis !== undefined) {
+    filter.inLatestAnalysis = options.inLatestAnalysis;
+  }
+  if (options.minMatchPercent != null && Number.isFinite(options.minMatchPercent)) {
+    filter.matchPercent = { $gte: options.minMatchPercent };
   }
   if (options.q?.trim()) {
     const q = options.q.trim();

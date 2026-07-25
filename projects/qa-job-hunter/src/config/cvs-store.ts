@@ -21,7 +21,7 @@ export interface ConfigCv {
   /** Nombre en disco (sanitizado). */
   storedName: string;
   originalName: string;
-  /** Etiqueta para matching en Easy Apply (ej. QA_Automation.pdf). */
+  /** Comentario opcional en UI; el matching EA usa `originalName`. */
   label: string;
   mimeType: string;
   sizeBytes: number;

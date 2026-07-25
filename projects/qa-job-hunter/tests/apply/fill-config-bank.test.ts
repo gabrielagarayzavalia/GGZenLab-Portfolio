@@ -13,6 +13,11 @@ import {
   patchQuestion,
   upsertUnansweredFromHits,
 } from "../../src/config/questions-store.js";
+import { pickConfigSelectOption } from "../../src/apply/fill-config-bank.js";
+import {
+  configAnswerToFillText,
+  configAnswerToYearsTarget,
+} from "../../src/apply/fill-config-bank.js";
 
 function field(partial: Partial<CapturedField> & { label: string }): CapturedField {
   return {
@@ -63,4 +68,85 @@ test("matchConfigAnswer encuentra portugués answered", () => {
   assert.equal(decision.pendingLabels.length, 0);
 
   patchQuestion(q!.id, { answer: "", status: "unanswered" });
+});
+
+test("patchQuestion guarda 0 como answered y en options", () => {
+  upsertUnansweredFromHits(
+    [
+      {
+        label: "Years with Apache",
+        kind: "text",
+        required: true,
+        value: "",
+      },
+    ],
+    { jobId: "job-zero" }
+  );
+  const store = loadQuestionsConfig();
+  const q = store.questions.find((x) => /Apache/i.test(x.label));
+  assert.ok(q);
+  patchQuestion(q!.id, { answer: "0" });
+  const after = loadQuestionsConfig().questions.find((x) => x.id === q!.id);
+  assert.equal(after?.status, "answered");
+  assert.equal(after?.answer, "0");
+  assert.ok(after?.options.includes("0"));
+  assert.ok(matchConfigAnswer("Years with Apache"));
+});
+
+test("matchConfigAnswer: años sin skill mapa (Playwriting) con banco", () => {
+  upsertUnansweredFromHits(
+    [
+      {
+        label: "How many years of work experience do you have with Playwriting?",
+        kind: "text",
+        required: true,
+        value: "",
+      },
+    ],
+    { jobId: "job-play" }
+  );
+  const store = loadQuestionsConfig();
+  const q = store.questions.find((x) => /Playwriting/i.test(x.label));
+  assert.ok(q);
+  patchQuestion(q!.id, { answer: "4" });
+  assert.ok(matchConfigAnswer("How many years of work experience do you have with Playwriting?"));
+});
+
+test("pickConfigSelectOption: rango más próximo a años en banco", () => {
+  const opts = [
+    { text: "Select an option", value: "" },
+    { text: "1-2 years", value: "1" },
+    { text: "3-5 years", value: "2" },
+    { text: "6-10 years", value: "3" },
+  ];
+  const forZero = pickConfigSelectOption(opts, "0");
+  assert.ok(forZero);
+  assert.match(forZero!.text, /1-2/);
+
+  const forDash = pickConfigSelectOption(opts, "-");
+  assert.ok(forDash);
+  assert.match(forDash!.text, /1-2/);
+
+  const forFour = pickConfigSelectOption(opts, "4");
+  assert.ok(forFour);
+  assert.match(forFour!.text, /3-5/);
+});
+
+test("configAnswer: - equivale a 0 en fill", () => {
+  assert.equal(configAnswerToYearsTarget("-"), 0);
+  assert.equal(configAnswerToFillText("-"), "0");
+});
+
+test("patchQuestion guarda - como answered", () => {
+  upsertUnansweredFromHits(
+    [{ label: "Years with Tosca", kind: "text", required: true, value: "" }],
+    { jobId: "job-dash" }
+  );
+  const q = loadQuestionsConfig().questions.find((x) => /Tosca/i.test(x.label));
+  assert.ok(q);
+  patchQuestion(q!.id, { answer: "-" });
+  const after = loadQuestionsConfig().questions.find((x) => x.id === q!.id);
+  assert.equal(after?.status, "answered");
+  assert.equal(after?.answer, "-");
+  assert.ok(after?.options.includes("-"));
 });

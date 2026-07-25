@@ -56,6 +56,17 @@ function normalizeKey(label: string): string {
   return normalizeQuestionKey(label);
 }
 
+function hasStoredAnswer(answer: string): boolean {
+  return answer.trim().length > 0;
+}
+
+function mergeAnswerIntoOptions(existing: string[], answer: string): string[] {
+  const a = answer.trim();
+  if (!a) return existing;
+  const set = new Set([...(existing || []), a]);
+  return [...set].slice(0, 40);
+}
+
 export type ConfigAnswerMatch = {
   label: string;
   answer: string;
@@ -75,7 +86,7 @@ function loadAnsweredCache(): Map<string, ConfigAnswerMatch> {
     for (const q of loadQuestionsConfig().questions) {
       if (q.status !== "answered") continue;
       const answer = q.answer.trim();
-      if (!answer) continue;
+      if (!hasStoredAnswer(answer)) continue;
       answeredCache.set(normalizeKey(q.label), {
         label: q.label,
         answer,
@@ -101,14 +112,48 @@ export function matchConfigAnswer(blob: string): ConfigAnswerMatch | null {
   return null;
 }
 
+function hashLabelKey(label: string): string {
+  const key = normalizeKey(label);
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** ID estable por label (evita colisión al truncar «How many years… wi»). */
 function slugId(label: string): string {
-  const base = normalizeKey(label)
+  const slug = normalizeKey(label)
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 48);
-  return `q-${base || "item"}-${Date.now().toString(36)}`;
+    .replace(/^-|-$/g, "");
+  const sig = hashLabelKey(label);
+  if (slug.length <= 40) return `q-${slug}-${sig}`;
+  const head = slug.slice(0, 24);
+  const tail = slug.slice(-16);
+  return `q-${head}-${tail}-${sig}`;
+}
+
+/** Repara ids duplicados (legacy) sin perder respuestas. */
+export function repairDuplicateQuestionIds(store: ConfigQuestionsStore): boolean {
+  const seen = new Set<string>();
+  let changed = false;
+  for (const q of store.questions) {
+    if (!seen.has(q.id)) {
+      seen.add(q.id);
+      continue;
+    }
+    let candidate = slugId(q.label);
+    while (seen.has(candidate)) {
+      candidate = `${candidate}-${Math.random().toString(36).slice(2, 5)}`;
+    }
+    q.id = candidate;
+    seen.add(candidate);
+    changed = true;
+  }
+  return changed;
 }
 
 export function loadQuestionsConfig(): ConfigQuestionsStore {
@@ -116,6 +161,9 @@ export function loadQuestionsConfig(): ConfigQuestionsStore {
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_QUESTIONS_PATH, "utf-8")) as ConfigQuestionsStore;
     if (!raw || !Array.isArray(raw.questions)) return emptyStore();
+    if (repairDuplicateQuestionIds(raw)) {
+      saveQuestionsConfig(raw);
+    }
     return raw;
   } catch {
     return emptyStore();
@@ -169,12 +217,16 @@ export function upsertUnansweredFromHits(
 
     if (existing) {
       if (existing.status === "answered") {
-        // Ya tiene respuesta en banco — no degradar; solo bump seen
+        // Ya tiene respuesta en banco — no degradar; solo bump seen + options capturadas
         existing.seenCount += 1;
         existing.updatedAt = t;
         if (meta.jobId) existing.lastJobId = meta.jobId;
         if (meta.company) existing.lastCompany = meta.company;
         if (meta.title) existing.lastTitle = meta.title;
+        if (hit.options?.length) {
+          const set = new Set([...(existing.options || []), ...hit.options]);
+          existing.options = [...set].slice(0, 40);
+        }
         touched.push(existing);
         continue;
       }
@@ -229,17 +281,22 @@ export function patchQuestion(
   const answer =
     patch.answer !== undefined ? String(patch.answer).trim() : prev.answer;
   let status = patch.status ?? prev.status;
-  if (patch.answer !== undefined && answer && status === "unanswered") {
+  if (patch.answer !== undefined && hasStoredAnswer(answer) && status === "unanswered") {
     status = "answered";
   }
-  if (patch.answer !== undefined && !answer && status === "answered") {
+  if (patch.answer !== undefined && !hasStoredAnswer(answer) && status === "answered") {
     status = "unanswered";
   }
+  const options =
+    patch.answer !== undefined && hasStoredAnswer(answer)
+      ? mergeAnswerIntoOptions(prev.options, answer)
+      : prev.options;
   store.questions[idx] = {
     ...prev,
     label: patch.label?.trim() || prev.label,
     kind: patch.kind?.trim() || prev.kind,
     answer,
+    options,
     status,
     updatedAt: nowIso(),
   };
@@ -264,9 +321,9 @@ export function addManualQuestion(input: {
     kind: input.kind || "text",
     required: !!input.required,
     answer,
-    options: [],
+    options: hasStoredAnswer(answer) ? [answer] : [],
     origin: "manual",
-    status: answer ? "answered" : "unanswered",
+    status: hasStoredAnswer(answer) ? "answered" : "unanswered",
     seenCount: 1,
     createdAt: t,
     updatedAt: t,

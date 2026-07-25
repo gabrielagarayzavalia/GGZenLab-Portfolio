@@ -239,6 +239,7 @@ export function evaluateUnknownFields(fields: CapturedField[]): UnknownFieldsDec
         kind: widget,
         required,
         value: (field.value || "").slice(0, 80),
+        ...(field.options?.length ? { options: field.options } : {}),
       });
     };
 

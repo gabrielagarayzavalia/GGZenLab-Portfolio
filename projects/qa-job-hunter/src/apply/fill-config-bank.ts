@@ -5,10 +5,12 @@
 
 import type { Locator, Page } from "playwright";
 import { matchConfigAnswer } from "../config/questions-store.js";
-import { hasPrefillValue } from "./fill-answers.js";
-
-const EMPTY_SELECT_RE =
-  /select an option|seleccion(a|á)|selecciona una opci|choose|eleg[ií]|elegir/i;
+import { EMPTY_SELECT_RE, hasPrefillValue } from "./field-utils.js";
+import {
+  optionsLookNumeric,
+  parseYearsOptionLabel,
+  pickBestYearsOption,
+} from "./years-option.js";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -87,12 +89,48 @@ function pickOptionByAnswer(
     if (!t || EMPTY_SELECT_RE.test(opt.text)) continue;
     if (t === want) return opt;
   }
-  for (const opt of options) {
-    const t = normalizeOptionText(opt.text);
-    if (!t || EMPTY_SELECT_RE.test(opt.text)) continue;
-    if (t.includes(want) || want.includes(t)) return opt;
+  if (want.length >= 2) {
+    for (const opt of options) {
+      const t = normalizeOptionText(opt.text);
+      if (!t || EMPTY_SELECT_RE.test(opt.text)) continue;
+      if (t.includes(want) || want.includes(t)) return opt;
+    }
   }
   return null;
+}
+
+/**
+ * Elige option en select EA: match exacto/substring o rango numérico más próximo.
+ */
+export function configAnswerToYearsTarget(answer: string): number | null {
+  const t = answer.trim();
+  if (t === "-" || t === "–" || t === "—") return 0;
+  if (/^\d+$/.test(t)) return Number(t);
+  return null;
+}
+
+/** Texto a tipear en input numérico del wizard. */
+export function configAnswerToFillText(answer: string): string {
+  const t = answer.trim();
+  if (t === "-" || t === "–" || t === "—") return "0";
+  return t;
+}
+
+export function pickConfigSelectOption(
+  options: { text: string; value: string | null }[],
+  answer: string
+): { text: string; value: string | null } | null {
+  const target = configAnswerToYearsTarget(answer);
+  if (target !== null && Number.isFinite(target)) {
+    const texts = options.map((o) => o.text);
+    const hasNumeric = options.some((o) => parseYearsOptionLabel(o.text) != null);
+    if (hasNumeric || optionsLookNumeric(texts)) {
+      const picked = pickBestYearsOption(options, target);
+      if (picked) return picked;
+    }
+  }
+
+  return pickOptionByAnswer(options, answer);
 }
 
 async function readSelectOptions(sel: Locator): Promise<{ text: string; value: string | null }[]> {
@@ -151,7 +189,7 @@ async function fillSelectWithAnswer(
     }
   }
 
-  const picked = pickOptionByAnswer(opts, answer);
+  const picked = pickConfigSelectOption(opts, answer);
   if (!picked) {
     console.log(`   ↳ Config [${logLabel}]: sin opción para "${answer.slice(0, 40)}"`);
     return false;
@@ -171,7 +209,7 @@ async function fillTextWithAnswer(el: Locator, answer: string, logLabel: string)
   }
   await el.click({ timeout: 2000 }).catch(() => {});
   await el.fill("");
-  await el.fill(answer);
+  await el.fill(configAnswerToFillText(answer));
   console.log(`   ↳ Config [${logLabel}]: ${answer.slice(0, 60)}`);
   await sleep(200);
   return true;

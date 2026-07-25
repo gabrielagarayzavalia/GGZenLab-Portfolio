@@ -8,6 +8,7 @@ import {
   listQuestions,
   loadQuestionsConfig,
   patchQuestion,
+  repairDuplicateQuestionIds,
   upsertUnansweredFromHits,
 } from "../../src/config/questions-store.js";
 import { evaluateUnknownFields } from "../../src/apply/unknown-field-strategy.js";
@@ -86,4 +87,43 @@ test("patch answer marca answered", () => {
   assert.equal(updated?.answer, "Básico / A2");
   // restore unanswered for local file cleanliness
   patchQuestion(q!.id, { answer: "", status: "unanswered" });
+});
+
+test("repairDuplicateQuestionIds separa ids duplicados", () => {
+  const t = new Date().toISOString();
+  const a = "How many years of work experience do you have with Playwriting?";
+  const b = "How many years of work experience do you have with Microsoft Dynamics 365?";
+  const store = {
+    updatedAt: t,
+    questions: [
+      {
+        id: "dup",
+        label: a,
+        kind: "text",
+        required: true,
+        answer: "-",
+        options: ["-"],
+        origin: "auto_apply" as const,
+        status: "answered" as const,
+        seenCount: 1,
+        createdAt: t,
+        updatedAt: t,
+      },
+      {
+        id: "dup",
+        label: b,
+        kind: "text",
+        required: true,
+        answer: "",
+        options: [],
+        origin: "auto_apply" as const,
+        status: "unanswered" as const,
+        seenCount: 1,
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+  };
+  assert.equal(repairDuplicateQuestionIds(store), true);
+  assert.notEqual(store.questions[0].id, store.questions[1].id);
 });

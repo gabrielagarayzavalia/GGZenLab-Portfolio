@@ -47,6 +47,7 @@ import {
   cssPrimaryActions,
   dismissModalOverlays,
   findButtonOrLink,
+  findWizardStepAdvanceButton,
   MODAL_LABELS,
   resolveApplyScope,
 } from "./apply/modal-controls.js";
@@ -90,6 +91,7 @@ import {
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import { syncEmptyCapturedFieldsToConfig } from "./apply/config-field-sync.js";
 import {
   applyUnknownPolicyToJob,
   evaluateUnknownFields,
@@ -154,7 +156,7 @@ async function stepFingerprint(page: Page): Promise<string> {
   const heading = (
     await modal
       .locator("h2, h3, .t-16, [class*='title']")
-      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions/i })
+      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions|top choice|Premium/i })
       .first()
       .innerText()
       .catch(() => "")
@@ -309,11 +311,17 @@ async function recordUnansweredAndStayPending(
   jobId: string,
   url: string,
   tag: string,
-  priorLabels: string[] = []
+  priorLabels: string[] = [],
+  jobMeta: { company?: string; title?: string } = {}
 ): Promise<{ labels: string[]; dumpPath: string }> {
   await saveDebugScreenshot(page, jobId, tag);
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, url, fields);
+  syncEmptyCapturedFieldsToConfig(fields, {
+    jobId,
+    company: jobMeta.company,
+    title: jobMeta.title,
+  });
   logCapturedFields(fields);
   const labels = mergeUniqueLabels(priorLabels, unansweredLabelsFromFields(fields));
   const fieldNotes =
@@ -374,15 +382,12 @@ async function tryAdvanceNext(
   const beforeFp = await stepFingerprint(page);
   const beforeUrl = page.url();
 
-  // Orden footer: Next/Continue → (si no hay) Review → (luego Submit se detecta en el loop).
-  const nextEl =
-    (await findButtonOrLink(scope, MODAL_LABELS.continue, 700)) ||
-    (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
-  const reviewEl = nextEl
-    ? null
-    : await findButtonOrLink(scope, MODAL_LABELS.review, 800);
-  const target = nextEl ?? reviewEl;
-  const which = nextEl ? "Next/Continue" : reviewEl ? "Review" : "css-primary";
+  let advance = await findWizardStepAdvanceButton(scope, page);
+  if (!advance) {
+    advance = await findWizardStepAdvanceButton(page, page);
+  }
+  const target = advance?.locator ?? null;
+  const which = advance?.which ?? "css-primary";
 
   if (!target) {
     const cssNext = cssPrimaryActions(scope);
@@ -410,17 +415,32 @@ async function tryAdvanceNext(
     return "discarded_exit";
   }
 
-  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos)
+  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos).
+  // Con skipFill (contact precargado) el fill del paso nuevo corre en la siguiente vuelta del wizard.
   await scrollEasyApplyFormToEnd(page);
-  {
+  if (!opts.skipFill) {
     const fillAfter = await fillPseudoAnswers(page, {
       jobTitle,
       company,
       mode: "dry_run",
     });
     if (fillAfter.resumeOutcome === "timeout_dry") return "resume_timeout";
+    await fillExpectedCompensation(page);
   }
-  await fillExpectedCompensation(page);
+
+  // Si el wizard avanzó, no bloquear por isNextDisabled / optional del paso nuevo (#245).
+  let afterFp = await stepFingerprint(page);
+  if (afterFp !== beforeFp) {
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+    ) {
+      console.log("   ✓ Llegamos a pantalla con Submit (post-Next)");
+      return "advanced";
+    }
+    console.log(`   ✓ Paso avanzó vía ${which}`);
+    return "advanced";
+  }
 
   if (await isNextDisabled(page)) return "blocked";
   let fields = await captureRequiredFields(page);
@@ -462,7 +482,6 @@ async function tryAdvanceNext(
     return "advanced";
   }
 
-  let afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
     // Reintento 1×: a veces el form de CV tarda en aceptar el toggle
     const needResume = page.getByText(
@@ -473,11 +492,9 @@ async function tryAdvanceNext(
       const resumeRetry = await ensureResumeForRole(page, jobTitle, company, "dry_run");
       if (resumeRetry.outcome === "timeout_dry") return "resume_timeout";
       await sleep(TIMING.modalStepMs);
-      const next2 =
-        (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
-        (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
-      if (next2) {
-        await next2.click({ force: true, timeout: 4000 }).catch(() => {});
+      const advance2 = await findWizardStepAdvanceButton(scope, page);
+      if (advance2?.locator) {
+        await advance2.locator.click({ force: true, timeout: 4000 }).catch(() => {});
         await waitForEasyApplyStepSettle(page);
       }
       afterFp = await stepFingerprint(page);
@@ -731,7 +748,8 @@ async function dryRunThroughModal(
         jobId,
         jobUrl,
         "resume_timeout",
-        unansweredAcc
+        unansweredAcc,
+        { company, title: jobTitle }
       );
       updateQueueRow(jobId, {
         status: "pendiente",
@@ -750,7 +768,8 @@ async function dryRunThroughModal(
       jobId,
       jobUrl,
       step,
-      unansweredAcc
+      unansweredAcc,
+      { company, title: jobTitle }
     );
     return { outcome: "unanswered", unansweredLabels: labels };
   }
@@ -759,6 +778,7 @@ async function dryRunThroughModal(
   await saveDebugScreenshot(page, jobId, "no-submit");
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, jobUrl, fields);
+  syncEmptyCapturedFieldsToConfig(fields, { jobId, company, title: jobTitle });
   logCapturedFields(fields);
   throw new DryRunDebugStopError(
     jobId,

@@ -25,7 +25,7 @@
 import { spawnSync } from "child_process";
 import { createInterface } from "readline/promises";
 import { stdin as input, stdout as output } from "process";
-import { exportQueueToExcel, openTrackerExcel } from "../apply/post-run.js";
+import { exportQueueToExcel, importQueueFromExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
 
 type Step = "fetch" | "pipeline" | "excel" | "apply" | "reconcile";
@@ -120,6 +120,8 @@ function runHunterEasyApply(applyMax: number | null, dryRun: boolean): void {
   const env = { ...process.env };
   const script = dryRun ? "easy-apply:dry-run" : "easy-apply";
   if (dryRun) {
+    // Hasta N intentos por corrida (sin cortar tras el primer dry_ok).
+    env.DRY_RUN_ALL = "1";
     if (applyMax != null && applyMax > 0) {
       env.DRY_RUN_MAX = String(applyMax);
     } else if (!env.DRY_RUN_MAX) {
@@ -203,6 +205,7 @@ async function main(): Promise<void> {
         console.log("\n⏭  Easy Apply omitido (--skip-apply)");
         continue;
       }
+      importQueueFromExcel();
       runHunterEasyApply(applyMax, dryRun);
       continue;
     }

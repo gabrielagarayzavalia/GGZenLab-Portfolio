@@ -28,6 +28,7 @@ import {
   type ApplyRoleKind,
 } from "./canonical-text.js";
 import { fillConfigBankAnswers } from "./fill-config-bank.js";
+import { EMPTY_SELECT_RE, hasPrefillValue } from "./field-utils.js";
 import { matchConfigAnswer } from "../config/questions-store.js";
 import {
   RESUME_INSIST_MS,
@@ -38,6 +39,18 @@ import {
   type ResumeEnsureResult,
   type ResumeRunMode,
 } from "./resume-contract.js";
+import {
+  RESUME_ACCEPT_SCORE,
+  RESUME_AMBIGUITY_DELTA,
+  defaultResumeFilenameHint,
+  isConfigCvOnLinkedInList,
+  normalizeResumeBlob,
+  pickBestConfigCvForJob,
+  resumeFilenamesMatch,
+  scoreResumeForJob,
+} from "./resume-match.js";
+import { getCvFilePath } from "../config/cvs-store.js";
+import { captureFieldOptions } from "./field-options.js";
 
 export interface CapturedField {
   label: string;
@@ -54,6 +67,8 @@ export interface CapturedField {
   optional?: boolean;
   /** radio / checkbox / text / select / combobox / textarea / unknown */
   scenarioKind?: string;
+  /** Opciones capturadas en apply (<select>, radios, texto del bloque). */
+  options?: string[];
 }
 
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
@@ -191,8 +206,8 @@ export const PSEUDO_ANSWERS = {
   },
 } as const;
 
-const EMPTY_SELECT_RE =
-  /select an option|seleccion(a|á)|selecciona una opci|choose|eleg[ií]|elegir/i;
+export { hasPrefillValue } from "./field-utils.js";
+
 const PLEASE_SELECT_RE = /please make a selection|hac[eé] una selecci[oó]n|seleccion(a|á) una opci[oó]n/i;
 
 export function isSummaryLabel(blob: string): boolean {
@@ -210,15 +225,6 @@ export function isCoverLetterLabel(blob: string): boolean {
 /** Cover letter / summary: sí se pisan (o upload). Resto: respetar prefill. */
 export function isCoverOrSummaryLabel(blob: string): boolean {
   return isSummaryLabel(blob) || isCoverLetterLabel(blob) || /\bmessage\b|\bmensaje\b/i.test(blob);
-}
-
-/** ¿Ya hay respuesta usable? (no placeholder de select vacío). */
-export function hasPrefillValue(value: string): boolean {
-  const v = value.trim();
-  if (!v) return false;
-  if (EMPTY_SELECT_RE.test(v)) return false;
-  // "0" es válido (años Apache/Tosca=0). Placeholder de select suele ser texto, no "0".
-  return true;
 }
 
 /** Labels típicos del paso "Información de contacto" (email / teléfono / código país). */
@@ -255,7 +261,11 @@ export function resumeAlreadyOkInInventory(
   if (deselect.length === 0) return false;
   return deselect.some((f) => {
     if (COVER_AS_RESUME_LABEL_RE.test(f.label)) return false;
-    return scoreResumeForRole(f.label, kind) >= 70;
+    const fn = f.label.replace(/^deselect\s+resume\s+/i, "").trim();
+    if (jobTitle.trim()) {
+      return scoreResumeForJob(fn, jobTitle, company) >= RESUME_ACCEPT_SCORE;
+    }
+    return scoreResumeForRole(fn, kind) >= RESUME_ACCEPT_SCORE;
   });
 }
 
@@ -406,6 +416,8 @@ async function collectVisibleFields(
     const required = ariaRequired || htmlRequired || starred || Boolean(errorText);
     const optional = !required;
 
+    const options = await captureFieldOptions(page, el, tag, inputType, label);
+
     // Modo legacy: solo obligatorios / error / vacíos relevantes
     if (opts.onlyBlockingCandidates) {
       if (!ariaRequired && !htmlRequired && !errorText && !starred && value) continue;
@@ -424,6 +436,7 @@ async function collectVisibleFields(
       ariaLabel,
       placeholder,
       errorText,
+      ...(options.length > 0 ? { options } : {}),
     });
   }
 
@@ -2143,6 +2156,9 @@ const DOWNLOAD_RESUME_RE = /download\s+resume/i;
 /** Link LinkedIn EN/ES: "Show 3 more resumes" / "Mostrar N currículums más". */
 const SHOW_MORE_RESUMES_RE =
   /show\s+\d+\s+more\s+resumes?|mostrar\s+\d+\s+(curr[ií]culums?|cvs?|resumes?)\s+m[aá]s|ver\s+\d+\s+m[aá]s/i;
+const UPLOAD_RESUME_BTN_RE = /upload\s+resume|subir\s+curr[ií]culum/i;
+const RESUME_REQUIRED_ERROR_RE =
+  /se necesita un curr[ií]culum|resume is required|please select a resume/i;
 
 type DocumentCardToggle = {
   id: string;
@@ -2332,71 +2348,154 @@ async function clickShowMoreResumes(root: Locator): Promise<boolean> {
   return true;
 }
 
-function roleResumeSelectedInToggles(
-  toggles: DocumentCardToggle[],
-  kind: ApplyRoleKind
-): boolean {
-  return toggles.some(
-    (t) =>
-      t.selected &&
-      scoreResumeForRole(t.title, kind) >= 70 &&
-      !COVER_AS_RESUME_RE.test(t.title) &&
-      !DOWNLOAD_RESUME_RE.test(t.aria)
-  );
+function resumeFilenameFromToggle(t: DocumentCardToggle): string {
+  const fromTitle = (t.title || "").trim();
+  if (fromTitle) return fromTitle;
+  return t.aria
+    .replace(/^select\s+resume\s+/i, "")
+    .replace(/^deselect\s+resume\s+/i, "")
+    .trim();
 }
 
-async function isRoleResumeSelected(page: Page, kind: ApplyRoleKind): Promise<boolean> {
+function resumeFilenameFromAria(aria: string): string {
+  return aria
+    .replace(/^select\s+resume\s+/i, "")
+    .replace(/^deselect\s+resume\s+/i, "")
+    .trim();
+}
+
+type ResumePickCandidate = { label: string; score: number };
+
+/** Evita re-upload del mismo CV en el mismo paso EA (#247). */
+const resumeUploadAttempted = new WeakMap<Page, Set<string>>();
+
+function pickBestResumeCandidate(
+  candidates: ResumePickCandidate[],
+  jobTitle: string,
+  company: string
+): ResumePickCandidate | null {
+  if (candidates.length === 0) return null;
+  const scored = [...candidates].filter((c) => c.score > 0).sort((a, b) => b.score - a.score);
+  if (scored.length === 0) return null;
+  const best = scored[0];
+  const second = scored[1]?.score ?? 0;
+  if (best.score < RESUME_ACCEPT_SCORE) return null;
+
+  const ties = scored.filter((s) => s.score >= RESUME_ACCEPT_SCORE);
+  // Solo CVs distintos en LinkedIn con score parecido; mismo archivo → ya está en la lista.
+  const distinctTies = ties.filter(
+    (c, i, arr) => arr.findIndex((x) => resumeFilenamesMatch(x.label, c.label)) === i
+  );
+  if (distinctTies.length > 1 && best.score - second < RESUME_AMBIGUITY_DELTA) {
+    const hint = defaultResumeFilenameHint();
+    if (hint) {
+      const defPick = distinctTies.find((s) => resumeFilenamesMatch(s.label, hint));
+      if (defPick) {
+        console.log(`   ↳ Resume: rol ambiguo → default Config (${hint})`);
+        return defPick;
+      }
+    }
+  }
+  return best;
+}
+
+function roleResumeSelectedInToggles(
+  toggles: DocumentCardToggle[],
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
+): boolean {
+  return toggles.some((t) => {
+    if (!t.selected) return false;
+    if (COVER_AS_RESUME_RE.test(t.title) || COVER_AS_RESUME_RE.test(t.aria)) return false;
+    if (DOWNLOAD_RESUME_RE.test(t.aria) || DOWNLOAD_RESUME_RE.test(t.title)) return false;
+    const fn = resumeFilenameFromToggle(t);
+    if (jobTitle.trim()) {
+      return scoreResumeForJob(fn, jobTitle, company) >= RESUME_ACCEPT_SCORE;
+    }
+    return scoreResumeForRole(fn, kind) >= RESUME_ACCEPT_SCORE;
+  });
+}
+
+async function isRoleResumeSelected(
+  page: Page,
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
+): Promise<boolean> {
   const toggles = await listDocumentCardToggles(page);
-  return roleResumeSelectedInToggles(toggles, kind);
+  return roleResumeSelectedInToggles(toggles, kind, jobTitle, company);
 }
 
 /**
  * Click UNA vez en jobsDocumentCardToggleLabel-* del mejor score.
  * Si ya está seleccionado (Deselect resume), no re-clickear (evita deseleccionar).
  */
-async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<boolean> {
-  if (await isRoleResumeSelected(page, kind)) {
+async function clickBestResumeToggle(
+  page: Page,
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
+): Promise<boolean> {
+  if (await isRoleResumeSelected(page, kind, jobTitle, company)) {
     console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — no re-click`);
     return true;
   }
 
   const toggles = await listDocumentCardToggles(page);
-  let best: DocumentCardToggle | null = null;
-  let bestScore = 0;
+  const candidates: ResumePickCandidate[] = [];
+  const toggleByLabel = new Map<string, DocumentCardToggle>();
 
   for (const t of toggles) {
     if (DOWNLOAD_RESUME_RE.test(t.aria) || DOWNLOAD_RESUME_RE.test(t.title)) continue;
     if (COVER_AS_RESUME_RE.test(t.title) || COVER_AS_RESUME_RE.test(t.aria)) continue;
-    const score = scoreResumeForRole(t.title, kind);
-    if (score > bestScore) {
-      bestScore = score;
-      best = t;
-    }
+    const fn = resumeFilenameFromToggle(t);
+    const score = jobTitle.trim()
+      ? scoreResumeForJob(fn, jobTitle, company)
+      : scoreResumeForRole(fn, kind);
+    candidates.push({ label: fn, score });
+    toggleByLabel.set(fn, t);
   }
 
+  const best = pickBestResumeCandidate(candidates, jobTitle, company);
+  const bestToggle = best ? (toggleByLabel.get(best.label) ?? null) : null;
   const modal = page.locator(".jobs-easy-apply-modal").first();
+  const bestScore = best?.score ?? 0;
 
-  if (!best || bestScore < 70) {
+  if (!bestToggle || bestScore < RESUME_ACCEPT_SCORE) {
     // Fallback light DOM: solo "Select resume" (no Download, no Deselect) — dentro del modal
     const selectLabels = modal.locator('[aria-label^="Select resume" i]');
     const n = await selectLabels.count().catch(() => 0);
     let fbBest = -1;
     let fbScore = 0;
     let fbTitle = "";
+    const fbCandidates: ResumePickCandidate[] = [];
     for (let i = 0; i < n; i++) {
       const el = selectLabels.nth(i);
       const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
       if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
       if (/^deselect\s+resume/i.test(aria)) continue;
-      const title = aria.replace(/^select\s+resume\s+/i, "").trim();
-      const score = scoreResumeForRole(title || aria, kind);
-      if (score > fbScore) {
-        fbScore = score;
-        fbBest = i;
-        fbTitle = title || aria;
+      const title = resumeFilenameFromAria(aria);
+      const score = jobTitle.trim()
+        ? scoreResumeForJob(title || aria, jobTitle, company)
+        : scoreResumeForRole(title || aria, kind);
+      fbCandidates.push({ label: title || aria, score });
+    }
+    const fbPick = pickBestResumeCandidate(fbCandidates, jobTitle, company);
+    if (fbPick) {
+      for (let i = 0; i < n; i++) {
+        const el = selectLabels.nth(i);
+        const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
+        const title = resumeFilenameFromAria(aria);
+        if (title === fbPick.label || aria === fbPick.label) {
+          fbBest = i;
+          fbScore = fbPick.score;
+          fbTitle = title || aria;
+          break;
+        }
       }
     }
-    if (fbBest >= 0 && fbScore >= 70) {
+    if (fbBest >= 0 && fbScore >= RESUME_ACCEPT_SCORE) {
       const el = selectLabels.nth(fbBest);
       await el.scrollIntoViewIfNeeded().catch(() => {});
       await el.click({ timeout: 4000, noWaitAfter: true }).catch(() =>
@@ -2406,30 +2505,41 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
         `   ↳ Resume: click TOGGLE (aria) ${kind} (score=${fbScore}) → ${fbTitle.slice(0, 90)}`
       );
       await sleep(300);
-      return isRoleResumeSelected(page, kind);
+      return isRoleResumeSelected(page, kind, jobTitle, company);
     }
     return false;
   }
 
-  if (best.selected) {
+  if (bestToggle.selected) {
     console.log(
-      `   ↳ Resume: toggle ya seleccionado ${kind} → ${best.title.slice(0, 90)}`
+      `   ↳ Resume: toggle ya seleccionado ${kind} → ${bestToggle.title.slice(0, 90)}`
     );
     return true;
   }
 
-  const ok = await clickDocumentCardToggle(page, best.id);
+  if (
+    await selectResumeByFilenameClick(
+      page,
+      modal,
+      bestToggle.title,
+      `click nombre ${kind}`
+    )
+  ) {
+    return true;
+  }
+
+  const ok = await clickDocumentCardToggle(page, bestToggle.id);
   if (!ok) {
-    console.log(`   ↳ Resume: no pude clickear toggle id=${best.id}`);
+    console.log(`   ↳ Resume: no pude clickear toggle id=${bestToggle.id}`);
     return false;
   }
   console.log(
-    `   ↳ Resume: click TOGGLE ${kind} (score=${bestScore}) id=${best.id} → ${best.title.slice(0, 90)}`
+    `   ↳ Resume: click TOGGLE ${kind} (score=${bestScore}) id=${bestToggle.id} → ${bestToggle.title.slice(0, 90)}`
   );
   await sleep(700);
 
   // Refuerzo: aria Select/Deselect resume <filename> (sin Download) — solo modal
-  const fileKey = best.title.replace(/\.pdf$/i, "").slice(0, 48);
+  const fileKey = bestToggle.title.replace(/\.pdf$/i, "").slice(0, 48);
   const deselectAria = modal.locator(
     `[aria-label^="Deselect resume"][aria-label*="${fileKey}" i]`
   );
@@ -2446,7 +2556,7 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
     console.log("   ↳ Resume: form ya en Deselect (seleccionado)");
   }
 
-  const pdfToken = best.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const pdfToken = bestToggle.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
   const formRadio = modal.getByRole("radio", { name: new RegExp(pdfToken, "i") }).first();
   if (await formRadio.count().catch(() => 0)) {
     const checked = await formRadio.isChecked().catch(() => false);
@@ -2458,28 +2568,18 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
     }
   }
 
-  const needResume = modal.getByText(
-    /se necesita un curr[ií]culum|resume is required|please select a resume/i
-  );
+  const needResume = modal.getByText(RESUME_REQUIRED_ERROR_RE);
   for (let w = 0; w < 8; w++) {
     if (!(await needResume.isVisible({ timeout: 400 }).catch(() => false))) {
       console.log("   ↳ Resume: error currículum ausente — form OK");
       break;
     }
-    console.log("   ↳ Resume: error 'Se necesita un currículum' — re-bind…");
-    await clickDocumentCardToggle(page, best.id);
-    if (await selectAria.first().isVisible({ timeout: 400 }).catch(() => false)) {
-      await selectAria.first().click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
-    }
-    // NUNCA page.getByText(pdf): el título puede existir en el feed detrás del modal
-    const name = modal.getByText(best.title, { exact: true }).first();
-    if (await name.isVisible({ timeout: 400 }).catch(() => false)) {
-      await name.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
-    }
+    console.log("   ↳ Resume: error 'Se necesita un currículum' — re-click nombre…");
+    await clickResumeFilenameInModal(page, modal, bestToggle.title);
     await sleep(800);
   }
 
-  const uiOk = await isRoleResumeSelected(page, kind);
+  const uiOk = await isRoleResumeSelected(page, kind, jobTitle, company);
   const errGone = !(await needResume.isVisible({ timeout: 500 }).catch(() => false));
   if (uiOk && errGone) return true;
   if (uiOk && !errGone) {
@@ -2493,19 +2593,37 @@ async function clickBestResumeToggle(page: Page, kind: ApplyRoleKind): Promise<b
 }
 
 /**
- * Último recurso: CV Eng01-2026 cuando no hay match Analyst/Automation.
+ * Último recurso: CV default de Config (o Eng01 legacy) cuando no hay match por título.
  * NUNCA cover letter / intro-GGZ.
  */
+function resumeMatchesFallback(label: string): boolean {
+  const hint = defaultResumeFilenameHint();
+  if (hint) {
+    const fn = normalizeResumeBlob(label);
+    const def = normalizeResumeBlob(hint);
+    if (fn && def && (fn.includes(def) || def.includes(fn))) return true;
+  }
+  return RESUME_FALLBACK_MATCH.test(label || "");
+}
+
 async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
   const modal = page.locator(".jobs-easy-apply-modal").first();
   if (!(await modal.isVisible({ timeout: 500 }).catch(() => false))) return false;
 
+  const fallbackName =
+    defaultResumeFilenameHint() || RESUME_FALLBACK_FILENAME;
+
+  if (await selectResumeByFilenameClick(page, modal, fallbackName, "click nombre fallback")) {
+    return true;
+  }
+
   const toggles = await listDocumentCardToggles(page);
   for (const t of toggles) {
     if (DOWNLOAD_RESUME_RE.test(t.aria) || COVER_AS_RESUME_RE.test(t.title)) continue;
-    if (!RESUME_FALLBACK_MATCH.test(t.title) && !RESUME_FALLBACK_MATCH.test(t.aria)) continue;
+    const fn = resumeFilenameFromToggle(t);
+    if (!resumeMatchesFallback(fn) && !resumeMatchesFallback(t.aria)) continue;
     if (t.selected) {
-      console.log(`   ↳ Resume: fallback ya seleccionado → ${RESUME_FALLBACK_FILENAME}`);
+      console.log(`   ↳ Resume: fallback ya seleccionado → ${fallbackName}`);
       return true;
     }
     const ok = await clickDocumentCardToggle(page, t.id);
@@ -2522,22 +2640,26 @@ async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
     const el = selectLabels.nth(i);
     const aria = ((await el.getAttribute("aria-label")) ?? "").trim();
     if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
-    if (!RESUME_FALLBACK_MATCH.test(aria)) continue;
+    if (!resumeMatchesFallback(aria) && !resumeMatchesFallback(resumeFilenameFromAria(aria))) {
+      continue;
+    }
     await el.scrollIntoViewIfNeeded().catch(() => {});
     await el
       .click({ timeout: 4000, noWaitAfter: true })
       .catch(() => el.click({ force: true, timeout: 4000, noWaitAfter: true }));
-    console.log(`   ↳ Resume: fallback (aria) → ${RESUME_FALLBACK_FILENAME}`);
+    console.log(`   ↳ Resume: fallback (aria) → ${fallbackName}`);
     await sleep(300);
     return true;
   }
 
-  const deselect = modal.locator(
-    `[aria-label^="Deselect resume" i][aria-label*="Eng01-2026" i]`
-  );
-  if (await deselect.first().isVisible({ timeout: 400 }).catch(() => false)) {
-    console.log(`   ↳ Resume: fallback ya en Deselect → ${RESUME_FALLBACK_FILENAME}`);
-    return true;
+  const deselect = modal.locator('[aria-label^="Deselect resume" i]');
+  const dn = await deselect.count().catch(() => 0);
+  for (let i = 0; i < dn; i++) {
+    const aria = ((await deselect.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (resumeMatchesFallback(aria) || resumeMatchesFallback(resumeFilenameFromAria(aria))) {
+      console.log(`   ↳ Resume: fallback ya en Deselect → ${fallbackName}`);
+      return true;
+    }
   }
 
   return false;
@@ -2548,27 +2670,39 @@ async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
  */
 async function clickResumeByAriaSelect(
   page: Page,
-  kind: ApplyRoleKind
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
 ): Promise<boolean> {
   const modal = page.locator(".jobs-easy-apply-modal").first();
   if (!(await modal.isVisible({ timeout: 400 }).catch(() => false))) return false;
 
   const selectLabels = modal.locator('[aria-label^="Select resume" i]');
   const n = await selectLabels.count().catch(() => 0);
-  let bestIdx = -1;
-  let bestScore = 0;
-  let bestTitle = "";
+  const candidates: ResumePickCandidate[] = [];
   for (let i = 0; i < n; i++) {
     const aria = ((await selectLabels.nth(i).getAttribute("aria-label")) ?? "").trim();
     if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
-    const score = scoreResumeForRole(aria, kind);
-    if (score > bestScore) {
-      bestScore = score;
+    const title = resumeFilenameFromAria(aria);
+    const score = jobTitle.trim()
+      ? scoreResumeForJob(title || aria, jobTitle, company)
+      : scoreResumeForRole(title || aria, kind);
+    candidates.push({ label: title || aria, score });
+  }
+  const best = pickBestResumeCandidate(candidates, jobTitle, company);
+  if (!best || best.score < RESUME_ACCEPT_SCORE) return false;
+
+  let bestIdx = -1;
+  for (let i = 0; i < n; i++) {
+    const aria = ((await selectLabels.nth(i).getAttribute("aria-label")) ?? "").trim();
+    const title = resumeFilenameFromAria(aria);
+    if (title === best.label || aria === best.label) {
       bestIdx = i;
-      bestTitle = aria;
+      break;
     }
   }
-  if (bestIdx < 0 || bestScore < 70) return false;
+  if (bestIdx < 0) return false;
+
   const el = selectLabels.nth(bestIdx);
   await el.scrollIntoViewIfNeeded().catch(() => {});
   const ok =
@@ -2578,24 +2712,490 @@ async function clickResumeByAriaSelect(
       .then(() => true)
       .catch(() => false));
   if (!ok) return false;
-  console.log(`   ↳ Resume: click aria ${kind} (score=${bestScore}) → ${bestTitle.slice(0, 90)}`);
+  console.log(
+    `   ↳ Resume: click aria ${kind} (score=${best.score}) → ${best.label.slice(0, 90)}`
+  );
   await sleep(300);
-  return isRoleResumeSelected(page, kind);
+  return isRoleResumeSelected(page, kind, jobTitle, company);
+}
+
+async function collectLinkedinResumeFilenames(page: Page, root: Locator): Promise<string[]> {
+  const names: string[] = [];
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    const fn = resumeFilenameFromToggle(t);
+    if (fn) names.push(fn);
+  }
+  const selectLabels = root.locator(
+    '[aria-label^="Select resume" i], [aria-label^="Deselect resume" i]'
+  );
+  const n = await selectLabels.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const aria = ((await selectLabels.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
+    const fn = resumeFilenameFromAria(aria);
+    if (fn) names.push(fn);
+  }
+  return names;
+}
+
+/** Botón/link "Upload resume" del paso CV (#247). */
+function uploadResumeButton(root: Locator): Locator {
+  return root
+    .getByRole("button", { name: UPLOAD_RESUME_BTN_RE })
+    .or(
+      root
+        .locator("button, a, span[role='button'], div[role='button']")
+        .filter({ hasText: UPLOAD_RESUME_BTN_RE })
+    )
+    .first();
+}
+
+async function clickUploadResumeAndSetFile(
+  page: Page,
+  root: Locator,
+  pdfPath: string
+): Promise<boolean> {
+  const uploadBtn = uploadResumeButton(root);
+  let target = uploadBtn;
+  if (!(await target.isVisible({ timeout: 600 }).catch(() => false))) {
+    target = root.getByText(UPLOAD_RESUME_BTN_RE).first();
+    if (!(await target.isVisible({ timeout: 400 }).catch(() => false))) {
+      console.log("   ↳ Resume: no encontré botón Upload resume");
+      return false;
+    }
+  }
+
+  try {
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent("filechooser", { timeout: 10_000 }),
+      clickSafeInEasyApply(target, { timeoutMs: 5000 }),
+    ]);
+    await fileChooser.setFiles(pdfPath);
+    console.log("   ↳ Resume: upload vía filechooser");
+    return true;
+  } catch {
+    /* fallback input oculto */
+  }
+
+  if (!(await clickSafeInEasyApply(target, { timeoutMs: 5000 }))) return false;
+  await sleep(600);
+  const fileInputs = root.locator("input[type='file']");
+  const n = await fileInputs.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const input = fileInputs.nth(i);
+    try {
+      await input.setInputFiles(pdfPath);
+      console.log("   ↳ Resume: upload vía input file tras click");
+      return true;
+    } catch {
+      /* siguiente input */
+    }
+  }
+  console.log("   ↳ Resume: click Upload resume sin input file utilizable");
+  return false;
+}
+
+async function waitForResumeFilenameOnLinkedIn(
+  page: Page,
+  root: Locator,
+  originalName: string,
+  timeoutMs = 20_000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  const token = originalName.replace(/\.pdf$/i, "").slice(0, 32);
+  const tokenRe = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  while (Date.now() < deadline) {
+    const names = await collectLinkedinResumeFilenames(page, root);
+    if (names.some((n) => resumeFilenamesMatch(n, originalName))) return true;
+    if (await root.getByText(tokenRe).first().isVisible({ timeout: 250 }).catch(() => false)) {
+      return true;
+    }
+    await sleep(500);
+  }
+  return false;
+}
+
+/** Tras upload: esperar que el PDF deje de procesarse (spinner en la fila del CV). */
+async function waitForResumeUploadReady(
+  page: Page,
+  root: Locator,
+  originalName: string,
+  timeoutMs = 30_000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const names = await collectLinkedinResumeFilenames(page, root);
+    if (!names.some((n) => resumeFilenamesMatch(n, originalName))) {
+      await sleep(500);
+      continue;
+    }
+    const state = (await page.evaluate(`((fname) => {
+      const modal = document.querySelector(".jobs-easy-apply-modal");
+      if (!modal) return { ready: false, reason: "no-modal" };
+      const token = fname.replace(/\\.pdf$/i, "").slice(0, 28).toLowerCase();
+      function norm(s) {
+        return (s || "").toLowerCase().replace(/\\.pdf$/i, "").replace(/[^a-z0-9]+/g, "");
+      }
+      const want = norm(fname);
+      function matchesText(text) {
+        const n = norm(text);
+        return n && (n === want || n.includes(want) || want.includes(n));
+      }
+      function cardLoaderBusy(root) {
+        for (const toggle of Array.from(root.querySelectorAll('[id^="jobsDocumentCardToggleLabel-"]'))) {
+          const aria = (toggle.getAttribute("aria-label") || "").trim();
+          const fn = aria.replace(/^(select|deselect)\\s+resume\\s+/i, "").trim();
+          if (!matchesText(fn)) continue;
+          if (/^deselect\\s+resume/i.test(aria)) {
+            return { ready: true, reason: "deselect-aria" };
+          }
+          const card =
+            toggle.closest("[class*='document'], [class*='JobsDocument'], [class*='resume']") ||
+            toggle.parentElement;
+          const loader = card && card.querySelector(
+            ".artdeco-loader, [class*='spinner']:not([class*='completeness']), [aria-busy='true']"
+          );
+          if (loader) return { ready: false, reason: "card-loader" };
+          return { ready: true, reason: "toggle-without-loader" };
+        }
+        for (const el of Array.from(root.querySelectorAll("*"))) {
+          if (el.shadowRoot) {
+            const hit = cardLoaderBusy(el.shadowRoot);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      }
+      const outlet = modal.querySelector("#interop-outlet");
+      const hit =
+        (outlet && outlet.shadowRoot && cardLoaderBusy(outlet.shadowRoot)) ||
+        cardLoaderBusy(modal);
+      if (hit) return hit;
+      return { ready: true, reason: "filename-in-list" };
+    })(${JSON.stringify(originalName)})`)) as { ready: boolean; reason: string };
+    if (state.ready) {
+      if (state.reason !== "filename-in-list") {
+        console.log(`   ↳ Resume: upload listo (${state.reason})`);
+      }
+      return true;
+    }
+    await sleep(600);
+  }
+  return false;
+}
+
+/** Clic en el texto del PDF (light DOM o shadow del modal). */
+async function clickResumeFilenameInModal(
+  page: Page,
+  root: Locator,
+  filename: string
+): Promise<boolean> {
+  const name = filename.trim();
+  if (!name) return false;
+
+  const exact = root.getByText(name, { exact: true }).first();
+  if (await exact.isVisible({ timeout: 700 }).catch(() => false)) {
+    await exact.scrollIntoViewIfNeeded().catch(() => {});
+    await exact
+      .click({ timeout: 4000, noWaitAfter: true })
+      .catch(() => exact.click({ force: true, timeout: 4000, noWaitAfter: true }));
+    return true;
+  }
+
+  const token = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const partial = root.getByText(new RegExp(token, "i")).first();
+  if (await partial.isVisible({ timeout: 500 }).catch(() => false)) {
+    await partial.scrollIntoViewIfNeeded().catch(() => {});
+    await partial
+      .click({ timeout: 4000, noWaitAfter: true })
+      .catch(() => partial.click({ force: true, timeout: 4000, noWaitAfter: true }));
+    return true;
+  }
+
+  return (await page.evaluate(`((targetName) => {
+    const modal = document.querySelector(".jobs-easy-apply-modal");
+    if (!modal) return false;
+    function norm(s) {
+      return (s || "").toLowerCase().replace(/\\.pdf$/i, "").replace(/[^a-z0-9]+/g, "");
+    }
+    const want = norm(targetName);
+    if (!want) return false;
+    function matchesPdf(text) {
+      if (!/\\.pdf/i.test(text || "")) return false;
+      const n = norm(text);
+      return n === want || n.includes(want) || want.includes(n);
+    }
+    function fireClick(el) {
+      const row =
+        el.closest("li, label, [class*='document'], [class*='resume'], [class*='JobsDocument']") ||
+        el.parentElement ||
+        el;
+      row.scrollIntoView({ block: "center", inline: "nearest" });
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(function (type) {
+        row.dispatchEvent(
+          new MouseEvent(type, { bubbles: true, cancelable: true, view: window })
+        );
+      });
+      return true;
+    }
+    function walk(root) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const txt = (node.textContent || "").trim();
+        if (!matchesPdf(txt)) continue;
+        const el = node.parentElement;
+        if (el && fireClick(el)) return true;
+      }
+      for (const el of Array.from(root.querySelectorAll("*"))) {
+        if (el.shadowRoot && walk(el.shadowRoot)) return true;
+      }
+      return false;
+    }
+    const outlet = modal.querySelector("#interop-outlet");
+    if (outlet && outlet.shadowRoot && walk(outlet.shadowRoot)) return true;
+    return walk(modal);
+  })(${JSON.stringify(name)})`)) as boolean;
+}
+
+async function isResumeRequiredErrorVisible(root: Locator): Promise<boolean> {
+  return root
+    .getByText(RESUME_REQUIRED_ERROR_RE)
+    .isVisible({ timeout: 350 })
+    .catch(() => false);
+}
+
+async function isConfigCvFilenameAccepted(
+  page: Page,
+  root: Locator,
+  filename: string
+): Promise<boolean> {
+  if (!filename.trim()) return false;
+  if (await isResumeRequiredErrorVisible(root)) return false;
+  if (await isConfigCvFilenameSelected(page, root, filename)) return true;
+
+  const deselect = root.locator('[aria-label^="Deselect resume" i]');
+  const dn = await deselect.count().catch(() => 0);
+  for (let i = 0; i < dn; i++) {
+    const aria = ((await deselect.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (resumeFilenamesMatch(resumeFilenameFromAria(aria), filename)) return true;
+  }
+  return false;
+}
+
+/** Selección principal: click en nombre del PDF + form sin error "resume required". */
+async function selectResumeByFilenameClick(
+  page: Page,
+  root: Locator,
+  originalName: string,
+  logPrefix = "click nombre"
+): Promise<boolean> {
+  if (await isConfigCvFilenameAccepted(page, root, originalName)) {
+    console.log(`   ↳ Resume: ya seleccionado → ${originalName.slice(0, 80)}`);
+    return true;
+  }
+
+  for (let w = 0; w < 12; w++) {
+    if (await isConfigCvFilenameAccepted(page, root, originalName)) {
+      console.log(`   ↳ Resume: ${logPrefix} → ${originalName.slice(0, 80)}`);
+      return true;
+    }
+    const clicked = await clickResumeFilenameInModal(page, root, originalName);
+    if (!clicked && w === 0) {
+      console.log(`   ↳ Resume: nombre aún no clickeable — reintentando…`);
+    }
+    await sleep(w < 3 ? 800 : 600);
+  }
+  return false;
+}
+
+/** Seleccionar por filename tras upload (nombre primero; toggle/radio solo fallback). */
+async function selectResumeByConfigFilename(
+  page: Page,
+  root: Locator,
+  originalName: string
+): Promise<boolean> {
+  if (await selectResumeByFilenameClick(page, root, originalName, "click nombre")) {
+    return true;
+  }
+
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    if (DOWNLOAD_RESUME_RE.test(t.aria) || COVER_AS_RESUME_RE.test(t.title)) continue;
+    if (!resumeFilenamesMatch(resumeFilenameFromToggle(t), originalName)) continue;
+    if (t.selected) {
+      console.log(`   ↳ Resume: post-upload ya seleccionado → ${t.title.slice(0, 80)}`);
+      return true;
+    }
+    const ok = await clickDocumentCardToggle(page, t.id);
+    if (ok) {
+      console.log(`   ↳ Resume: post-upload toggle (fallback) → ${t.title.slice(0, 80)}`);
+      await sleep(400);
+      if (await isConfigCvFilenameAccepted(page, root, originalName)) return true;
+    }
+  }
+
+  const token = originalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const radio = root.getByRole("radio", { name: new RegExp(token, "i") }).first();
+  if (await radio.isVisible({ timeout: 600 }).catch(() => false)) {
+    const checked = await radio.isChecked().catch(() => false);
+    if (!checked) {
+      await radio.check({ force: true }).catch(() => radio.click({ timeout: 3000, noWaitAfter: true }));
+    }
+    await sleep(400);
+    if (await isConfigCvFilenameAccepted(page, root, originalName)) {
+      console.log(`   ↳ Resume: post-upload radio (fallback) → ${originalName.slice(0, 80)}`);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * #247: subir PDF de Config solo si NO está ya en la lista de LinkedIn.
+ * Si ya está → no upload (evita duplicados).
+ */
+async function uploadResumeFromConfigIfMissing(
+  page: Page,
+  root: Locator,
+  jobTitle: string,
+  company: string
+): Promise<boolean> {
+  const configCv = pickBestConfigCvForJob(jobTitle, company);
+  if (!configCv) {
+    console.log("   ↳ Resume: sin CV Config para el rol — no upload");
+    return false;
+  }
+
+  const linkedinNames = await collectLinkedinResumeFilenames(page, root);
+  if (isConfigCvOnLinkedInList(configCv, linkedinNames)) {
+    console.log(`   ↳ Resume: ya en LinkedIn (${configCv.originalName}) — sin upload`);
+    return false;
+  }
+
+  const pdfPath = getCvFilePath(configCv);
+  if (!fs.existsSync(pdfPath)) {
+    console.log(`   ↳ Resume: PDF Config no en disco (${configCv.originalName})`);
+    return false;
+  }
+
+  const attempted = resumeUploadAttempted.get(page) ?? new Set<string>();
+  if (attempted.has(configCv.id)) {
+    console.log(`   ↳ Resume: upload ya intentado (${configCv.originalName}) — skip`);
+    return false;
+  }
+
+  const uploaded = await clickUploadResumeAndSetFile(page, root, pdfPath);
+  if (!uploaded) {
+    console.log("   ↳ Resume: no se pudo subir PDF desde Config");
+    return false;
+  }
+
+  attempted.add(configCv.id);
+  resumeUploadAttempted.set(page, attempted);
+  console.log(`   ↳ Resume: upload Config → LinkedIn (${configCv.originalName})`);
+
+  const appeared = await waitForResumeFilenameOnLinkedIn(page, root, configCv.originalName);
+  if (!appeared) {
+    console.log(`   ↳ Resume: upload hecho pero no apareció en lista (${configCv.originalName})`);
+    return false;
+  }
+
+  const ready = await waitForResumeUploadReady(page, root, configCv.originalName);
+  if (!ready) {
+    console.log(`   ↳ Resume: upload en lista pero sigue procesando (${configCv.originalName})`);
+  }
+
+  if (await selectResumeByConfigFilename(page, root, configCv.originalName)) {
+    return true;
+  }
+
+  console.log(`   ↳ Resume: en lista pero no quedó seleccionado (${configCv.originalName})`);
+  return false;
+}
+
+async function isConfigCvFilenameSelected(
+  page: Page,
+  root: Locator,
+  filename: string
+): Promise<boolean> {
+  if (!filename.trim()) return false;
+
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    if (!t.selected) continue;
+    if (COVER_AS_RESUME_RE.test(t.title) || COVER_AS_RESUME_RE.test(t.aria)) continue;
+    if (resumeFilenamesMatch(resumeFilenameFromToggle(t), filename)) return true;
+  }
+
+  const deselect = root.locator('[aria-label^="Deselect resume" i]');
+  const dn = await deselect.count().catch(() => 0);
+  for (let i = 0; i < dn; i++) {
+    const aria = ((await deselect.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (resumeFilenamesMatch(resumeFilenameFromAria(aria), filename)) return true;
+  }
+
+  const token = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const radio = root.getByRole("radio", { name: new RegExp(token, "i") }).first();
+  if (await radio.isVisible({ timeout: 300 }).catch(() => false)) {
+    return radio.isChecked().catch(() => false);
+  }
+
+  return false;
+}
+
+async function trySelectForcedConfigCv(
+  page: Page,
+  root: Locator,
+  jobTitle: string,
+  company: string,
+  forcedCvName: string
+): Promise<boolean> {
+  if (await isConfigCvFilenameAccepted(page, root, forcedCvName)) {
+    console.log(`   ↳ Resume: forced CV OK → ${forcedCvName}`);
+    return true;
+  }
+  await clickShowMoreResumes(root);
+  const linkedinNames = await collectLinkedinResumeFilenames(page, root);
+  const configCv = pickBestConfigCvForJob(jobTitle, company);
+  if (configCv && isConfigCvOnLinkedInList(configCv, linkedinNames)) {
+    if (await selectResumeByConfigFilename(page, root, forcedCvName)) return true;
+  }
+  if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
+    return isConfigCvFilenameAccepted(page, root, forcedCvName);
+  }
+  return selectResumeByConfigFilename(page, root, forcedCvName);
 }
 
 async function trySelectPreferredResume(
   page: Page,
   root: Locator,
-  kind: ApplyRoleKind
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
 ): Promise<boolean> {
-  if (await isRoleResumeSelected(page, kind)) return true;
-  if (await clickBestResumeToggle(page, kind)) return true;
-  if (await clickResumeByAriaSelect(page, kind)) return true;
+  const forcedCvName = (process.env.DRY_RUN_CONFIG_CV ?? "").trim();
+  if (forcedCvName) {
+    return trySelectForcedConfigCv(page, root, jobTitle, company, forcedCvName);
+  }
+
+  if (await isRoleResumeSelected(page, kind, jobTitle, company)) return true;
   await clickShowMoreResumes(root);
-  if (await clickBestResumeToggle(page, kind)) return true;
-  if (await clickResumeByAriaSelect(page, kind)) return true;
+  if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
+    return isRoleResumeSelected(page, kind, jobTitle, company);
+  }
+  if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
+  if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;
+  await clickShowMoreResumes(root);
+  if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
+    return isRoleResumeSelected(page, kind, jobTitle, company);
+  }
+  if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
+  if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;
   if (await clickResumeFallbackDefault(page)) return true;
-  return isRoleResumeSelected(page, kind);
+  return isRoleResumeSelected(page, kind, jobTitle, company);
 }
 
 /**
@@ -2674,11 +3274,20 @@ export async function ensureResumeForRole(
 
   let selected = await readSelected();
 
+  const forcedCvName = (process.env.DRY_RUN_CONFIG_CV ?? "").trim();
+  const forcedCvSelected =
+    !!forcedCvName &&
+    selected
+      .split("|")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .some((part) => resumeFilenamesMatch(part, forcedCvName));
+
   if (isCoverAsResumeLabel(selected)) {
     console.log(
       `   ↳ Resume: ⚠ cover/intro seleccionado ("${selected.slice(0, 60)}") — cambiar`
     );
-    await trySelectPreferredResume(page, root, kind);
+    await trySelectPreferredResume(page, root, kind, jobTitle, company);
     toggles = await listDocumentCardToggles(page);
     selected = await readSelected();
     if (isCoverAsResumeLabel(selected)) {
@@ -2687,7 +3296,22 @@ export async function ensureResumeForRole(
     }
   }
 
-  if (roleResumeSelectedInToggles(toggles, kind) || isPreferredResumeLabel(selected, kind)) {
+  if (forcedCvName && forcedCvSelected) {
+    console.log(`   ↳ Resume: dry-run CV forzado OK → ${forcedCvName}`);
+    return {
+      outcome: "ok",
+      preferred: true,
+      selectedLabel: selected,
+      notes: "",
+      canAdvance: true,
+    };
+  }
+
+  if (
+    !forcedCvName &&
+    (roleResumeSelectedInToggles(toggles, kind, jobTitle, company) ||
+      isPreferredResumeLabel(selected, kind, jobTitle, company))
+  ) {
     console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — Next sin re-bind`);
     return {
       outcome: "ok",
@@ -2698,10 +3322,18 @@ export async function ensureResumeForRole(
     };
   }
 
-  console.log(`   ↳ Resume: buscando CV ${kind} (Show more si hace falta)`);
-  if (await trySelectPreferredResume(page, root, kind)) {
+  console.log(
+    forcedCvName
+      ? `   ↳ Resume: buscando forced CV ${forcedCvName}`
+      : `   ↳ Resume: buscando CV ${kind} (Show more si hace falta)`
+  );
+  if (await trySelectPreferredResume(page, root, kind, jobTitle, company)) {
     selected = await readSelected();
-    console.log(`   ↳ Resume: OK (${kind}) → ${selected.slice(0, 80)}`);
+    console.log(
+      forcedCvName
+        ? `   ↳ Resume: OK (forced) → ${selected.slice(0, 80)}`
+        : `   ↳ Resume: OK (${kind}) → ${selected.slice(0, 80)}`
+    );
     return {
       outcome: "ok",
       preferred: true,
@@ -2715,7 +3347,7 @@ export async function ensureResumeForRole(
   const deadline = Date.now() + RESUME_INSIST_MS;
   while (Date.now() < deadline) {
     await clickShowMoreResumes(root);
-    if (await trySelectPreferredResume(page, root, kind)) {
+    if (await trySelectPreferredResume(page, root, kind, jobTitle, company)) {
       selected = await readSelected();
       console.log(`   ↳ Resume: OK tras insistir → ${selected.slice(0, 80)}`);
       return {
@@ -3176,6 +3808,8 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
         // Hay mapa → no bloquear; fillSkillYearsOfExperience lo rellena
         continue;
       }
+      // Banco Config (#154): años sin skill mapa pero con respuesta guardada
+      if (matchConfigAnswer(blob) != null) continue;
       const label = blob
         .replace(/\s+/g, " ")
         .trim()
@@ -3367,6 +4001,15 @@ export async function fillPseudoAnswers(
 }
 
 /**
+ * Campos que LinkedIn marca required pero son opcionales en la práctica (no bloquean Next).
+ */
+export function isOptionalEasyApplyField(f: CapturedField): boolean {
+  if (f.optional) return true;
+  const blob = `${f.label} ${f.ariaLabel} ${f.placeholder}`;
+  return /top choice|primera opci[oó]n|\(optional\)|\(opcional\)/i.test(blob);
+}
+
+/**
  * ¿Hay campos bloqueantes vacíos? (required / error / "Select an option" en Country*).
  * Si hay → NO clickear Next/Review (evita modal Save or Discard).
  */
@@ -3380,6 +4023,7 @@ export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[
 
   const all = await captureRequiredFields(page);
   const blocking = all.filter((f) => {
+    if (isOptionalEasyApplyField(f)) return false;
     const label = f.label.replace(/\s+/g, " ");
     const starred = /\*/.test(label);
     // No tratar "0" como vacío: es respuesta válida de años (Apache/Tosca).

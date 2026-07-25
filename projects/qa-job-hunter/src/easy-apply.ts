@@ -27,6 +27,7 @@ import {
   clickButtonOrLink,
   cssPrimaryActions,
   findButtonOrLink,
+  findWizardStepAdvanceButton,
   isLanguageOnlyShell,
   MODAL_LABELS,
   resolveApplyScope,
@@ -88,6 +89,7 @@ import {
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import { syncEmptyCapturedFieldsToConfig } from "./apply/config-field-sync.js";
 import {
   applyUnknownPolicyToJob,
   evaluateUnknownFields,
@@ -155,6 +157,11 @@ async function leavePendingTypeaheadFail(
     .map((f) => (f.label || f.ariaLabel || f.placeholder || "").replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
+  syncEmptyCapturedFieldsToConfig(blocking, {
+    jobId: job.jobId,
+    company: job.company,
+    title: job.title,
+  });
   if (blocking.length > 0) logCapturedFields(blocking);
   const fieldNotes =
     formatFailedFieldsNotes(labels) ||
@@ -728,14 +735,9 @@ async function tryEasyApply(
         return completeSubmitAndDone(page, job, record);
       }
 
-      // Orden: Next mientras exista; si no → Review
-      const nextEl =
-        (await findButtonOrLink(modal, MODAL_LABELS.continue, 700)) ||
-        (await findButtonOrLink(modal, MODAL_LABELS.next, 400));
-      const reviewEl = nextEl
-        ? null
-        : await findButtonOrLink(modal, MODAL_LABELS.review, 800);
-      const advanceBtn = nextEl ?? reviewEl;
+      // Orden: Next mientras exista; si no → Review (scroll si hace falta)
+      const advance = await findWizardStepAdvanceButton(modal, page);
+      const advanceBtn = advance?.locator ?? null;
       if (advanceBtn) {
         const advanced =
           (await advanceBtn

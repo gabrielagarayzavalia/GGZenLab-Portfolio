@@ -35,7 +35,9 @@
     "smoke:resume": "npx tsx --test tests/apply/resume-contract.test.ts && npx tsx scripts/smoke-resume.ts",
     "test:indeed": "npx tsx --test tests/adapters/indeed-adapter.test.ts",
     "smoke:indeed": "npx tsx scripts/smoke-indeed.ts",
-    "discover:indeed": "npx tsx scripts/discover-indeed.ts"
+    "discover:indeed": "npx tsx scripts/discover-indeed.ts",
+    "discover:notifications": "npx tsx scripts/discover-notifications.ts",
+    "test:notifications-merge": "npx tsx --test tests/discovery/notifications-applied-list.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

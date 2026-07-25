@@ -20,6 +20,9 @@
  *   APPLY_MAX          mismo efecto que --apply-max
  *   CAMPAIGN_DRY_RUN=1 mismo que --dry-run
  *   DISCOVERY          gmail (default) | linkedin_search (opt-in; no es el camino diario)
+ *   NOTIFICATIONS_DISCOVERY  1 (default con gmail) | 0 para omitir post-fetch
+ *   NOTIFICATIONS_LOOKBACK_HOURS  default 24 (max 336)
+ *   NOTIFICATIONS_MAX_ITEMS       default 5 en campaña
  */
 
 import { spawnSync } from "child_process";
@@ -86,6 +89,7 @@ Orden canónico: gmail:fetch → pipeline → excel (revisión) → apply → re
 Dry-run: fetch → pipeline → export (sin abrir Excel) → easy-apply:dry-run → reconcile → abrir Excel
 
 DISCOVERY=gmail (default) | linkedin_search (opt-in; NO usar como fallback diario)
+NOTIFICATIONS_DISCOVERY=1 (default) | 0 para omitir discovery LinkedIn Notifications
 CAMPAIGN_DRY_RUN=1 | --dry-run
 APPLIED_LIST_ROOT=${resolveAppliedListRoot()}
 `);
@@ -113,6 +117,36 @@ async function pauseForManualExcel(yes: boolean): Promise<void> {
     );
   } finally {
     rl.close();
+  }
+}
+
+function notificationsDiscoveryEnabled(discovery: Discovery): boolean {
+  if (discovery !== "gmail") return false;
+  const raw = (process.env.NOTIFICATIONS_DISCOVERY ?? "1").trim().toLowerCase();
+  return raw !== "0" && raw !== "false" && raw !== "no";
+}
+
+function runNotificationsDiscoveryStep(): void {
+  const args = ["--merge-applied-list"];
+  const lookback = process.env.NOTIFICATIONS_LOOKBACK_HOURS?.trim();
+  const maxItems = process.env.NOTIFICATIONS_MAX_ITEMS?.trim();
+  if (lookback) args.push(`--lookback-hours=${lookback}`);
+  if (maxItems) args.push(`--max-items=${maxItems}`);
+
+  console.log("\n▶ hunter: npm run discover:notifications (post-gmail)");
+  const result = spawnSync("npm", ["run", "discover:notifications", "--", ...args], {
+    cwd: HUNTER_ROOT,
+    stdio: "inherit",
+    shell: true,
+    env: {
+      ...process.env,
+      APPLIED_LIST_ROOT: resolveAppliedListRoot(),
+    },
+  });
+  if (result.status !== 0) {
+    console.warn(
+      "⚠️  discover:notifications falló — la campaña sigue con jobs de Gmail solamente."
+    );
   }
 }
 
@@ -182,6 +216,13 @@ async function main(): Promise<void> {
         continue;
       }
       runAppliedListScript("gmail:fetch");
+      if (!dryRun && notificationsDiscoveryEnabled(discovery)) {
+        runNotificationsDiscoveryStep();
+      } else if (dryRun) {
+        console.log("⏭  Notifications discovery omitido (campaña dry-run).");
+      } else if (!notificationsDiscoveryEnabled(discovery)) {
+        console.log("⏭  Notifications discovery omitido (NOTIFICATIONS_DISCOVERY=0).");
+      }
       continue;
     }
     if (step === "pipeline") {

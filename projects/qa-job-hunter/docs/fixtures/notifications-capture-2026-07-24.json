@@ -1,0 +1,31 @@
+{
+  "capturedAt": "2026-07-24",
+  "source": "LinkedIn /notifications — captura usuaria (#248)",
+  "includePatterns": ["new opportunities", "other recommendations for you"],
+  "samples": [
+    {
+      "kind": "include",
+      "text": "software quality assurance engineer: new opportunities in Argentina."
+    },
+    {
+      "kind": "include",
+      "text": "Senior QA Automation Engineer (Playwright) at Miratech and 5 other recommendations for you."
+    },
+    {
+      "kind": "exclude",
+      "text": "Juan shared a post: We're #hiring QA engineers — know someone?"
+    },
+    {
+      "kind": "exclude",
+      "text": "María liked your comment on a post about testing culture."
+    },
+    {
+      "kind": "exclude",
+      "text": "Pedro sent you a connection request."
+    },
+    {
+      "kind": "exclude",
+      "text": "Ana commented on your post."
+    }
+  ]
+}

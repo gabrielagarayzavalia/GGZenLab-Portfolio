@@ -16,6 +16,7 @@ export interface AutomationApplicationFields {
   applyType?: string;
   proximoPaso?: string;
   notas?: string;
+  fechaAplicacion?: string;
   estado?: TrackerEstado;
 }
 
@@ -26,6 +27,23 @@ export interface AutomationExistingDoc {
   gmailId?: string;
   cvType?: string;
   applyType?: string;
+  fechaAplicacion?: string;
+}
+
+/** Estados que Easy Apply no debe tocar (usuaria / finales no-EA). Enviada y Pendiente sí. */
+const EA_LOCKED_ESTADOS = new Set([
+  "cerrado",
+  "descartado",
+  "duplicado",
+  "stand-by",
+  "standby",
+  "borrador abierto",
+  "a-pendiente",
+  "a-realizado",
+]);
+
+export function isEasyApplyLockedEstado(estado: string | undefined): boolean {
+  return EA_LOCKED_ESTADOS.has((estado ?? "").trim().toLowerCase());
 }
 
 export type AutomationMergePlan =
@@ -77,6 +95,76 @@ export function planAutomationUpsert(
 
   if (!existing.notas?.trim() && merged.notas?.trim()) {
     update.notas = merged.notas;
+  }
+
+  return { action: "update", update };
+}
+
+/**
+ * Plan upsert Easy Apply → Mongo (B-38-6).
+ * A diferencia del pipeline: puede subir Pendiente→Enviada, mergear notas EA y reflejar la cola.
+ */
+export function planEasyApplyUpsert(
+  existing: AutomationExistingDoc | null,
+  input: AutomationApplicationFields,
+  updatedBy = "easy-apply"
+): AutomationMergePlan {
+  const { patch } = applyTrackerPatch(input, "automation");
+  const merged: AutomationApplicationFields = { ...input, ...patch };
+
+  if (!existing) {
+    const estado = merged.estado ?? "Pendiente";
+    return {
+      action: "insert",
+      fields: {
+        ...merged,
+        estado,
+        ...(estado === "Enviada"
+          ? { fechaAplicacion: new Date().toISOString().slice(0, 10) }
+          : {}),
+      },
+    };
+  }
+
+  if (isEasyApplyLockedEstado(existing.estado)) {
+    return { action: "skip" };
+  }
+
+  const update: Partial<AutomationApplicationFields> & {
+    updatedBy: string;
+    fechaAplicacion?: string;
+  } = {
+    matchPercent: merged.matchPercent,
+    puesto: merged.puesto,
+    empresa: merged.empresa,
+    linkedinUrl: merged.linkedinUrl,
+    linkedinUrlNorm: merged.linkedinUrlNorm,
+    jobId: merged.jobId,
+    canal: merged.canal,
+    applyType: merged.applyType ?? existing.applyType,
+    updatedBy,
+  };
+
+  if (merged.estado) {
+    update.estado = merged.estado;
+  }
+
+  if (merged.notas?.trim()) {
+    const base = existing.notas?.trim() ?? "";
+    const line = merged.notas.trim();
+    update.notas = !base ? line : base.includes(line) ? base : `${base}\n${line}`;
+  }
+
+  if (merged.estado === "Enviada" && !existing.fechaAplicacion?.trim()) {
+    update.fechaAplicacion = new Date().toISOString().slice(0, 10);
+  }
+
+  if (merged.notas?.includes("Preguntas nuevas")) {
+    const hint = "Definir respuestas (ver Notas) y avisar en chat";
+    const prev = existing.proximoPaso?.trim() ?? "";
+    if (!prev.toLowerCase().includes(hint.toLowerCase())) {
+      update.proximoPaso = prev ? `${prev} | ${hint}` : hint;
+    }
   }
 
   return { action: "update", update };

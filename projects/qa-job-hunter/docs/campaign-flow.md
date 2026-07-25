@@ -189,6 +189,31 @@ npm run dashboard   # http://localhost:3847/tracker
 
 Re-ejecutar `tracker:sync-pipeline` no debe pisar filas con estado protegido (Enviada, Descartado, etc.) en Mongo.
 
+### Verificación dual-write Easy Apply (B-38-6)
+
+Cada cambio en `output/apply/apply-queue.csv` (productivo o dry-run) dispara sync a Mongo vía `scheduleApplyQueueSync` en `updateQueueRow` / `forcePendienteForRetry`. Mismo flag que pipeline:
+
+| Env | Efecto |
+|-----|--------|
+| `TRACKER_DUAL_WRITE=1` (default) | Cola EA → `applications` (estado, notas, fecha aplicación) |
+| `TRACKER_DUAL_WRITE=0` | Solo CSV + export Python (transición) |
+
+```bash
+cd projects/qa-job-hunter
+docker compose up -d
+
+# Dry-run (sin Submit real) — actualiza Mongo igual
+npm run easy-apply:dry-run
+
+# Productivo — Mongo se actualiza en cada fila; Excel sigue vía exportQueueToExcel
+npm run easy-apply
+
+npm run test:tracker
+npm run dashboard   # http://localhost:3847/tracker
+```
+
+**Transición:** `exportQueueToExcel` / `sync-empleos-tracker.py` se mantienen (#296). Reconcile Gmail sigue leyendo Excel exportado al cierre de apply.
+
 ## Backlog: LinkedIn search scrape
 
 Mejorar `src/2-scrape-jobs.ts` (filtros Easy Apply / geo / menos cards basura) en PR aparte — **fuera del camino Gmail** hasta review. Ver [docs/backlog-linkedin-search-scrape.md](./backlog-linkedin-search-scrape.md).

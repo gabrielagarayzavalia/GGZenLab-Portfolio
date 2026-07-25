@@ -256,6 +256,13 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
 | Deprecar legacy | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | Low |
 | Botonera /tracker | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | Low |
+| Spike dashboard ↔ tracker | B-38-11 | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) | High — cerrado GO · PR [#310](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/310) |
+| API match-jobs dashboard | B-38-12 | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) | High — post #297, #312 |
+| Schema analysis + matchRejected | B-38-13 | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) | High |
+| Wire dashboard lista | B-38-14 | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) | High — post #311 |
+| Writes dashboard → tracker | B-38-15 | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) | High — post #312 |
+| Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | Medium — post #314 |
+| Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | Low — post #313, parte #300 |
 
 ### Spike tasks (canónicos)
 
@@ -279,7 +286,7 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 
 ### Orden de ejecución
 
-`B-38-0 spike` (#264) → merge [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) → [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) → [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297)+[#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) dual-write → [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) mobile → [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) Excel legacy oculto (flag).
+`#264` spike → `#294` MVP → `#305` spike dashboard (GO, PR #310) → `#297` dual-write pipeline → `#298` dual-write EA → `#312` schema → `#311` API match-jobs → `#313` wire dashboard → `#314` writes → `#315` feedback sync → `#316` shim → `#300` deprecar legacy → `#295` mobile (misma API) → `#296` Excel flag.
 
 ### Stories post-spike (issues formales)
 
@@ -293,6 +300,22 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | — |
 | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | — |
 | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | — |
+| B-38-11 Spike dashboard ↔ tracker | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) | [#306](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/306)–[#309](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/309) — cerrado |
+| B-38-12 API match-jobs | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) | post #297, #312 |
+| B-38-13 Schema analysis | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) | — |
+| B-38-14 Wire dashboard | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) | post #311 |
+| B-38-15 Writes UI → tracker | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) | post #312 |
+| B-38-16 Feedback sync | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
+| B-38-17 Shim /api/results | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
+
+### B-39 — Feature config centralizado (pre-freemium)
+
+**Story:** [#289 US-JH-B39](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/289) · `priority:medium` · `layer:pipeline`  
+**Docs:** [`docs/feature-config-strategy.md`](docs/feature-config-strategy.md) · toggles actuales [`docs/campaign-flow.md`](docs/campaign-flow.md)
+
+**Estado:** **pospuesto** — no implementar hasta cerrar highs sprint-2. [#150 B-25](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/150) cerrada; gate actual = tanda high sprint-2.
+
+**Nivel 3 (freemium gating):** pendiente go/no-go [#225 B-36](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/225) → decidir `planLimits` local vs servicio externo (ver strategy doc).
 
 ### B-17 — Página de estadísticas (borrador)
 

@@ -56,6 +56,13 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | server-side |
 | Deprecar legacy | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | `/api/results` |
 | Botonera /tracker | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | vs Excel mid-campaña |
+| Spike dashboard ↔ tracker | B-38-11 | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) | cerrado GO · PR [#310](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/310) |
+| API match-jobs dashboard | B-38-12 | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) | post #297, #312 |
+| Schema analysis + matchRejected | B-38-13 | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) | — |
+| Wire dashboard lista | B-38-14 | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) | post #311 |
+| Writes dashboard → tracker | B-38-15 | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) | post #312 |
+| Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
+| Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
 
 **Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
 

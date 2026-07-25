@@ -308,6 +308,15 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | B-38-16 Feedback sync | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
 | B-38-17 Shim /api/results | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
 
+### B-39 — Feature config centralizado (pre-freemium)
+
+**Story:** [#289 US-JH-B39](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/289) · `priority:medium` · `layer:pipeline`  
+**Docs:** [`docs/feature-config-strategy.md`](docs/feature-config-strategy.md) · toggles actuales [`docs/campaign-flow.md`](docs/campaign-flow.md)
+
+**Estado:** **pospuesto** — no implementar hasta cerrar highs sprint-2. [#150 B-25](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/150) cerrada; gate actual = tanda high sprint-2.
+
+**Nivel 3 (freemium gating):** pendiente go/no-go [#225 B-36](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/225) → decidir `planLimits` local vs servicio externo (ver strategy doc).
+
 ### B-17 — Página de estadísticas (borrador)
 
 **Outcome:** Veo en una sola pantalla cómo evoluciona el mercado y mi pipeline de postulaciones.

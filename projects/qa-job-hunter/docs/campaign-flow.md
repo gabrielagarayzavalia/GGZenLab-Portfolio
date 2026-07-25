@@ -60,7 +60,23 @@ Excel canónico: `OneDrive\Escritorio\Empleos_Tracker.xlsx`. Applied-list no pis
 
 `Canal=Externo` = sin Easy Apply. Flujo: Excel abierto → postulación manual → marcar **Enviada**. No se automatiza el portal.
 
-## Flags
+## Toggles y variables de entorno
+
+Referencia operativa de **todo lo que hoy controla comportamiento** sin `features.json` centralizado.
+Estrategia de flags a futuro: [`docs/feature-config-strategy.md`](./feature-config-strategy.md).
+
+### Reglas rápidas
+
+| Regla | Detalle |
+|-------|---------|
+| Spikes | Script separado + env opt-in (ej. `discover-notifications.ts`); no cablear a `run-campaign` hasta go/no-go |
+| Camino diario | `DISCOVERY=gmail` (default); **no** usar `linkedin_search` como fallback |
+| Excel mid-campaña | Default **no abrir**; `OPEN_EXCEL=1` al cierre productivo; tracker web es canónico (B-38) |
+| Fixes sprint-2 | Merge directo; no flag permanente |
+
+### CLI — `npm run campaign`
+
+Orquestador: `src/campaign/run-campaign.ts`.
 
 | Flag | Efecto |
 |------|--------|
@@ -68,17 +84,81 @@ Excel canónico: `OneDrive\Escritorio\Empleos_Tracker.xlsx`. Applied-list no pis
 | `--apply-max=N` | Hasta **N intentos** de apply/dry-run (sin EA → sigue; si no hay más pendientes, termina antes) |
 | `--skip-apply` | Omite Easy Apply |
 | `--dry-run` | Sin abrir Excel mid; `easy-apply:dry-run`; Excel solo al final post-reconcile |
-| `--yes` / `-y` | Sin pausa interactiva tras Excel (CI). En uso humano preferí **sin** `--yes` para revisar Excel. |
+| `--yes` / `-y` | Sin pausa interactiva tras Excel (CI). En uso humano preferí **sin** `--yes` para revisar Excel |
 
-## Env
+### Env — campaña y discovery
 
-| Variable | Descripción |
-|----------|-------------|
-| `APPLIED_LIST_ROOT` | Path a `qa-job-applied-list` (fetch/pipeline/reconcile) |
-| `EMPLEOS_TRACKER_XLSX` | Path al Excel (default OneDrive Escritorio) |
-| `APPLY_MAX` | Tope de avisos en Easy Apply productivo |
-| `CAMPAIGN_DRY_RUN` | `1` = mismo que `--dry-run` |
-| `DISCOVERY` | `gmail` (default) \| `linkedin_search` (opt-in; imprime aviso de calidad) |
+| Variable | Default | Comportamiento |
+|----------|---------|----------------|
+| `CAMPAIGN_DRY_RUN` | — | `1` / `true` = mismo que `--dry-run` |
+| `DISCOVERY` | `gmail` | `gmail` = fetch Gmail API. `linkedin_search` = opt-in; imprime aviso de calidad; **no** camino diario |
+| `NOTIFICATIONS_DISCOVERY` | `1` (con gmail) | `0` = omitir post-fetch LinkedIn Notifications en campaña |
+| `NOTIFICATIONS_LOOKBACK_HOURS` | `24` | Ventana horas (max 336) para notifications discovery |
+| `NOTIFICATIONS_MAX_ITEMS` | `5` | Tope ítems en campaña |
+| `APPLIED_LIST_ROOT` | auto | Path a `qa-job-applied-list` (fetch / pipeline / reconcile) |
+| `APPLY_MAX` | — | Tope avisos Easy Apply productivo (equiv. `--apply-max`) |
+
+### Env — Easy Apply (productivo y dry-run)
+
+| Variable | Default | Comportamiento |
+|----------|---------|----------------|
+| `DRY_RUN_MAX` | `10` | Máx. jobs en `easy-apply:dry-run` |
+| `DRY_RUN_ALL` | — | `1` = no parar tras primer éxito dry-run |
+| `DRY_RUN_JOB_ID` | — | Forzar un jobId en dry-run |
+| `DRY_RUN_JOB_TITLE` / `DRY_RUN_JOB_COMPANY` | — | Metadata cuando se fuerza jobId |
+| `DRY_RUN_CONFIG_CV` | — | Forzar CV en dry-run (`resume-match`, `fill-answers`) |
+| `APPLY_JOB_ID` | — | Forzar un job en apply productivo |
+| `APPLY_JOB_TITLE` / `APPLY_JOB_COMPANY` | — | Metadata cuando se fuerza `APPLY_JOB_ID` |
+| `OPEN_EXCEL` | off | `1` / `true` = abrir Excel al **cierre** productivo (`post-run.ts`) |
+| `EMPLEOS_TRACKER_XLSX` | Desktop | Path al Excel tracker |
+| `EXCEL_DESKTOP_DIR` | — | Directorio Desktop si Excel no está en OneDrive default |
+| `COVER_LETTER_PDF` | default interno | Path PDF cover letter |
+| `PERF_TEST` | — | Modo perf tests apply (`timing.ts`) |
+| `PERF_FAIL_HARD` | — | `0` / `1` = fallar duro en perf tests |
+
+Detalle flujo apply: [`docs/easy-apply-flow.md`](./easy-apply-flow.md).
+
+### Env — scrape / analyze (path hunter legacy)
+
+| Variable | Default | Comportamiento |
+|----------|---------|----------------|
+| `DISCOVERY` | — | En `2-scrape-jobs.ts`: requiere `linkedin_search` explícito para scrape search |
+| `LLM_PROVIDER` | auto | `regex` \| `ollama` \| `anthropic` (`llm-client.ts`) |
+| `ANTHROPIC_API_KEY` | — | Si existe → provider anthropic |
+| `OLLAMA_URL` / `OLLAMA_MODEL` | localhost | Ollama para analyze local |
+
+### Env — dashboard y tracker
+
+| Variable | Default | Comportamiento |
+|----------|---------|----------------|
+| `DASHBOARD_PORT` | `3847` | Puerto `serve-dashboard.ts` |
+| `MONGODB_URI` | docker local | Mongo para tracker / jobs |
+| `OPEN_DESKTOP_EXCEL` | off (futuro B-38-3) | Abrir Excel mid-campaña; hoy usar `OPEN_EXCEL` al cierre |
+
+### Dashboard `/api/health` — features hardcoded
+
+Hoy **no** leen env ni JSON; objeto fijo en `serve-dashboard.ts`:
+
+| Key | Valor actual | UI / API |
+|-----|--------------|----------|
+| `configQuestions` | `true` | `/config#preguntas` |
+| `configSources` | `true` | Config fuentes |
+| `configPuestos` | `true` | Config puestos |
+| `configEmpleo` | `true` | Config empleo |
+| `configCvs` | `true` | Config CVs |
+| `runApply` | `true` | Botón apply desde dashboard |
+| `tracker` | `true` | Ruta `/tracker` |
+
+Unificación futura: [#289 B-39](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/289) + `local/features.json`.
+
+### Scripts spike / opt-in (fuera de campaña)
+
+| Script / env | Rol |
+|--------------|-----|
+| `npm run discover:notifications` + `--dry-run` | Spike B-37; no en pipeline diario hasta go |
+| `NOTIFICATIONS_LOOKBACK_HOURS` | También en script standalone |
+| `npm run discover:indeed` | Spike Indeed; `INDEED_KEYWORDS`, `INDEED_LIMIT`, `FORCE_SOURCE=1` |
+| `SMOKE_INDEED_LIVE=1` | Smoke Indeed con browser |
 
 ## Criterios done (MVP)
 

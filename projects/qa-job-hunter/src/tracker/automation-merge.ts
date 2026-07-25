@@ -16,6 +16,7 @@ export interface AutomationApplicationFields {
   applyType?: string;
   proximoPaso?: string;
   notas?: string;
+  fechaAplicacion?: string;
   estado?: TrackerEstado;
 }
 
@@ -112,9 +113,16 @@ export function planEasyApplyUpsert(
   const merged: AutomationApplicationFields = { ...input, ...patch };
 
   if (!existing) {
+    const estado = merged.estado ?? "Pendiente";
     return {
       action: "insert",
-      fields: { ...merged, estado: merged.estado ?? "Pendiente" },
+      fields: {
+        ...merged,
+        estado,
+        ...(estado === "Enviada"
+          ? { fechaAplicacion: new Date().toISOString().slice(0, 10) }
+          : {}),
+      },
     };
   }
 

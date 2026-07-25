@@ -66,6 +66,22 @@ test("planEasyApplyUpsert permite actualizar Enviada (notas)", () => {
   }
 });
 
+test("planEasyApplyUpsert insert Enviada setea fechaAplicacion", () => {
+  const plan = planEasyApplyUpsert(null, { ...baseFields, estado: "Enviada" });
+  assert.equal(plan.action, "insert");
+  if (plan.action === "insert") {
+    assert.match(plan.fields.fechaAplicacion ?? "", /^\d{4}-\d{2}-\d{2}$/);
+  }
+});
+
+test("planEasyApplyUpsert insert Pendiente sin fechaAplicacion", () => {
+  const plan = planEasyApplyUpsert(null, baseFields);
+  assert.equal(plan.action, "insert");
+  if (plan.action === "insert") {
+    assert.equal(plan.fields.fechaAplicacion, undefined);
+  }
+});
+
 test("isEasyApplyLockedEstado no bloquea Pendiente ni Enviada", () => {
   assert.equal(isEasyApplyLockedEstado("Pendiente"), false);
   assert.equal(isEasyApplyLockedEstado("Enviada"), false);

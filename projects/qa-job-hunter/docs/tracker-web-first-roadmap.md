@@ -26,9 +26,9 @@
 | Fase | ID backlog | Entregable | Depende de |
 |------|------------|------------|------------|
 | **0 Spike** | B-38-0 (#264) | Inventario, API diseño, PoC grillas, wireframe mobile, plan migración, go/no-go (#273) | — |
-| **1 MVP desktop** | B-38-1 (placeholder) | `/tracker` AG Grid + API CRUD + import .xlsx | Spike GO |
-| **2 Mobile lite** | B-38-2 (placeholder) | `/m-lite` cards, misma API | B-38-1 |
-| **3 Retiro Excel writers** | B-38-3 (placeholder) | Dual-write → Mongo-only; applied-list sin writer Escritorio | B-38-1, B-23 |
+| **1 MVP desktop** | B-38-1 ([#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294)) | `/tracker` AG Grid + API CRUD + import .xlsx | Spike GO · PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
+| **2 Mobile lite** | B-38-2 ([#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295)) | `/m-lite` cards wired API | #294 |
+| **3 Retiro Excel writers** | B-38-3 ([#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296)) | Dual-write → Mongo-only; applied-list sin writer Escritorio | #297, #298 |
 
 ---
 
@@ -64,15 +64,20 @@ B-38-1 MVP desktop → B-38-2 mobile → B-38-3 retiro Excel
 
 ---
 
-## Stories post-spike (placeholders — crear issues tras go/no-go #273)
+## Stories post-spike (issues formales)
 
-| ID | Título propuesto | Prioridad | Notas |
-|----|------------------|-----------|-------|
-| **B-38-1** | MVP desktop `/tracker` (AG Grid + API) | High | Wire a `applications` Mongo |
-| **B-38-2** | Mobile lite `/m` cards | Medium | Misma API que desktop |
-| **B-38-3** | Retiro writers Excel applied-list | High | Cierra loop con #131; política estados Excel |
+| ID | Issue | Prioridad |
+|----|-------|-----------|
+| B-38-1 MVP desktop | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | High — PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
+| B-38-2 Mobile lite | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) + tasks [#302](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/302)–[#304](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/304) | Medium |
+| B-38-3 Retiro Excel | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | High |
+| B-38-5 Dual-write pipeline | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | High |
+| B-38-6 Dual-write EA | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | High |
+| B-38-7 Import/export xlsx | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
+| B-38-8 Deprecar legacy | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | Low |
+| B-38-9 Botonera /tracker | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | Low |
 
-Detalle tasks: ver breakdown en [`spike-tracker-web.md`](./spike-tracker-web.md) sección B38-0-06 (B38-1…B38-10).
+**Orden sugerido:** merge #293 → cerrar #294 → #297+#298 → #295 → #299/#301 → #300 → #296.
 
 ---
 

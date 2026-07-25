@@ -47,10 +47,15 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 
 | Fase | ID | GitHub | Notas |
 |------|-----|--------|-------|
-| Spike | B-38-0 | #264 + [#265](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/265)–[#273](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/273) | Inventario, API, PoC grillas, mobile wireframe, migración, go/no-go |
-| MVP desktop | B-38-1 | *(placeholder post-#273)* | `/tracker` + AG Grid CE |
-| Mobile lite | B-38-2 | *(placeholder)* | `/m-lite` cards |
-| Retiro Excel | B-38-3 | *(placeholder)* | Writers applied-list; **supersede futuro** [#131 B-23](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131) |
+| Spike | B-38-0 | [#264](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264) + tasks #265–#273 (cerrados) | GO · spike cerrado |
+| MVP desktop | B-38-1 | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
+| Mobile lite | B-38-2 | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) | tasks [#302](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/302)–[#304](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/304) |
+| Retiro Excel | B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | supersede [#131](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131) |
+| Dual-write pipeline | B-38-5 | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | post #294 |
+| Dual-write EA | B-38-6 | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | reemplazar sync.py |
+| Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | server-side |
+| Deprecar legacy | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | `/api/results` |
+| Botonera /tracker | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | vs Excel mid-campaña |
 
 **Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
 

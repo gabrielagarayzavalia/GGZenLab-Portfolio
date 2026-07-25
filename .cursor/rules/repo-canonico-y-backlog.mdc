@@ -13,6 +13,8 @@ alwaysApply: true
 - Si ves `qa-portfolio` en el código, es solo **nombre interno/legacy** (redirect `/qa-portfolio/` → `/qa/`, `container_name`, `_postman_id`), **no** un repo aparte. No lo confundas con el remoto ni cambies el origin por él.
 - Antes de operaciones de git/GitHub (PR, issues, links), verificá el remoto real:
   `git remote -v` debe mostrar `gabrielagarayzavalia/GGZenLab-Portfolio`.
+- **qa-job-hunter:** el único clone válido es `GGZenLab-Portfolio/projects/qa-job-hunter`. El path `QA-portfolio/projects/qa-job-hunter` (remote `qa-job-hunter` standalone) está **deprecado** — no commitear ni abrir PRs desde ahí.
+- **qa-job-applied-list:** canónico en `QA-portfolio/projects/qa-job-applied-list` → `gabrielagarayzavalia/qa-job-applied-list`. Línea activa **`release/v2`**; sync `main` tras cada merge. Ver `docs/versionado-ramas.md` en cada repo.
 - Al enlazar issues/PRs o el sitio, usá siempre:
   - Repo: `gabrielagarayzavalia/GGZenLab-Portfolio`
   - Sitio live: `https://gabrielagarayzavalia.github.io/GGZenLab-Portfolio/`

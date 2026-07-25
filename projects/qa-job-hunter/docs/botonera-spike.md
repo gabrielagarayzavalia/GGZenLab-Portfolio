@@ -25,6 +25,7 @@ Definir el **mínimo** de controles UI para lanzar Easy Apply sin terminal, con 
 ## API (desacoplada)
 
 - `POST /api/run/apply` — body `{ mode, applyMax?, jobId? }` → spawn en background.
+- `POST /api/run/apply/cancel` — tree-kill corrida (#324).
 - `GET /api/run/apply/status` — `{ status, logTail, ... }` desde `output/run/apply-run.json`.
 
 Runner: `src/run/apply-runner.ts` (sin UI).

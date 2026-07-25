@@ -4,6 +4,7 @@
 // desde grabación es B17-3. Ver docs/easy-apply-flow.md.
 
 import { chromium } from "playwright";
+import { registerPlaywrightShutdown } from "./run/playwright-shutdown.js";
 import fs from "fs";
 import path from "path";
 import {
@@ -929,6 +930,7 @@ async function main() {
     slowMo: 250,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });
+  registerPlaywrightShutdown(browser);
   const context = await browser.newContext(maximizedContextOptions(sessionPath));
   const page = await prepareApplyBrowserPage(context);
   await maximizeWindow(page);

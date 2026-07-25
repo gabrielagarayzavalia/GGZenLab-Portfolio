@@ -58,6 +58,7 @@ import {
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
 import {
+  cancelApplyRun,
   refreshApplyRunState,
   startApplyRun,
   type ApplyRunMode,
@@ -167,6 +168,17 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     } catch (err) {
       const message = err instanceof Error ? err.message : "JSON inválido";
       const status = message.includes("en curso") ? 409 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  if (pathname === "/api/run/apply/cancel" && method === "POST") {
+    try {
+      sendJson(res, 200, cancelApplyRun());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cancelar";
+      const status = message.includes("No hay") ? 409 : 400;
       sendJson(res, status, { error: message });
     }
     return;

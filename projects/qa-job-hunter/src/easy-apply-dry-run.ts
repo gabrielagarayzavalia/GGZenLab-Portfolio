@@ -91,6 +91,7 @@ import {
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import { syncEmptyCapturedFieldsToConfig } from "./apply/config-field-sync.js";
 import {
   applyUnknownPolicyToJob,
   evaluateUnknownFields,
@@ -310,11 +311,17 @@ async function recordUnansweredAndStayPending(
   jobId: string,
   url: string,
   tag: string,
-  priorLabels: string[] = []
+  priorLabels: string[] = [],
+  jobMeta: { company?: string; title?: string } = {}
 ): Promise<{ labels: string[]; dumpPath: string }> {
   await saveDebugScreenshot(page, jobId, tag);
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, url, fields);
+  syncEmptyCapturedFieldsToConfig(fields, {
+    jobId,
+    company: jobMeta.company,
+    title: jobMeta.title,
+  });
   logCapturedFields(fields);
   const labels = mergeUniqueLabels(priorLabels, unansweredLabelsFromFields(fields));
   const fieldNotes =
@@ -741,7 +748,8 @@ async function dryRunThroughModal(
         jobId,
         jobUrl,
         "resume_timeout",
-        unansweredAcc
+        unansweredAcc,
+        { company, title: jobTitle }
       );
       updateQueueRow(jobId, {
         status: "pendiente",
@@ -760,7 +768,8 @@ async function dryRunThroughModal(
       jobId,
       jobUrl,
       step,
-      unansweredAcc
+      unansweredAcc,
+      { company, title: jobTitle }
     );
     return { outcome: "unanswered", unansweredLabels: labels };
   }
@@ -769,6 +778,7 @@ async function dryRunThroughModal(
   await saveDebugScreenshot(page, jobId, "no-submit");
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, jobUrl, fields);
+  syncEmptyCapturedFieldsToConfig(fields, { jobId, company, title: jobTitle });
   logCapturedFields(fields);
   throw new DryRunDebugStopError(
     jobId,

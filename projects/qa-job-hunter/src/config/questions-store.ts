@@ -169,12 +169,16 @@ export function upsertUnansweredFromHits(
 
     if (existing) {
       if (existing.status === "answered") {
-        // Ya tiene respuesta en banco — no degradar; solo bump seen
+        // Ya tiene respuesta en banco — no degradar; solo bump seen + options capturadas
         existing.seenCount += 1;
         existing.updatedAt = t;
         if (meta.jobId) existing.lastJobId = meta.jobId;
         if (meta.company) existing.lastCompany = meta.company;
         if (meta.title) existing.lastTitle = meta.title;
+        if (hit.options?.length) {
+          const set = new Set([...(existing.options || []), ...hit.options]);
+          existing.options = [...set].slice(0, 40);
+        }
         touched.push(existing);
         continue;
       }

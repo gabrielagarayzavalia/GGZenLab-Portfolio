@@ -1,0 +1,28 @@
+---
+description: Consultar al agente Version Control antes de tickets, merges o ramas nuevas
+alwaysApply: true
+---
+
+# Version Control — guardrail obligatorio
+
+Antes de **crear un issue/ticket nuevo**, **abrir un PR**, **mergear**, **crear rama de trabajo** o **promover entre ramas** (`main`, `release/v1`, `refactor/*`, features):
+
+1. **Consultar al agente/chat Version Control** (chat dedicado en Cursor) si vas en buen camino.
+2. Incluir en la consulta: rama actual, objetivo, si toca `main` / `release/v1` / feature, y si hay PRs abiertos relacionados.
+3. **No mergear “a lo loco”** ni abrir tickets duplicados sin ese OK o sin alinear con backlog/issues existentes.
+4. Si hay duda de rama, freeze, o split de PRs → **preguntar a la usuaria** (no asumir).
+
+## Qué valida Version Control
+
+- Rama correcta para el modo de trabajo (v1 freeze vs desacople vs feature).
+- Si el cambio va en PR chico de un solo tema.
+- Si conviene port/cherry-pick vs merge completo.
+- Coherencia con tags (`v1.0-functional`, `v1.1-stable`) y política de no push a `main`.
+
+## Ritual mínimo (cualquier agente)
+
+```text
+git branch --show-current && git status -sb
+```
+
+Si la tarea implica git/GitHub/backlog → **pausar** y escribir en Version Control (o a la usuaria) antes de ejecutar.

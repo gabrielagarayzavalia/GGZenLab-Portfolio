@@ -2150,6 +2150,7 @@ const DOWNLOAD_RESUME_RE = /download\s+resume/i;
 /** Link LinkedIn EN/ES: "Show 3 more resumes" / "Mostrar N currículums más". */
 const SHOW_MORE_RESUMES_RE =
   /show\s+\d+\s+more\s+resumes?|mostrar\s+\d+\s+(curr[ií]culums?|cvs?|resumes?)\s+m[aá]s|ver\s+\d+\s+m[aá]s/i;
+const UPLOAD_RESUME_BTN_RE = /upload\s+resume|subir\s+curr[ií]culum/i;
 
 type DocumentCardToggle = {
   id: string;
@@ -2725,6 +2726,128 @@ async function collectLinkedinResumeFilenames(page: Page, root: Locator): Promis
   return names;
 }
 
+/** Botón/link "Upload resume" del paso CV (#247). */
+function uploadResumeButton(root: Locator): Locator {
+  return root
+    .getByRole("button", { name: UPLOAD_RESUME_BTN_RE })
+    .or(
+      root
+        .locator("button, a, span[role='button'], div[role='button']")
+        .filter({ hasText: UPLOAD_RESUME_BTN_RE })
+    )
+    .first();
+}
+
+async function clickUploadResumeAndSetFile(
+  page: Page,
+  root: Locator,
+  pdfPath: string
+): Promise<boolean> {
+  const uploadBtn = uploadResumeButton(root);
+  let target = uploadBtn;
+  if (!(await target.isVisible({ timeout: 600 }).catch(() => false))) {
+    target = root.getByText(UPLOAD_RESUME_BTN_RE).first();
+    if (!(await target.isVisible({ timeout: 400 }).catch(() => false))) {
+      console.log("   ↳ Resume: no encontré botón Upload resume");
+      return false;
+    }
+  }
+
+  try {
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent("filechooser", { timeout: 10_000 }),
+      clickSafeInEasyApply(target, { timeoutMs: 5000 }),
+    ]);
+    await fileChooser.setFiles(pdfPath);
+    console.log("   ↳ Resume: upload vía filechooser");
+    return true;
+  } catch {
+    /* fallback input oculto */
+  }
+
+  if (!(await clickSafeInEasyApply(target, { timeoutMs: 5000 }))) return false;
+  await sleep(600);
+  const fileInputs = root.locator("input[type='file']");
+  const n = await fileInputs.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const input = fileInputs.nth(i);
+    try {
+      await input.setInputFiles(pdfPath);
+      console.log("   ↳ Resume: upload vía input file tras click");
+      return true;
+    } catch {
+      /* siguiente input */
+    }
+  }
+  console.log("   ↳ Resume: click Upload resume sin input file utilizable");
+  return false;
+}
+
+async function waitForResumeFilenameOnLinkedIn(
+  page: Page,
+  root: Locator,
+  originalName: string,
+  timeoutMs = 20_000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  const token = originalName.replace(/\.pdf$/i, "").slice(0, 32);
+  const tokenRe = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  while (Date.now() < deadline) {
+    const names = await collectLinkedinResumeFilenames(page, root);
+    if (names.some((n) => resumeFilenamesMatch(n, originalName))) return true;
+    if (await root.getByText(tokenRe).first().isVisible({ timeout: 250 }).catch(() => false)) {
+      return true;
+    }
+    await sleep(500);
+  }
+  return false;
+}
+
+/** Seleccionar por filename tras upload (toggle shadow o radio light DOM). */
+async function selectResumeByConfigFilename(
+  page: Page,
+  root: Locator,
+  originalName: string
+): Promise<boolean> {
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    if (DOWNLOAD_RESUME_RE.test(t.aria) || COVER_AS_RESUME_RE.test(t.title)) continue;
+    if (!resumeFilenamesMatch(resumeFilenameFromToggle(t), originalName)) continue;
+    if (t.selected) {
+      console.log(`   ↳ Resume: post-upload ya seleccionado → ${t.title.slice(0, 80)}`);
+      return true;
+    }
+    const ok = await clickDocumentCardToggle(page, t.id);
+    if (ok) {
+      console.log(`   ↳ Resume: post-upload toggle → ${t.title.slice(0, 80)}`);
+      await sleep(400);
+      return true;
+    }
+  }
+
+  const token = originalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const radio = root.getByRole("radio", { name: new RegExp(token, "i") }).first();
+  if (await radio.isVisible({ timeout: 600 }).catch(() => false)) {
+    const checked = await radio.isChecked().catch(() => false);
+    if (!checked) {
+      await radio.check({ force: true }).catch(() => radio.click({ timeout: 3000, noWaitAfter: true }));
+    }
+    console.log(`   ↳ Resume: post-upload radio → ${originalName.slice(0, 80)}`);
+    await sleep(400);
+    return true;
+  }
+
+  const row = root.getByText(new RegExp(token, "i")).first();
+  if (await row.isVisible({ timeout: 500 }).catch(() => false)) {
+    await row.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
+    console.log(`   ↳ Resume: post-upload click fila → ${originalName.slice(0, 80)}`);
+    await sleep(400);
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * #247: subir PDF de Config solo si NO está ya en la lista de LinkedIn.
  * Si ya está → no upload (evita duplicados).
@@ -2759,42 +2882,27 @@ async function uploadResumeFromConfigIfMissing(
     return false;
   }
 
-  const fileInputs = root.locator("input[type='file']");
-  const n = await fileInputs.count().catch(() => 0);
-  for (let i = 0; i < n; i++) {
-    const input = fileInputs.nth(i);
-    const near = await input
-      .evaluate((node) => {
-        const wrap =
-          node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div, label") ??
-          node.parentElement;
-        return (wrap?.textContent ?? "").trim().slice(0, 280);
-      })
-      .catch(() => "");
-    const name = ((await input.getAttribute("name")) ?? "").trim();
-    const aria = ((await input.getAttribute("aria-label")) ?? "").trim();
-    const blob = `${near} ${name} ${aria}`;
-    if (isCoverLetterLabel(blob)) continue;
-    if (!/resume|cv\b|curriculum|upload\s*resume|subir.*curr/i.test(blob)) continue;
-
-    try {
-      await input.setInputFiles(pdfPath);
-      attempted.add(configCv.id);
-      resumeUploadAttempted.set(page, attempted);
-      console.log(`   ↳ Resume: upload Config → LinkedIn (${configCv.originalName})`);
-      await sleep(1200);
-      const after = await collectLinkedinResumeFilenames(page, root);
-      if (isConfigCvOnLinkedInList(configCv, after)) {
-        console.log(`   ↳ Resume: apareció en lista tras upload`);
-      }
-      return true;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`   ↳ Resume: upload falló: ${msg.slice(0, 100)}`);
-    }
+  const uploaded = await clickUploadResumeAndSetFile(page, root, pdfPath);
+  if (!uploaded) {
+    console.log("   ↳ Resume: no se pudo subir PDF desde Config");
+    return false;
   }
 
-  console.log("   ↳ Resume: no encontré input file para upload de CV");
+  attempted.add(configCv.id);
+  resumeUploadAttempted.set(page, attempted);
+  console.log(`   ↳ Resume: upload Config → LinkedIn (${configCv.originalName})`);
+
+  const appeared = await waitForResumeFilenameOnLinkedIn(page, root, configCv.originalName);
+  if (!appeared) {
+    console.log(`   ↳ Resume: upload hecho pero no apareció en lista (${configCv.originalName})`);
+    return false;
+  }
+
+  if (await selectResumeByConfigFilename(page, root, configCv.originalName)) {
+    return true;
+  }
+
+  console.log(`   ↳ Resume: en lista pero no quedó seleccionado (${configCv.originalName})`);
   return false;
 }
 
@@ -2805,16 +2913,31 @@ async function trySelectPreferredResume(
   jobTitle = "",
   company = ""
 ): Promise<boolean> {
-  if (await isRoleResumeSelected(page, kind, jobTitle, company)) return true;
+  const forcedCvName = (process.env.DRY_RUN_CONFIG_CV ?? "").trim();
+  if (!forcedCvName && (await isRoleResumeSelected(page, kind, jobTitle, company))) {
+    return true;
+  }
   await clickShowMoreResumes(root);
   if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
-    await sleep(500);
+    if (forcedCvName) {
+      return (
+        (await selectResumeByConfigFilename(page, root, forcedCvName)) ||
+        (await isRoleResumeSelected(page, kind, jobTitle, company))
+      );
+    }
+    return isRoleResumeSelected(page, kind, jobTitle, company);
   }
   if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
   if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;
   await clickShowMoreResumes(root);
   if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
-    await sleep(500);
+    if (forcedCvName) {
+      return (
+        (await selectResumeByConfigFilename(page, root, forcedCvName)) ||
+        (await isRoleResumeSelected(page, kind, jobTitle, company))
+      );
+    }
+    return isRoleResumeSelected(page, kind, jobTitle, company);
   }
   if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
   if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;

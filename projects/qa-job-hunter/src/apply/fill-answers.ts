@@ -2810,7 +2810,7 @@ async function waitForResumeFilenameOnLinkedIn(
   return false;
 }
 
-/** Tras upload: esperar que el PDF deje de procesarse (spinner) antes de clickear nombre. */
+/** Tras upload: esperar que el PDF deje de procesarse (spinner en la fila del CV). */
 async function waitForResumeUploadReady(
   page: Page,
   root: Locator,
@@ -2824,37 +2824,56 @@ async function waitForResumeUploadReady(
       await sleep(500);
       continue;
     }
-    const busy = (await page
-      .evaluate(`((fname) => {
-        const modal = document.querySelector(".jobs-easy-apply-modal");
-        if (!modal) return true;
-        const token = fname.replace(/\\.pdf$/i, "").slice(0, 28).toLowerCase();
-        function rowBusy(root) {
-          for (const el of Array.from(root.querySelectorAll("*"))) {
-            const t = (el.textContent || "").toLowerCase();
-            if (!t.includes(token) || !t.includes(".pdf")) continue;
-            const row =
-              el.closest("li, label, [class*='document'], [class*='resume'], [class*='JobsDocument']") ||
-              el.parentElement;
-            if (
-              row &&
-              row.querySelector(
-                "[class*='loading'], [class*='spinner'], [aria-busy='true'], .artdeco-loader, progress"
-              )
-            ) {
-              return true;
-            }
+    const state = (await page.evaluate(`((fname) => {
+      const modal = document.querySelector(".jobs-easy-apply-modal");
+      if (!modal) return { ready: false, reason: "no-modal" };
+      const token = fname.replace(/\\.pdf$/i, "").slice(0, 28).toLowerCase();
+      function norm(s) {
+        return (s || "").toLowerCase().replace(/\\.pdf$/i, "").replace(/[^a-z0-9]+/g, "");
+      }
+      const want = norm(fname);
+      function matchesText(text) {
+        const n = norm(text);
+        return n && (n === want || n.includes(want) || want.includes(n));
+      }
+      function cardLoaderBusy(root) {
+        for (const toggle of Array.from(root.querySelectorAll('[id^="jobsDocumentCardToggleLabel-"]'))) {
+          const aria = (toggle.getAttribute("aria-label") || "").trim();
+          const fn = aria.replace(/^(select|deselect)\\s+resume\\s+/i, "").trim();
+          if (!matchesText(fn)) continue;
+          if (/^deselect\\s+resume/i.test(aria)) {
+            return { ready: true, reason: "deselect-aria" };
           }
-          for (const el of Array.from(root.querySelectorAll("*"))) {
-            if (el.shadowRoot && rowBusy(el.shadowRoot)) return true;
-          }
-          return false;
+          const card =
+            toggle.closest("[class*='document'], [class*='JobsDocument'], [class*='resume']") ||
+            toggle.parentElement;
+          const loader = card && card.querySelector(
+            ".artdeco-loader, [class*='spinner']:not([class*='completeness']), [aria-busy='true']"
+          );
+          if (loader) return { ready: false, reason: "card-loader" };
+          return { ready: true, reason: "toggle-without-loader" };
         }
-        const outlet = modal.querySelector("#interop-outlet");
-        if (outlet && outlet.shadowRoot && rowBusy(outlet.shadowRoot)) return true;
-        return rowBusy(modal);
-      })(${JSON.stringify(originalName)})`)) as boolean;
-    if (!busy) return true;
+        for (const el of Array.from(root.querySelectorAll("*"))) {
+          if (el.shadowRoot) {
+            const hit = cardLoaderBusy(el.shadowRoot);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      }
+      const outlet = modal.querySelector("#interop-outlet");
+      const hit =
+        (outlet && outlet.shadowRoot && cardLoaderBusy(outlet.shadowRoot)) ||
+        cardLoaderBusy(modal);
+      if (hit) return hit;
+      return { ready: true, reason: "filename-in-list" };
+    })(${JSON.stringify(originalName)})`)) as { ready: boolean; reason: string };
+    if (state.ready) {
+      if (state.reason !== "filename-in-list") {
+        console.log(`   ↳ Resume: upload listo (${state.reason})`);
+      }
+      return true;
+    }
     await sleep(600);
   }
   return false;

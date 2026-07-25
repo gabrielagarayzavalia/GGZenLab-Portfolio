@@ -2357,6 +2357,9 @@ function resumeFilenameFromAria(aria: string): string {
 
 type ResumePickCandidate = { label: string; score: number };
 
+/** Evita re-upload del mismo CV en el mismo paso EA (#247). */
+const resumeUploadAttempted = new WeakMap<Page, Set<string>>();
+
 function pickBestResumeCandidate(
   candidates: ResumePickCandidate[],
   jobTitle: string,
@@ -2750,6 +2753,12 @@ async function uploadResumeFromConfigIfMissing(
     return false;
   }
 
+  const attempted = resumeUploadAttempted.get(page) ?? new Set<string>();
+  if (attempted.has(configCv.id)) {
+    console.log(`   ↳ Resume: upload ya intentado (${configCv.originalName}) — skip`);
+    return false;
+  }
+
   const fileInputs = root.locator("input[type='file']");
   const n = await fileInputs.count().catch(() => 0);
   for (let i = 0; i < n; i++) {
@@ -2770,8 +2779,14 @@ async function uploadResumeFromConfigIfMissing(
 
     try {
       await input.setInputFiles(pdfPath);
+      attempted.add(configCv.id);
+      resumeUploadAttempted.set(page, attempted);
       console.log(`   ↳ Resume: upload Config → LinkedIn (${configCv.originalName})`);
       await sleep(1200);
+      const after = await collectLinkedinResumeFilenames(page, root);
+      if (isConfigCvOnLinkedInList(configCv, after)) {
+        console.log(`   ↳ Resume: apareció en lista tras upload`);
+      }
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2883,6 +2898,15 @@ export async function ensureResumeForRole(
 
   let selected = await readSelected();
 
+  const forcedCvName = (process.env.DRY_RUN_CONFIG_CV ?? "").trim();
+  const forcedCvSelected =
+    !!forcedCvName &&
+    selected
+      .split("|")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .some((part) => resumeFilenamesMatch(part, forcedCvName));
+
   if (isCoverAsResumeLabel(selected)) {
     console.log(
       `   ↳ Resume: ⚠ cover/intro seleccionado ("${selected.slice(0, 60)}") — cambiar`
@@ -2896,9 +2920,21 @@ export async function ensureResumeForRole(
     }
   }
 
+  if (forcedCvName && forcedCvSelected) {
+    console.log(`   ↳ Resume: dry-run CV forzado OK → ${forcedCvName}`);
+    return {
+      outcome: "ok",
+      preferred: true,
+      selectedLabel: selected,
+      notes: "",
+      canAdvance: true,
+    };
+  }
+
   if (
-    roleResumeSelectedInToggles(toggles, kind, jobTitle, company) ||
-    isPreferredResumeLabel(selected, kind, jobTitle, company)
+    !forcedCvName &&
+    (roleResumeSelectedInToggles(toggles, kind, jobTitle, company) ||
+      isPreferredResumeLabel(selected, kind, jobTitle, company))
   ) {
     console.log(`   ↳ Resume: ya seleccionado OK (${kind}) — Next sin re-bind`);
     return {

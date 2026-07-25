@@ -48,6 +48,11 @@ export function isResumeAlreadyOnLinkedIn(linkedinFilename: string): boolean {
 
 /** Mejor CV de Config para el aviso (por originalName + título). */
 export function pickBestConfigCvForJob(jobTitle: string, company = ""): ConfigCv | null {
+  const forced = (process.env.DRY_RUN_CONFIG_CV ?? "").trim();
+  if (forced) {
+    const hit = listCvs().find((c) => resumeFilenamesMatch(c.originalName, forced));
+    if (hit) return hit;
+  }
   const cvs = listCvs().filter((c) => !c.archived);
   if (cvs.length === 0) return null;
   let best: ConfigCv | null = null;

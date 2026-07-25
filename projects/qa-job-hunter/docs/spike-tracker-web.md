@@ -1,6 +1,7 @@
 # Spike B38 — Tracker web-first (desktop grid + mobile lite)
 
 **Epic:** [US-JH-B38-0 #264](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264)  
+**Roadmap producto:** [`tracker-web-first-roadmap.md`](./tracker-web-first-roadmap.md)  
 **Rama:** `spike/b38-tracker-web`  
 **Fecha:** 2026-07-25  
 **Repo:** `GGZenLab-Portfolio/projects/qa-job-hunter`
@@ -310,11 +311,27 @@ Documento: ver `TrackerApplication` en `src/types/tracker-application.ts`.
 
 ```bash
 cd projects/qa-job-hunter
+docker compose up -d
+npm run tracker:seed          # MVP: seed Mongo desde Desktop (solo lectura)
 npm run dashboard
-# Abrir http://localhost:3847/poc/
-# Probar import con Empleos_Tracker.xlsx (Desktop)
-# Mobile: http://localhost:3847/m-lite.html
+# PoC estático: http://localhost:3847/poc/
+# Tracker MVP:  http://localhost:3847/tracker
+# Mobile:       http://localhost:3847/m-lite.html
 ```
+
+### Verificación manual (2026-07-25)
+
+| Ruta | Resultado |
+|------|-----------|
+| `/poc/`, `/poc/ag-grid.html`, `/poc/tabulator.html` | OK — import .xlsx cliente (SheetJS) |
+| `/m-lite.html` | OK — cards + filtros estado |
+| `npm run tracker:seed` | OK — **148 filas** desde `Empleos_Tracker.xlsx` Desktop |
+| `GET /api/tracker/applications` | OK — 148 docs en Mongo `applications` |
+| `/tracker` | OK — AG Grid wired a API; edición Estado / Notas / Mis comentarios / Próximo paso |
+
+**Decisión grillas:** AG Grid CE 1ª (producción `/tracker`); Tabulator 2ª (fallback).
+
+**Pendiente post-MVP fase 1:** dual-write pipeline (#131), mobile wired a API, retiro writers Excel.
 
 ---
 

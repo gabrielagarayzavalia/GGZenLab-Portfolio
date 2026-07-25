@@ -62,6 +62,7 @@ import {
   startApplyRun,
   type ApplyRunMode,
 } from "./run/apply-runner.js";
+import { handleTrackerApi } from "./tracker/handle-api.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -121,7 +122,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, X-Tracker-User",
     });
     res.end();
     return;
@@ -138,6 +139,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         configEmpleo: true,
         configCvs: true,
         runApply: true,
+        tracker: true,
       },
     });
     return;
@@ -167,6 +169,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       const status = message.includes("en curso") ? 409 : 400;
       sendJson(res, status, { error: message });
     }
+    return;
+  }
+
+  if (await handleTrackerApi(req, res, pathname, method, url, readBody, sendJson)) {
     return;
   }
 
@@ -618,6 +624,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   if (pathname === "/run" || pathname === "/run.html") {
     serveStatic(res, path.join(DASHBOARD_DIR, "run.html"));
+    return;
+  }
+
+  if (pathname === "/tracker" || pathname === "/tracker.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "tracker.html"));
     return;
   }
 

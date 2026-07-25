@@ -223,6 +223,77 @@ Opcional fin sprint / Sprint 2:
 
 Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 
+---
+
+## B-38 — Tracker web-first (Sprint 2 · High)
+
+**Story spike:** [#264 US-JH-B38-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264)  
+**Epic:** [#125 EPIC-JH-UI](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/125) · `backlog:B-38`, `layer:ui`, `epic:botonera`, `sprint-2`  
+**Docs:** [`docs/tracker-web-first-roadmap.md`](docs/tracker-web-first-roadmap.md) · [`docs/spike-tracker-web.md`](docs/spike-tracker-web.md)
+
+### Visión (registrar en backlog)
+
+1. Fuente canónica futura: API/DB web — no `Empleos_Tracker.xlsx` diario.
+2. Desktop: grilla completa (AG Grid CE 1ª; Tabulator 2ª).
+3. Mobile: cards lite — misma API.
+4. Excel: import inicial, export backup, transición.
+5. Unificar dashboard + campaña en un store (no `/api/results` ni lista paralela).
+6. A largo plazo supersede [#131 B-23](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131).
+7. B-06: reorientar Mongo a `applications`; no cerrar [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) hasta post-spike.
+
+**No mezclar:** [#213 B33-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/213) Grafana.
+
+### Fases
+
+| Fase | Backlog ID | Issue | Prioridad |
+|------|------------|-------|-----------|
+| Spike | B-38-0 | [#264](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264) | High (cerrado) |
+| MVP desktop | B-38-1 | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | High — PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
+| Mobile lite | B-38-2 | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) | Medium |
+| Retiro Excel writers | B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | High |
+| Dual-write pipeline | B-38-5 | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | High |
+| Dual-write EA | B-38-6 | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | High |
+| Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
+| Deprecar legacy | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | Low |
+| Botonera /tracker | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | Low |
+
+### Spike tasks (canónicos)
+
+| Task | Issue |
+|------|-------|
+| B38-0-01 Inventario + schema | [#265](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/265) |
+| B38-0-02 Persistencia + API | [#281](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/281) |
+| B38-0-03 PoC AG Grid vs Tabulator | [#267](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/267) |
+| B38-0-04 Wireframe mobile lite | [#269](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/269) |
+| B38-0-05 Plan migración + B-23 | [#271](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/271) |
+| B38-0-06 Reporte go/no-go | [#273](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/273) |
+
+### Relación backlog existente
+
+| Item | Issue | Regla B-38 |
+|------|-------|------------|
+| B-08 tracking | #17 | Columnas del tracker web, no store aparte |
+| B-14 home | #18 | Home futura = grilla tracker |
+| B-06 Mongo | #35–#53 | `applications`; #52 abierto hasta post-spike |
+| B-23 Excel canónico | #131 | Dual-write transición → supersede en B-38-3 |
+
+### Orden de ejecución
+
+`B-38-0 spike` (#264) → merge [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) → [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) → [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297)+[#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) dual-write → [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) mobile → [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) retiro Excel.
+
+### Stories post-spike (issues formales)
+
+| ID | Issue | Tasks |
+|----|-------|-------|
+| B-38-1 | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | — (MVP en PR #293) |
+| B-38-2 | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) | [#302](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/302)–[#304](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/304) |
+| B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | fase 4 / B38-10 |
+| B-38-5 | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | — |
+| B-38-6 | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | — |
+| B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | — |
+| B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | — |
+| B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | — |
+
 ### B-17 — Página de estadísticas (borrador)
 
 **Outcome:** Veo en una sola pantalla cómo evoluciona el mercado y mi pipeline de postulaciones.

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Empleos Tracker — QA Job Hunter</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@33.1.1/styles/ag-grid.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@33.1.1/styles/ag-theme-alpine.css">
+  <style>
+    .tracker-layout { display: flex; flex-direction: column; height: calc(100vh - 56px); }
+    .tracker-toolbar {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border, #2d3a4d);
+    }
+    .tracker-toolbar input[type="search"] {
+      min-width: 200px; padding: 0.4rem 0.6rem; border-radius: 6px;
+      border: 1px solid var(--border, #2d3a4d); background: var(--panel, #1a2332); color: inherit;
+    }
+    .tracker-toolbar button, .tracker-toolbar label.btn {
+      padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid var(--border, #2d3a4d);
+      background: var(--panel, #243044); color: inherit; cursor: pointer; font-size: 0.85rem;
+    }
+    .tracker-toolbar label.btn input { display: none; }
+    #tracker-grid.ag-theme-alpine-dark { flex: 1; width: 100%; }
+    .tracker-status { margin-left: auto; font-size: 0.8rem; color: #8b9cb3; }
+    .match-high { color: #34d399; font-weight: 600; }
+    .match-mid { color: #fbbf24; }
+    .match-low { color: #f87171; }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <div class="top-bar__brand">
+      <span class="logo">QA Job Hunter</span>
+      <span class="subtitle">Empleos Tracker</span>
+    </div>
+    <nav class="site-nav" aria-label="Principal">
+      <a class="site-nav__link" href="/">Dashboard</a>
+      <a class="site-nav__link" href="/tracker" aria-current="page">Tracker</a>
+      <a class="site-nav__link" href="/m-lite.html">Mobile</a>
+      <a class="site-nav__link" href="/run">Ejecutar</a>
+      <a class="site-nav__link" href="/config">Configuración</a>
+    </nav>
+  </header>
+  <main class="tracker-layout">
+    <div class="tracker-toolbar">
+      <input type="search" id="search" placeholder="Buscar puesto, empresa, notas…" aria-label="Buscar">
+      <select id="filter-estado" aria-label="Filtrar por estado">
+        <option value="">Todos los estados</option>
+      </select>
+      <button type="button" id="btn-reload">Recargar</button>
+      <button type="button" id="btn-import-desktop">Importar Desktop .xlsx</button>
+      <span class="tracker-status" id="status">Cargando…</span>
+    </div>
+    <div id="tracker-grid" class="ag-theme-alpine-dark"></div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.1.1/dist/ag-grid-community.min.js"></script>
+  <script type="module" src="/tracker.js"></script>
+</body>
+</html>

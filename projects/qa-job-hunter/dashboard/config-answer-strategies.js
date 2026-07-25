@@ -22,6 +22,27 @@ export const LANGUAGE_PROFICIENCY_OPTIONS = [
 ];
 
 const YES_NO_OPTIONS = ["Sí", "No", "Yes"];
+const YEARS_QUICK_OPTIONS = ["-", "0"];
+
+/** Evita que `0` se pierda con `|| ""`. */
+export function normalizeConfigAnswerValue(value) {
+  if (value === undefined || value === null) return "";
+  if (value === 0) return "0";
+  return String(value).trim();
+}
+
+function displayAnswerValue(value) {
+  return normalizeConfigAnswerValue(value);
+}
+
+function buildYearsSelectOptions(label, rawOptions) {
+  const captured = actionableOptions(label, rawOptions).filter(
+    (o) => o === "-" || o === "0" || /^\d{1,2}$/.test(o) || /^\d+\s*\+$/.test(o)
+  );
+  const nums = [];
+  for (let i = 1; i <= 25; i++) nums.push(String(i));
+  return [...new Set([...YEARS_QUICK_OPTIONS, ...captured, ...nums])].slice(0, 40);
+}
 
 function normalizeCompare(s) {
   return String(s || "")
@@ -124,7 +145,7 @@ function selectStrategy(options, hint) {
         const opt = document.createElement("option");
         opt.value = o;
         opt.textContent = o;
-        if (currentAnswer && currentAnswer === o) opt.selected = true;
+        if (displayAnswerValue(currentAnswer) === o) opt.selected = true;
         sel.appendChild(opt);
       }
       label.append(span, sel);
@@ -154,7 +175,7 @@ function textStrategy(hint) {
       input.name = "answer";
       input.maxLength = 400;
       input.placeholder = "Escribí la respuesta…";
-      input.value = currentAnswer || "";
+      input.value = displayAnswerValue(currentAnswer);
       input.autocomplete = "off";
       label.append(span, input);
       container.appendChild(label);
@@ -164,6 +185,19 @@ function textStrategy(hint) {
       const raw = input?.value;
       return raw === undefined || raw === null ? "" : String(raw).trim();
     },
+  };
+}
+
+function yearsExperienceStrategy(label, rawOptions) {
+  const opts = buildYearsSelectOptions(label, rawOptions);
+  const base = selectStrategy(
+    opts,
+    "Años de experiencia. «-» = ninguno / cero años (equivale a 0 en el wizard)."
+  );
+  return {
+    ...base,
+    id: "years-select",
+    capturedOptionsHint: formatCapturedOptionsHint(label, rawOptions),
   };
 }
 
@@ -184,7 +218,7 @@ function numberStrategy(hint) {
       input.min = "0";
       input.max = "99";
       input.step = "1";
-      input.value = currentAnswer || "";
+      input.value = displayAnswerValue(currentAnswer);
       input.autocomplete = "off";
       label.append(span, input);
       container.appendChild(label);
@@ -232,7 +266,7 @@ export function resolveAnswerStrategy(question) {
   }
 
   if (isYearsExperienceLabel(label) || kind === "number") {
-    return withCapturedHint(numberStrategy(), label, rawOptions);
+    return yearsExperienceStrategy(label, rawOptions);
   }
 
   if (kind === "select" || kind === "listbox" || kind === "radio") {

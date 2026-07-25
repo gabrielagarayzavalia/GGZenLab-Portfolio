@@ -2,7 +2,7 @@
  * Config shell + Fuentes/Sitios (B18-01 / B18-05 / B18-07).
  */
 
-import { resolveAnswerStrategy } from "./config-answer-strategies.js";
+import { resolveAnswerStrategy, normalizeConfigAnswerValue } from "./config-answer-strategies.js";
 
 const tabs = [...document.querySelectorAll(".config-tab")];
 const panels = [...document.querySelectorAll(".config-panel")];
@@ -96,8 +96,8 @@ function loadAnswerDrafts() {
 
 function saveAnswerDraft(id, value) {
   const all = loadAnswerDrafts();
-  const v = String(value || "").trim();
-  if (v) all[id] = v;
+  const v = normalizeConfigAnswerValue(value);
+  if (v.length > 0) all[id] = v;
   else delete all[id];
   localStorage.setItem(ANSWER_DRAFTS_KEY, JSON.stringify(all));
 }
@@ -131,7 +131,10 @@ function openAnswerDialog(question) {
     answerCaptured.textContent = cap;
   }
   const drafts = loadAnswerDrafts();
-  const initial = drafts[question.id] || question.answer || "";
+  const initial =
+    drafts[question.id] !== undefined
+      ? normalizeConfigAnswerValue(drafts[question.id])
+      : normalizeConfigAnswerValue(question.answer);
   answerDialogStrategy.mount(answerField, { currentAnswer: initial });
   bindAnswerDraftAutosave(question.id, answerDialogStrategy);
   answerDialog.showModal();

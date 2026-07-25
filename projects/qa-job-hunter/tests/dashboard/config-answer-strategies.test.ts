@@ -19,15 +19,15 @@ test("portugués select sin options → dropdown idioma", () => {
   assert.match(s.hint || "", /idioma/i);
 });
 
-test("años experiencia con eco del label → número + hint debajo", () => {
+test("años experiencia → select con opción - y 0", () => {
   const label = "How many years of work experience do you have with Microsoft Dynamics 365?";
   const s = resolveAnswerStrategy({
     label,
     kind: "text",
     options: [label],
   });
-  assert.equal(s.id, "number");
-  assert.equal(s.capturedOptionsHint, "");
+  assert.equal(s.id, "years-select");
+  assert.match(s.hint || "", /-/);
 });
 
 test("select Yes/No capturado → dropdown", () => {

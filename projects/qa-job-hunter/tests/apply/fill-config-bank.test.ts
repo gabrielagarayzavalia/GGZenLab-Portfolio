@@ -14,6 +14,10 @@ import {
   upsertUnansweredFromHits,
 } from "../../src/config/questions-store.js";
 import { pickConfigSelectOption } from "../../src/apply/fill-config-bank.js";
+import {
+  configAnswerToFillText,
+  configAnswerToYearsTarget,
+} from "../../src/apply/fill-config-bank.js";
 
 function field(partial: Partial<CapturedField> & { label: string }): CapturedField {
   return {
@@ -100,7 +104,30 @@ test("pickConfigSelectOption: rango más próximo a años en banco", () => {
   assert.ok(forZero);
   assert.match(forZero!.text, /1-2/);
 
+  const forDash = pickConfigSelectOption(opts, "-");
+  assert.ok(forDash);
+  assert.match(forDash!.text, /1-2/);
+
   const forFour = pickConfigSelectOption(opts, "4");
   assert.ok(forFour);
   assert.match(forFour!.text, /3-5/);
+});
+
+test("configAnswer: - equivale a 0 en fill", () => {
+  assert.equal(configAnswerToYearsTarget("-"), 0);
+  assert.equal(configAnswerToFillText("-"), "0");
+});
+
+test("patchQuestion guarda - como answered", () => {
+  upsertUnansweredFromHits(
+    [{ label: "Years with Tosca", kind: "text", required: true, value: "" }],
+    { jobId: "job-dash" }
+  );
+  const q = loadQuestionsConfig().questions.find((x) => /Tosca/i.test(x.label));
+  assert.ok(q);
+  patchQuestion(q!.id, { answer: "-" });
+  const after = loadQuestionsConfig().questions.find((x) => x.id === q!.id);
+  assert.equal(after?.status, "answered");
+  assert.equal(after?.answer, "-");
+  assert.ok(after?.options.includes("-"));
 });

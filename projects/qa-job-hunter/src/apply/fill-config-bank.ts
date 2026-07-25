@@ -102,20 +102,31 @@ function pickOptionByAnswer(
 /**
  * Elige option en select EA: match exacto/substring o rango numérico más próximo.
  */
+export function configAnswerToYearsTarget(answer: string): number | null {
+  const t = answer.trim();
+  if (t === "-" || t === "–" || t === "—") return 0;
+  if (/^\d+$/.test(t)) return Number(t);
+  return null;
+}
+
+/** Texto a tipear en input numérico del wizard. */
+export function configAnswerToFillText(answer: string): string {
+  const t = answer.trim();
+  if (t === "-" || t === "–" || t === "—") return "0";
+  return t;
+}
+
 export function pickConfigSelectOption(
   options: { text: string; value: string | null }[],
   answer: string
 ): { text: string; value: string | null } | null {
-  const trimmed = answer.trim();
-  if (/^\d+$/.test(trimmed)) {
-    const target = Number(trimmed);
-    if (Number.isFinite(target)) {
-      const texts = options.map((o) => o.text);
-      const hasNumeric = options.some((o) => parseYearsOptionLabel(o.text) != null);
-      if (hasNumeric || optionsLookNumeric(texts)) {
-        const picked = pickBestYearsOption(options, target);
-        if (picked) return picked;
-      }
+  const target = configAnswerToYearsTarget(answer);
+  if (target !== null && Number.isFinite(target)) {
+    const texts = options.map((o) => o.text);
+    const hasNumeric = options.some((o) => parseYearsOptionLabel(o.text) != null);
+    if (hasNumeric || optionsLookNumeric(texts)) {
+      const picked = pickBestYearsOption(options, target);
+      if (picked) return picked;
     }
   }
 
@@ -198,7 +209,7 @@ async function fillTextWithAnswer(el: Locator, answer: string, logLabel: string)
   }
   await el.click({ timeout: 2000 }).catch(() => {});
   await el.fill("");
-  await el.fill(answer);
+  await el.fill(configAnswerToFillText(answer));
   console.log(`   ↳ Config [${logLabel}]: ${answer.slice(0, 60)}`);
   await sleep(200);
   return true;

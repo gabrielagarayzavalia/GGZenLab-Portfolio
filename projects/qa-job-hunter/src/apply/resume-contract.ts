@@ -16,6 +16,14 @@ import {
   scoreResumeForRole,
   type ApplyRoleKind,
 } from "./canonical-text.js";
+import {
+  RESUME_ACCEPT_SCORE,
+  RESUME_AMBIGUITY_DELTA,
+  RESUME_PREFERRED_SCORE,
+  defaultResumeFilenameHint,
+  normalizeResumeBlob,
+  scoreResumeForJob,
+} from "./resume-match.js";
 
 export const RESUME_INSIST_MS = 30_000;
 
@@ -89,13 +97,26 @@ export function resolveResumeTimeoutOutcome(
   };
 }
 
-export function resumeRoleScore(label: string, kind: ApplyRoleKind): number {
+export function resumeRoleScore(
+  label: string,
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
+): number {
   if (isCoverAsResumeLabel(label)) return 0;
+  if (jobTitle.trim()) {
+    return scoreResumeForJob(label, jobTitle, company);
+  }
   return scoreResumeForRole(label, kind);
 }
 
-export function isPreferredResumeLabel(label: string, kind: ApplyRoleKind): boolean {
-  if (resumeRoleScore(label, kind) >= 70) return true;
+export function isPreferredResumeLabel(
+  label: string,
+  kind: ApplyRoleKind,
+  jobTitle = "",
+  company = ""
+): boolean {
+  if (resumeRoleScore(label, kind, jobTitle, company) >= RESUME_PREFERRED_SCORE) return true;
   return RESUME_FALLBACK_MATCH.test(label);
 }
 

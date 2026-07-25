@@ -707,7 +707,8 @@ function formatBytes(n) {
 function rowCv(c) {
   const archived = c.archived ? " config-row--archived" : "";
   const def = c.isDefault ? " · default" : "";
-  const meta = `${c.label} · ${formatBytes(c.sizeBytes)}${def}`;
+  const note = c.label && c.label !== c.originalName ? ` · ${c.label}` : "";
+  const meta = `${formatBytes(c.sizeBytes)}${def}${note}`;
   return `<li class="config-row${archived}" data-id="${esc(c.id)}">
     <span class="config-row__name">${esc(c.originalName)}</span>
     <p class="config-row__meta">${esc(meta)}</p>
@@ -830,7 +831,7 @@ document.getElementById("cvs-list")?.addEventListener("click", async (ev) => {
   }
 
   if (btn.dataset.action === "edit") {
-    const label = prompt("Etiqueta para matching", row.querySelector(".config-row__meta")?.textContent || "");
+    const label = prompt("Nota interna (opcional; el matching usa el nombre del archivo)", "");
     if (label == null) return;
     const empleoProfileId = prompt("ID perfil empleo (vacío = ninguno)", "") ?? "";
     try {

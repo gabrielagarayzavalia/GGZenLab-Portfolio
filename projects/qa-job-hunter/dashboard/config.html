@@ -60,7 +60,7 @@
 
       <section class="config-panel" id="panel-cvs" role="tabpanel" aria-labelledby="tab-cvs" hidden>
         <h1>CVs</h1>
-        <p class="config-panel__lead">Subir PDF, marcar default y asociar a perfil de empleo buscado (#99).</p>
+        <p class="config-panel__lead">Subir PDF, marcar default y asociar a perfil de empleo buscado (#99). Easy Apply matchea por <strong>nombre del archivo</strong> (parcial: QA Analyst, QA Automation, etc.); si hay empate, usa el default.</p>
         <p class="config-status" id="cvs-status" hidden></p>
         <ul class="config-list" id="cvs-list" aria-live="polite"></ul>
         <form class="config-form" id="cvs-form" autocomplete="off">
@@ -70,8 +70,8 @@
             <input name="file" type="file" accept="application/pdf,.pdf" required />
           </label>
           <label class="config-field">
-            <span>Etiqueta (matching LinkedIn)</span>
-            <input name="label" type="text" maxlength="120" placeholder="Ej. CV_Gabriela_QA_Automation.pdf" />
+            <span>Nota interna (opcional)</span>
+            <input name="label" type="text" maxlength="120" placeholder="Ej. versión EN 2026 — no afecta el matching" />
           </label>
           <label class="config-field">
             <span>Perfil empleo buscado (opcional)</span>

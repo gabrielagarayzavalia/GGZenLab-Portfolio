@@ -45,6 +45,27 @@ test("isPreferredResumeLabel: score rol + fallback Eng01", () => {
   assert.equal(isPreferredResumeLabel("Eng01-2026.pdf", "automation"), true);
 });
 
+test("isPreferredResumeLabel: por título del aviso (parcial filename)", () => {
+  assert.equal(
+    isPreferredResumeLabel(
+      "CV_Gabriela_Garay_QA_Analyst.pdf",
+      "analyst",
+      "QA Analyst",
+      ""
+    ),
+    true
+  );
+  assert.equal(
+    isPreferredResumeLabel(
+      "CV_Gabriela_Garay_Zavalia_QA_Automation.pdf",
+      "analyst",
+      "QA Analyst",
+      ""
+    ),
+    false
+  );
+});
+
 test("resolveResumeTimeoutOutcome: dry_run no avanza", () => {
   const r = resolveResumeTimeoutOutcome(
     "dry_run",

@@ -3359,6 +3359,15 @@ export async function fillPseudoAnswers(
 }
 
 /**
+ * Campos que LinkedIn marca required pero son opcionales en la práctica (no bloquean Next).
+ */
+export function isOptionalEasyApplyField(f: CapturedField): boolean {
+  if (f.optional) return true;
+  const blob = `${f.label} ${f.ariaLabel} ${f.placeholder}`;
+  return /top choice|primera opci[oó]n|\(optional\)|\(opcional\)/i.test(blob);
+}
+
+/**
  * ¿Hay campos bloqueantes vacíos? (required / error / "Select an option" en Country*).
  * Si hay → NO clickear Next/Review (evita modal Save or Discard).
  */
@@ -3372,6 +3381,7 @@ export async function hasBlockingEmptyFields(page: Page): Promise<CapturedField[
 
   const all = await captureRequiredFields(page);
   const blocking = all.filter((f) => {
+    if (isOptionalEasyApplyField(f)) return false;
     const label = f.label.replace(/\s+/g, " ");
     const starred = /\*/.test(label);
     // No tratar "0" como vacío: es respuesta válida de años (Apache/Tosca).

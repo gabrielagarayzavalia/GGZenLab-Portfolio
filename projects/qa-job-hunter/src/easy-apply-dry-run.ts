@@ -154,7 +154,7 @@ async function stepFingerprint(page: Page): Promise<string> {
   const heading = (
     await modal
       .locator("h2, h3, .t-16, [class*='title']")
-      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions/i })
+      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions|top choice|Premium/i })
       .first()
       .innerText()
       .catch(() => "")
@@ -422,6 +422,20 @@ async function tryAdvanceNext(
   }
   await fillExpectedCompensation(page);
 
+  // Si el wizard avanzó, no bloquear por isNextDisabled / optional del paso nuevo (#245).
+  let afterFp = await stepFingerprint(page);
+  if (afterFp !== beforeFp) {
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+    ) {
+      console.log("   ✓ Llegamos a pantalla con Submit (post-Next)");
+      return "advanced";
+    }
+    console.log(`   ✓ Paso avanzó vía ${which}`);
+    return "advanced";
+  }
+
   if (await isNextDisabled(page)) return "blocked";
   let fields = await captureRequiredFields(page);
   let hasErrors = fields.some((f) => f.errorText);
@@ -462,7 +476,6 @@ async function tryAdvanceNext(
     return "advanced";
   }
 
-  let afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
     // Reintento 1×: a veces el form de CV tarda en aceptar el toggle
     const needResume = page.getByText(

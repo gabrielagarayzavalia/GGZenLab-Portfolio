@@ -82,3 +82,17 @@ test("resumeAlreadyOkInInventory: Deselect automation → skip heavy", () => {
     true
   );
 });
+
+test("isOptionalEasyApplyField: top choice no bloquea Next", async () => {
+  const { isOptionalEasyApplyField } = await import("../../src/apply/fill-answers.js");
+  assert.equal(
+    isOptionalEasyApplyField(
+      field({
+        label: "Mark job as a top choice (Optional)",
+        value: "",
+        required: true,
+      })
+    ),
+    true
+  );
+});

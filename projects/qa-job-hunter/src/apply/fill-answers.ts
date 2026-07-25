@@ -2151,6 +2151,8 @@ const DOWNLOAD_RESUME_RE = /download\s+resume/i;
 const SHOW_MORE_RESUMES_RE =
   /show\s+\d+\s+more\s+resumes?|mostrar\s+\d+\s+(curr[ií]culums?|cvs?|resumes?)\s+m[aá]s|ver\s+\d+\s+m[aá]s/i;
 const UPLOAD_RESUME_BTN_RE = /upload\s+resume|subir\s+curr[ií]culum/i;
+const RESUME_REQUIRED_ERROR_RE =
+  /se necesita un curr[ií]culum|resume is required|please select a resume/i;
 
 type DocumentCardToggle = {
   id: string;
@@ -2509,6 +2511,17 @@ async function clickBestResumeToggle(
     return true;
   }
 
+  if (
+    await selectResumeByFilenameClick(
+      page,
+      modal,
+      bestToggle.title,
+      `click nombre ${kind}`
+    )
+  ) {
+    return true;
+  }
+
   const ok = await clickDocumentCardToggle(page, bestToggle.id);
   if (!ok) {
     console.log(`   ↳ Resume: no pude clickear toggle id=${bestToggle.id}`);
@@ -2549,24 +2562,14 @@ async function clickBestResumeToggle(
     }
   }
 
-  const needResume = modal.getByText(
-    /se necesita un curr[ií]culum|resume is required|please select a resume/i
-  );
+  const needResume = modal.getByText(RESUME_REQUIRED_ERROR_RE);
   for (let w = 0; w < 8; w++) {
     if (!(await needResume.isVisible({ timeout: 400 }).catch(() => false))) {
       console.log("   ↳ Resume: error currículum ausente — form OK");
       break;
     }
-    console.log("   ↳ Resume: error 'Se necesita un currículum' — re-bind…");
-    await clickDocumentCardToggle(page, bestToggle.id);
-    if (await selectAria.first().isVisible({ timeout: 400 }).catch(() => false)) {
-      await selectAria.first().click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
-    }
-    // NUNCA page.getByText(pdf): el título puede existir en el feed detrás del modal
-    const name = modal.getByText(bestToggle.title, { exact: true }).first();
-    if (await name.isVisible({ timeout: 400 }).catch(() => false)) {
-      await name.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
-    }
+    console.log("   ↳ Resume: error 'Se necesita un currículum' — re-click nombre…");
+    await clickResumeFilenameInModal(modal, bestToggle.title);
     await sleep(800);
   }
 
@@ -2603,6 +2606,10 @@ async function clickResumeFallbackDefault(page: Page): Promise<boolean> {
 
   const fallbackName =
     defaultResumeFilenameHint() || RESUME_FALLBACK_FILENAME;
+
+  if (await selectResumeByFilenameClick(page, modal, fallbackName, "click nombre fallback")) {
+    return true;
+  }
 
   const toggles = await listDocumentCardToggles(page);
   for (const t of toggles) {
@@ -2803,12 +2810,93 @@ async function waitForResumeFilenameOnLinkedIn(
   return false;
 }
 
-/** Seleccionar por filename tras upload (toggle shadow o radio light DOM). */
+/** Clic en el texto del PDF dentro del modal (LinkedIn: no hace falta toggle/radio). */
+async function clickResumeFilenameInModal(
+  root: Locator,
+  filename: string
+): Promise<boolean> {
+  const name = filename.trim();
+  if (!name) return false;
+
+  const exact = root.getByText(name, { exact: true }).first();
+  if (await exact.isVisible({ timeout: 700 }).catch(() => false)) {
+    await exact.scrollIntoViewIfNeeded().catch(() => {});
+    await exact
+      .click({ timeout: 4000, noWaitAfter: true })
+      .catch(() => exact.click({ force: true, timeout: 4000, noWaitAfter: true }));
+    return true;
+  }
+
+  const token = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const partial = root.getByText(new RegExp(token, "i")).first();
+  if (await partial.isVisible({ timeout: 500 }).catch(() => false)) {
+    await partial.scrollIntoViewIfNeeded().catch(() => {});
+    await partial
+      .click({ timeout: 4000, noWaitAfter: true })
+      .catch(() => partial.click({ force: true, timeout: 4000, noWaitAfter: true }));
+    return true;
+  }
+  return false;
+}
+
+async function isResumeRequiredErrorVisible(root: Locator): Promise<boolean> {
+  return root
+    .getByText(RESUME_REQUIRED_ERROR_RE)
+    .isVisible({ timeout: 350 })
+    .catch(() => false);
+}
+
+async function isConfigCvFilenameAccepted(
+  page: Page,
+  root: Locator,
+  filename: string
+): Promise<boolean> {
+  if (!filename.trim()) return false;
+  if (await isResumeRequiredErrorVisible(root)) return false;
+  if (await isConfigCvFilenameSelected(page, root, filename)) return true;
+
+  const deselect = root.locator('[aria-label^="Deselect resume" i]');
+  const dn = await deselect.count().catch(() => 0);
+  for (let i = 0; i < dn; i++) {
+    const aria = ((await deselect.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (resumeFilenamesMatch(resumeFilenameFromAria(aria), filename)) return true;
+  }
+  return false;
+}
+
+/** Selección principal: click en nombre del PDF + form sin error "resume required". */
+async function selectResumeByFilenameClick(
+  page: Page,
+  root: Locator,
+  originalName: string,
+  logPrefix = "click nombre"
+): Promise<boolean> {
+  if (await isConfigCvFilenameAccepted(page, root, originalName)) {
+    console.log(`   ↳ Resume: ya seleccionado → ${originalName.slice(0, 80)}`);
+    return true;
+  }
+
+  for (let w = 0; w < 8; w++) {
+    if (await isConfigCvFilenameAccepted(page, root, originalName)) {
+      console.log(`   ↳ Resume: ${logPrefix} → ${originalName.slice(0, 80)}`);
+      return true;
+    }
+    if (!(await clickResumeFilenameInModal(root, originalName))) break;
+    await sleep(w === 0 ? 400 : 600);
+  }
+  return false;
+}
+
+/** Seleccionar por filename tras upload (nombre primero; toggle/radio solo fallback). */
 async function selectResumeByConfigFilename(
   page: Page,
   root: Locator,
   originalName: string
 ): Promise<boolean> {
+  if (await selectResumeByFilenameClick(page, root, originalName, "click nombre")) {
+    return true;
+  }
+
   const toggles = await listDocumentCardToggles(page);
   for (const t of toggles) {
     if (DOWNLOAD_RESUME_RE.test(t.aria) || COVER_AS_RESUME_RE.test(t.title)) continue;
@@ -2819,9 +2907,9 @@ async function selectResumeByConfigFilename(
     }
     const ok = await clickDocumentCardToggle(page, t.id);
     if (ok) {
-      console.log(`   ↳ Resume: post-upload toggle → ${t.title.slice(0, 80)}`);
+      console.log(`   ↳ Resume: post-upload toggle (fallback) → ${t.title.slice(0, 80)}`);
       await sleep(400);
-      return true;
+      if (await isConfigCvFilenameAccepted(page, root, originalName)) return true;
     }
   }
 
@@ -2832,17 +2920,9 @@ async function selectResumeByConfigFilename(
     if (!checked) {
       await radio.check({ force: true }).catch(() => radio.click({ timeout: 3000, noWaitAfter: true }));
     }
-    console.log(`   ↳ Resume: post-upload radio → ${originalName.slice(0, 80)}`);
     await sleep(400);
-    return true;
-  }
-
-  const row = root.getByText(new RegExp(token, "i")).first();
-  if (await row.isVisible({ timeout: 500 }).catch(() => false)) {
-    await row.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
-    await sleep(500);
-    if (await isConfigCvFilenameSelected(page, root, originalName)) {
-      console.log(`   ↳ Resume: post-upload click fila → ${originalName.slice(0, 80)}`);
+    if (await isConfigCvFilenameAccepted(page, root, originalName)) {
+      console.log(`   ↳ Resume: post-upload radio (fallback) → ${originalName.slice(0, 80)}`);
       return true;
     }
   }
@@ -2945,7 +3025,7 @@ async function trySelectForcedConfigCv(
   company: string,
   forcedCvName: string
 ): Promise<boolean> {
-  if (await isConfigCvFilenameSelected(page, root, forcedCvName)) {
+  if (await isConfigCvFilenameAccepted(page, root, forcedCvName)) {
     console.log(`   ↳ Resume: forced CV OK → ${forcedCvName}`);
     return true;
   }
@@ -2956,7 +3036,7 @@ async function trySelectForcedConfigCv(
     if (await selectResumeByConfigFilename(page, root, forcedCvName)) return true;
   }
   if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
-    return isConfigCvFilenameSelected(page, root, forcedCvName);
+    return isConfigCvFilenameAccepted(page, root, forcedCvName);
   }
   return selectResumeByConfigFilename(page, root, forcedCvName);
 }

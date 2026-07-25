@@ -2569,7 +2569,7 @@ async function clickBestResumeToggle(
       break;
     }
     console.log("   ↳ Resume: error 'Se necesita un currículum' — re-click nombre…");
-    await clickResumeFilenameInModal(modal, bestToggle.title);
+    await clickResumeFilenameInModal(page, modal, bestToggle.title);
     await sleep(800);
   }
 
@@ -2810,8 +2810,59 @@ async function waitForResumeFilenameOnLinkedIn(
   return false;
 }
 
-/** Clic en el texto del PDF dentro del modal (LinkedIn: no hace falta toggle/radio). */
+/** Tras upload: esperar que el PDF deje de procesarse (spinner) antes de clickear nombre. */
+async function waitForResumeUploadReady(
+  page: Page,
+  root: Locator,
+  originalName: string,
+  timeoutMs = 30_000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const names = await collectLinkedinResumeFilenames(page, root);
+    if (!names.some((n) => resumeFilenamesMatch(n, originalName))) {
+      await sleep(500);
+      continue;
+    }
+    const busy = (await page
+      .evaluate(`((fname) => {
+        const modal = document.querySelector(".jobs-easy-apply-modal");
+        if (!modal) return true;
+        const token = fname.replace(/\\.pdf$/i, "").slice(0, 28).toLowerCase();
+        function rowBusy(root) {
+          for (const el of Array.from(root.querySelectorAll("*"))) {
+            const t = (el.textContent || "").toLowerCase();
+            if (!t.includes(token) || !t.includes(".pdf")) continue;
+            const row =
+              el.closest("li, label, [class*='document'], [class*='resume'], [class*='JobsDocument']") ||
+              el.parentElement;
+            if (
+              row &&
+              row.querySelector(
+                "[class*='loading'], [class*='spinner'], [aria-busy='true'], .artdeco-loader, progress"
+              )
+            ) {
+              return true;
+            }
+          }
+          for (const el of Array.from(root.querySelectorAll("*"))) {
+            if (el.shadowRoot && rowBusy(el.shadowRoot)) return true;
+          }
+          return false;
+        }
+        const outlet = modal.querySelector("#interop-outlet");
+        if (outlet && outlet.shadowRoot && rowBusy(outlet.shadowRoot)) return true;
+        return rowBusy(modal);
+      })(${JSON.stringify(originalName)})`)) as boolean;
+    if (!busy) return true;
+    await sleep(600);
+  }
+  return false;
+}
+
+/** Clic en el texto del PDF (light DOM o shadow del modal). */
 async function clickResumeFilenameInModal(
+  page: Page,
   root: Locator,
   filename: string
 ): Promise<boolean> {
@@ -2836,7 +2887,51 @@ async function clickResumeFilenameInModal(
       .catch(() => partial.click({ force: true, timeout: 4000, noWaitAfter: true }));
     return true;
   }
-  return false;
+
+  return (await page.evaluate(`((targetName) => {
+    const modal = document.querySelector(".jobs-easy-apply-modal");
+    if (!modal) return false;
+    function norm(s) {
+      return (s || "").toLowerCase().replace(/\\.pdf$/i, "").replace(/[^a-z0-9]+/g, "");
+    }
+    const want = norm(targetName);
+    if (!want) return false;
+    function matchesPdf(text) {
+      if (!/\\.pdf/i.test(text || "")) return false;
+      const n = norm(text);
+      return n === want || n.includes(want) || want.includes(n);
+    }
+    function fireClick(el) {
+      const row =
+        el.closest("li, label, [class*='document'], [class*='resume'], [class*='JobsDocument']") ||
+        el.parentElement ||
+        el;
+      row.scrollIntoView({ block: "center", inline: "nearest" });
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(function (type) {
+        row.dispatchEvent(
+          new MouseEvent(type, { bubbles: true, cancelable: true, view: window })
+        );
+      });
+      return true;
+    }
+    function walk(root) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const txt = (node.textContent || "").trim();
+        if (!matchesPdf(txt)) continue;
+        const el = node.parentElement;
+        if (el && fireClick(el)) return true;
+      }
+      for (const el of Array.from(root.querySelectorAll("*"))) {
+        if (el.shadowRoot && walk(el.shadowRoot)) return true;
+      }
+      return false;
+    }
+    const outlet = modal.querySelector("#interop-outlet");
+    if (outlet && outlet.shadowRoot && walk(outlet.shadowRoot)) return true;
+    return walk(modal);
+  })(${JSON.stringify(name)})`)) as boolean;
 }
 
 async function isResumeRequiredErrorVisible(root: Locator): Promise<boolean> {
@@ -2876,13 +2971,16 @@ async function selectResumeByFilenameClick(
     return true;
   }
 
-  for (let w = 0; w < 8; w++) {
+  for (let w = 0; w < 12; w++) {
     if (await isConfigCvFilenameAccepted(page, root, originalName)) {
       console.log(`   ↳ Resume: ${logPrefix} → ${originalName.slice(0, 80)}`);
       return true;
     }
-    if (!(await clickResumeFilenameInModal(root, originalName))) break;
-    await sleep(w === 0 ? 400 : 600);
+    const clicked = await clickResumeFilenameInModal(page, root, originalName);
+    if (!clicked && w === 0) {
+      console.log(`   ↳ Resume: nombre aún no clickeable — reintentando…`);
+    }
+    await sleep(w < 3 ? 800 : 600);
   }
   return false;
 }
@@ -2978,6 +3076,11 @@ async function uploadResumeFromConfigIfMissing(
   if (!appeared) {
     console.log(`   ↳ Resume: upload hecho pero no apareció en lista (${configCv.originalName})`);
     return false;
+  }
+
+  const ready = await waitForResumeUploadReady(page, root, configCv.originalName);
+  if (!ready) {
+    console.log(`   ↳ Resume: upload en lista pero sigue procesando (${configCv.originalName})`);
   }
 
   if (await selectResumeByConfigFilename(page, root, configCv.originalName)) {

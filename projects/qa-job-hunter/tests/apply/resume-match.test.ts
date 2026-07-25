@@ -5,6 +5,7 @@ import {
   RESUME_PREFERRED_SCORE,
   extractResumeMatchTokens,
   isResumeAlreadyOnLinkedIn,
+  isConfigCvOnLinkedInList,
   normalizeResumeBlob,
   resumeFilenamesMatch,
   scoreResumeByJobTitle,
@@ -65,6 +66,22 @@ test("resumeFilenamesMatch: mismo archivo Config y LinkedIn", () => {
   );
 });
 
-test("isResumeAlreadyOnLinkedIn: sin config retorna false", () => {
-  assert.equal(isResumeAlreadyOnLinkedIn("cualquier.pdf"), false);
+test("isConfigCvOnLinkedInList: mismo archivo no requiere upload", () => {
+  const cv = {
+    id: "x",
+    storedName: "a.pdf",
+    originalName: "CV_QA_Analyst.pdf",
+    label: "",
+    mimeType: "application/pdf",
+    sizeBytes: 1,
+    isDefault: true,
+    archived: false,
+    createdAt: "",
+    updatedAt: "",
+  };
+  assert.equal(
+    isConfigCvOnLinkedInList(cv, ["Select resume CV QA Analyst.pdf"]),
+    true
+  );
+  assert.equal(isConfigCvOnLinkedInList(cv, ["CV_Otro.pdf"]), false);
 });

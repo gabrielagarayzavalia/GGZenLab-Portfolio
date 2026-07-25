@@ -46,6 +46,31 @@ export function isResumeAlreadyOnLinkedIn(linkedinFilename: string): boolean {
   return findConfigCvOnLinkedIn(linkedinFilename) !== null;
 }
 
+/** Mejor CV de Config para el aviso (por originalName + título). */
+export function pickBestConfigCvForJob(jobTitle: string, company = ""): ConfigCv | null {
+  const cvs = listCvs().filter((c) => !c.archived);
+  if (cvs.length === 0) return null;
+  let best: ConfigCv | null = null;
+  let bestScore = 0;
+  for (const cv of cvs) {
+    const score = scoreResumeForJob(cv.originalName, jobTitle, company);
+    if (score > bestScore) {
+      bestScore = score;
+      best = cv;
+    }
+  }
+  if (best && bestScore >= RESUME_ACCEPT_SCORE) return best;
+  return getDefaultCv() ?? null;
+}
+
+/** ¿Algún filename de LinkedIn matchea el CV de Config? (#247 — no re-subir). */
+export function isConfigCvOnLinkedInList(
+  configCv: ConfigCv,
+  linkedinFilenames: string[]
+): boolean {
+  return linkedinFilenames.some((n) => resumeFilenamesMatch(n, configCv.originalName));
+}
+
 /** Tokens del título del aviso que deben aparecer en el filename (parcial). */
 export function extractResumeMatchTokens(jobTitle: string): string[] {
   const norm = normalizeResumeBlob(jobTitle);

@@ -43,10 +43,13 @@ import {
   RESUME_ACCEPT_SCORE,
   RESUME_AMBIGUITY_DELTA,
   defaultResumeFilenameHint,
+  isConfigCvOnLinkedInList,
   normalizeResumeBlob,
+  pickBestConfigCvForJob,
   resumeFilenamesMatch,
   scoreResumeForJob,
 } from "./resume-match.js";
+import { getCvFilePath } from "../config/cvs-store.js";
 
 export interface CapturedField {
   label: string;
@@ -2699,6 +2702,87 @@ async function clickResumeByAriaSelect(
   return isRoleResumeSelected(page, kind, jobTitle, company);
 }
 
+async function collectLinkedinResumeFilenames(page: Page, root: Locator): Promise<string[]> {
+  const names: string[] = [];
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    const fn = resumeFilenameFromToggle(t);
+    if (fn) names.push(fn);
+  }
+  const selectLabels = root.locator(
+    '[aria-label^="Select resume" i], [aria-label^="Deselect resume" i]'
+  );
+  const n = await selectLabels.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const aria = ((await selectLabels.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (DOWNLOAD_RESUME_RE.test(aria) || COVER_AS_RESUME_RE.test(aria)) continue;
+    const fn = resumeFilenameFromAria(aria);
+    if (fn) names.push(fn);
+  }
+  return names;
+}
+
+/**
+ * #247: subir PDF de Config solo si NO está ya en la lista de LinkedIn.
+ * Si ya está → no upload (evita duplicados).
+ */
+async function uploadResumeFromConfigIfMissing(
+  page: Page,
+  root: Locator,
+  jobTitle: string,
+  company: string
+): Promise<boolean> {
+  const configCv = pickBestConfigCvForJob(jobTitle, company);
+  if (!configCv) {
+    console.log("   ↳ Resume: sin CV Config para el rol — no upload");
+    return false;
+  }
+
+  const linkedinNames = await collectLinkedinResumeFilenames(page, root);
+  if (isConfigCvOnLinkedInList(configCv, linkedinNames)) {
+    console.log(`   ↳ Resume: ya en LinkedIn (${configCv.originalName}) — sin upload`);
+    return false;
+  }
+
+  const pdfPath = getCvFilePath(configCv);
+  if (!fs.existsSync(pdfPath)) {
+    console.log(`   ↳ Resume: PDF Config no en disco (${configCv.originalName})`);
+    return false;
+  }
+
+  const fileInputs = root.locator("input[type='file']");
+  const n = await fileInputs.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const input = fileInputs.nth(i);
+    const near = await input
+      .evaluate((node) => {
+        const wrap =
+          node.closest(".fb-form-element, .jobs-easy-apply-form-element, fieldset, li, div, label") ??
+          node.parentElement;
+        return (wrap?.textContent ?? "").trim().slice(0, 280);
+      })
+      .catch(() => "");
+    const name = ((await input.getAttribute("name")) ?? "").trim();
+    const aria = ((await input.getAttribute("aria-label")) ?? "").trim();
+    const blob = `${near} ${name} ${aria}`;
+    if (isCoverLetterLabel(blob)) continue;
+    if (!/resume|cv\b|curriculum|upload\s*resume|subir.*curr/i.test(blob)) continue;
+
+    try {
+      await input.setInputFiles(pdfPath);
+      console.log(`   ↳ Resume: upload Config → LinkedIn (${configCv.originalName})`);
+      await sleep(1200);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`   ↳ Resume: upload falló: ${msg.slice(0, 100)}`);
+    }
+  }
+
+  console.log("   ↳ Resume: no encontré input file para upload de CV");
+  return false;
+}
+
 async function trySelectPreferredResume(
   page: Page,
   root: Locator,
@@ -2707,9 +2791,16 @@ async function trySelectPreferredResume(
   company = ""
 ): Promise<boolean> {
   if (await isRoleResumeSelected(page, kind, jobTitle, company)) return true;
+  await clickShowMoreResumes(root);
+  if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
+    await sleep(500);
+  }
   if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
   if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;
   await clickShowMoreResumes(root);
+  if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
+    await sleep(500);
+  }
   if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
   if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;
   if (await clickResumeFallbackDefault(page)) return true;

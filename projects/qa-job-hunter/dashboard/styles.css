@@ -308,3 +308,21 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   .config-row { grid-template-columns: 1fr; }
   .config-row__actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
 }
+
+/* /run botonera (#125, #324) */
+.run-page { max-width: 42rem; padding: 1rem 1.25rem 2rem; }
+.run-page__lead { color: var(--text-muted); margin-bottom: 1rem; }
+.run-panel { margin-bottom: 1.25rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.run-mode { border: none; margin: 0 0 1rem; }
+.run-mode__legend { font-weight: 600; margin-bottom: 0.5rem; }
+.run-mode__option { display: block; margin: 0.35rem 0; }
+.run-fields { display: grid; gap: 0.75rem; margin-bottom: 0.75rem; }
+.run-btn { margin-top: 0.5rem; }
+.run-btn--danger { background: #c0392b; border-color: #a93226; color: #fff; }
+.run-btn--danger:hover { filter: brightness(1.05); }
+.run-hint { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem; }
+.run-state { font-family: var(--mono, monospace); font-size: 0.9rem; }
+.run-log {
+  margin-top: 0.5rem; padding: 0.75rem; max-height: 280px; overflow: auto;
+  background: #0d1117; color: #e6edf3; border-radius: 6px; font-size: 0.8rem;
+}

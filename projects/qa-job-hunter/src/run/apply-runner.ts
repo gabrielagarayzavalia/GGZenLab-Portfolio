@@ -1,12 +1,13 @@
 /**
  * Botonera spike (EPIC-JH-UI / #125) — lanzar Easy Apply desde dashboard.
- * Desacoplado de serve-dashboard: solo spawn + estado en output/.
+ * #324 — cancel + tree-kill para evitar Chromium huérfano en Windows.
  */
 
-import { spawn } from "child_process";
+import { type ChildProcess, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { killProcessTree } from "./process-tree-kill.js";
 
 const HUNTER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const RUN_DIR = path.join(HUNTER_ROOT, "output", "run");
@@ -22,7 +23,7 @@ export type ApplyRunRequest = {
 };
 
 export type ApplyRunState = {
-  status: "idle" | "running" | "done" | "error";
+  status: "idle" | "running" | "done" | "error" | "cancelled";
   mode?: ApplyRunMode;
   script?: string;
   pid?: number;
@@ -33,6 +34,9 @@ export type ApplyRunState = {
   jobId?: string;
   logTail?: string;
 };
+
+let activeChild: ChildProcess | null = null;
+let runCancelled = false;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -57,6 +61,11 @@ function saveApplyRunState(state: ApplyRunState): void {
   fs.writeFileSync(APPLY_RUN_STATE_PATH, JSON.stringify(state, null, 2), "utf-8");
 }
 
+function appendLogLine(line: string): void {
+  ensureRunDir();
+  fs.appendFileSync(APPLY_RUN_LOG_PATH, `${line}\n`, "utf-8");
+}
+
 function tailLog(maxLines = 80): string {
   if (!fs.existsSync(APPLY_RUN_LOG_PATH)) return "";
   const lines = fs.readFileSync(APPLY_RUN_LOG_PATH, "utf-8").split(/\r?\n/);
@@ -78,11 +87,13 @@ export function refreshApplyRunState(): ApplyRunState {
   if (state.status === "running" && state.pid && !isPidRunning(state.pid)) {
     const next: ApplyRunState = {
       ...state,
-      status: state.exitCode === 0 ? "done" : "error",
+      status: runCancelled ? "cancelled" : state.exitCode === 0 ? "done" : "error",
       finishedAt: state.finishedAt ?? nowIso(),
       logTail: tailLog(),
     };
     saveApplyRunState(next);
+    activeChild = null;
+    runCancelled = false;
     return next;
   }
   if (state.status === "running") {
@@ -94,8 +105,11 @@ export function refreshApplyRunState(): ApplyRunState {
 export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
   const current = refreshApplyRunState();
   if (current.status === "running") {
-    throw new Error("Ya hay un Easy Apply en curso. Esperá a que termine.");
+    throw new Error("Ya hay un Easy Apply en curso. Esperá a que termine o detenelo.");
   }
+
+  runCancelled = false;
+  activeChild = null;
 
   const mode = req.mode === "productive" ? "productive" : "dry_run";
   const script = mode === "dry_run" ? "easy-apply:dry-run" : "easy-apply";
@@ -131,6 +145,7 @@ export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
     shell: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  activeChild = child;
 
   child.stdout?.on("data", (chunk) => logStream.write(chunk));
   child.stderr?.on("data", (chunk) => logStream.write(chunk));
@@ -148,18 +163,21 @@ export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
   saveApplyRunState(running);
 
   child.on("close", (code) => {
+    activeChild = null;
     const finished: ApplyRunState = {
       ...running,
-      status: code === 0 ? "done" : "error",
+      status: runCancelled ? "cancelled" : code === 0 ? "done" : "error",
       finishedAt: nowIso(),
-      exitCode: code,
+      exitCode: runCancelled ? null : code,
       logTail: tailLog(),
     };
     saveApplyRunState(finished);
     logStream.end();
+    runCancelled = false;
   });
 
   child.on("error", (err) => {
+    activeChild = null;
     logStream.write(`\n[spawn error] ${err.message}\n`);
     saveApplyRunState({
       ...running,
@@ -169,7 +187,40 @@ export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
       logTail: tailLog(),
     });
     logStream.end();
+    runCancelled = false;
   });
 
   return running;
+}
+
+/** Detiene la corrida lanzada desde /run (tree-kill en Windows). */
+export function cancelApplyRun(): ApplyRunState {
+  const state = refreshApplyRunState();
+  if (state.status !== "running" || !state.pid) {
+    throw new Error("No hay Easy Apply en curso.");
+  }
+
+  runCancelled = true;
+  const { ok, detail } = killProcessTree(state.pid);
+  appendLogLine(`[cancel] tree-kill pid=${state.pid} ok=${ok} ${detail}`);
+
+  if (activeChild && !activeChild.killed) {
+    try {
+      activeChild.kill("SIGTERM");
+    } catch {
+      /* ignore */
+    }
+  }
+  activeChild = null;
+
+  const finished: ApplyRunState = {
+    ...state,
+    status: "cancelled",
+    finishedAt: nowIso(),
+    exitCode: null,
+    logTail: tailLog(),
+  };
+  saveApplyRunState(finished);
+  runCancelled = false;
+  return finished;
 }

@@ -14,6 +14,7 @@
 //
 import path from "path";
 import { chromium, type Browser, type Locator, type Page } from "playwright";
+import { registerPlaywrightShutdown } from "./run/playwright-shutdown.js";
 import {
   COVER_LETTER_DEFAULT,
   resolveApplicationSummary,
@@ -945,6 +946,7 @@ async function main() {
     slowMo: 150,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });
+  registerPlaywrightShutdown(browser);
   const context = await browser.newContext(maximizedContextOptions(sessionPath));
   const page = await prepareApplyBrowserPage(context);
   await maximizeWindow(page);

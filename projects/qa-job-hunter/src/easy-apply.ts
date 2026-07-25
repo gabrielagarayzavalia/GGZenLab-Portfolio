@@ -27,6 +27,7 @@ import {
   clickButtonOrLink,
   cssPrimaryActions,
   findButtonOrLink,
+  findWizardStepAdvanceButton,
   isLanguageOnlyShell,
   MODAL_LABELS,
   resolveApplyScope,
@@ -728,14 +729,9 @@ async function tryEasyApply(
         return completeSubmitAndDone(page, job, record);
       }
 
-      // Orden: Next mientras exista; si no → Review
-      const nextEl =
-        (await findButtonOrLink(modal, MODAL_LABELS.continue, 700)) ||
-        (await findButtonOrLink(modal, MODAL_LABELS.next, 400));
-      const reviewEl = nextEl
-        ? null
-        : await findButtonOrLink(modal, MODAL_LABELS.review, 800);
-      const advanceBtn = nextEl ?? reviewEl;
+      // Orden: Next mientras exista; si no → Review (scroll si hace falta)
+      const advance = await findWizardStepAdvanceButton(modal, page);
+      const advanceBtn = advance?.locator ?? null;
       if (advanceBtn) {
         const advanced =
           (await advanceBtn

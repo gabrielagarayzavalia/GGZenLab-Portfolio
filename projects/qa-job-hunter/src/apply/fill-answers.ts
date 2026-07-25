@@ -2906,6 +2906,48 @@ async function uploadResumeFromConfigIfMissing(
   return false;
 }
 
+async function isConfigCvFilenameSelected(
+  page: Page,
+  root: Locator,
+  filename: string
+): Promise<boolean> {
+  if (!filename.trim()) return false;
+  const toggles = await listDocumentCardToggles(page);
+  for (const t of toggles) {
+    if (!t.selected) continue;
+    if (resumeFilenamesMatch(resumeFilenameFromToggle(t), filename)) return true;
+  }
+  const selected = await selectedResumeLabel(page, root);
+  return selected
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .some((part) => resumeFilenamesMatch(part, filename));
+}
+
+async function trySelectForcedConfigCv(
+  page: Page,
+  root: Locator,
+  jobTitle: string,
+  company: string,
+  forcedCvName: string
+): Promise<boolean> {
+  if (await isConfigCvFilenameSelected(page, root, forcedCvName)) {
+    console.log(`   ↳ Resume: forced CV OK → ${forcedCvName}`);
+    return true;
+  }
+  await clickShowMoreResumes(root);
+  const linkedinNames = await collectLinkedinResumeFilenames(page, root);
+  const configCv = pickBestConfigCvForJob(jobTitle, company);
+  if (configCv && isConfigCvOnLinkedInList(configCv, linkedinNames)) {
+    if (await selectResumeByConfigFilename(page, root, forcedCvName)) return true;
+  }
+  if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
+    return isConfigCvFilenameSelected(page, root, forcedCvName);
+  }
+  return selectResumeByConfigFilename(page, root, forcedCvName);
+}
+
 async function trySelectPreferredResume(
   page: Page,
   root: Locator,
@@ -2914,29 +2956,19 @@ async function trySelectPreferredResume(
   company = ""
 ): Promise<boolean> {
   const forcedCvName = (process.env.DRY_RUN_CONFIG_CV ?? "").trim();
-  if (!forcedCvName && (await isRoleResumeSelected(page, kind, jobTitle, company))) {
-    return true;
+  if (forcedCvName) {
+    return trySelectForcedConfigCv(page, root, jobTitle, company, forcedCvName);
   }
+
+  if (await isRoleResumeSelected(page, kind, jobTitle, company)) return true;
   await clickShowMoreResumes(root);
   if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
-    if (forcedCvName) {
-      return (
-        (await selectResumeByConfigFilename(page, root, forcedCvName)) ||
-        (await isRoleResumeSelected(page, kind, jobTitle, company))
-      );
-    }
     return isRoleResumeSelected(page, kind, jobTitle, company);
   }
   if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
   if (await clickResumeByAriaSelect(page, kind, jobTitle, company)) return true;
   await clickShowMoreResumes(root);
   if (await uploadResumeFromConfigIfMissing(page, root, jobTitle, company)) {
-    if (forcedCvName) {
-      return (
-        (await selectResumeByConfigFilename(page, root, forcedCvName)) ||
-        (await isRoleResumeSelected(page, kind, jobTitle, company))
-      );
-    }
     return isRoleResumeSelected(page, kind, jobTitle, company);
   }
   if (await clickBestResumeToggle(page, kind, jobTitle, company)) return true;
@@ -3069,10 +3101,18 @@ export async function ensureResumeForRole(
     };
   }
 
-  console.log(`   ↳ Resume: buscando CV ${kind} (Show more si hace falta)`);
+  console.log(
+    forcedCvName
+      ? `   ↳ Resume: buscando forced CV ${forcedCvName}`
+      : `   ↳ Resume: buscando CV ${kind} (Show more si hace falta)`
+  );
   if (await trySelectPreferredResume(page, root, kind, jobTitle, company)) {
     selected = await readSelected();
-    console.log(`   ↳ Resume: OK (${kind}) → ${selected.slice(0, 80)}`);
+    console.log(
+      forcedCvName
+        ? `   ↳ Resume: OK (forced) → ${selected.slice(0, 80)}`
+        : `   ↳ Resume: OK (${kind}) → ${selected.slice(0, 80)}`
+    );
     return {
       outcome: "ok",
       preferred: true,

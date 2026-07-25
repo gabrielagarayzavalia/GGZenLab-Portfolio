@@ -47,6 +47,7 @@ import {
   cssPrimaryActions,
   dismissModalOverlays,
   findButtonOrLink,
+  findWizardStepAdvanceButton,
   MODAL_LABELS,
   resolveApplyScope,
 } from "./apply/modal-controls.js";
@@ -374,15 +375,12 @@ async function tryAdvanceNext(
   const beforeFp = await stepFingerprint(page);
   const beforeUrl = page.url();
 
-  // Orden footer: Next/Continue → (si no hay) Review → (luego Submit se detecta en el loop).
-  const nextEl =
-    (await findButtonOrLink(scope, MODAL_LABELS.continue, 700)) ||
-    (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
-  const reviewEl = nextEl
-    ? null
-    : await findButtonOrLink(scope, MODAL_LABELS.review, 800);
-  const target = nextEl ?? reviewEl;
-  const which = nextEl ? "Next/Continue" : reviewEl ? "Review" : "css-primary";
+  let advance = await findWizardStepAdvanceButton(scope, page);
+  if (!advance) {
+    advance = await findWizardStepAdvanceButton(page, page);
+  }
+  const target = advance?.locator ?? null;
+  const which = advance?.which ?? "css-primary";
 
   if (!target) {
     const cssNext = cssPrimaryActions(scope);
@@ -486,11 +484,9 @@ async function tryAdvanceNext(
       const resumeRetry = await ensureResumeForRole(page, jobTitle, company, "dry_run");
       if (resumeRetry.outcome === "timeout_dry") return "resume_timeout";
       await sleep(TIMING.modalStepMs);
-      const next2 =
-        (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
-        (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
-      if (next2) {
-        await next2.click({ force: true, timeout: 4000 }).catch(() => {});
+      const advance2 = await findWizardStepAdvanceButton(scope, page);
+      if (advance2?.locator) {
+        await advance2.locator.click({ force: true, timeout: 4000 }).catch(() => {});
         await waitForEasyApplyStepSettle(page);
       }
       afterFp = await stepFingerprint(page);

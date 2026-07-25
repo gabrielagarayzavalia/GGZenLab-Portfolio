@@ -397,9 +397,9 @@ export async function runNotificationsSpike(options: {
         added++;
       }
       fs.writeFileSync(JOBS_PATH, JSON.stringify([...byId.values()], null, 2), "utf-8");
-      console.log(`💾 Merge jobs.json: +${added} (total ${byId.size})`);
+      console.log(`💾 Merge jobs-found.json: +${added} (total ${byId.size})`);
     } else {
-      console.log("🧪 Dry-run: no se escribió jobs.json (usá --merge para persistir).");
+      console.log("🧪 Dry-run: no se escribió output/spike-notifications/jobs-found.json (usá --merge).");
     }
   } finally {
     await browser.close();

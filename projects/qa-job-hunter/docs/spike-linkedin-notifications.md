@@ -3,14 +3,15 @@
 **Story:** [US-JH-B37-0 #248](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/248)  
 **Rama:** `spike/b37-linkedin-notifications`  
 **Fecha:** 2026-07-25  
-**Estado:** spike cerrado — **no integrado** a `run-hunt.ts`
+**Estado:** spike cerrado — **no integrado** a `run-campaign` / `agent:pipeline`  
+**Repo:** `GGZenLab-Portfolio/projects/qa-job-hunter` (rama `spike/b37-linkedin-notifications` → PR a `release/v2`)
 
 ## TL;DR
 
 | | |
 |---|---|
 | **Veredicto** | **GO parcial** — fuente viable como *complemento* de Gmail, no como reemplazo |
-| **PoC** | `npm run discover-notifications` — 3 ítems procesados, 8 `JobEntry`, 0 errores de navegación |
+| **PoC** | `npm run discover:notifications` — 3 ítems procesados, 8 `JobEntry`, 0 errores de navegación (run 2026-07-25, clone previo) |
 | **Script** | `scripts/discover-notifications.ts` + helpers browser en `scripts/notifications-browser.js` |
 
 ---
@@ -29,7 +30,7 @@ Ejecutado con sesión `es-AR`, viewport 1280×900, scroll finito ~6 rondas.
 | **Prefijo accesibilidad** | Muchos textos empiezan con `Unread notification.` (ignorar en filtro; matchear el cuerpo) |
 | **Virtualización** | Re-scroll al volver de destino; re-navegar a `/notifications` más fiable que `goBack()` |
 | **Destino tras click** | `https://www.linkedin.com/jobs/search/?alertAction=viewjobs&currentJobId=…` o `jobs/search-results/?currentJobId=…` |
-| **Jobs en destino** | Misma lista virtualizada que `discover-list.ts`: `[data-occludable-job-id]` + paneles de detalle |
+| **Jobs en destino** | Misma lista virtualizada que LinkedIn search: `[data-occludable-job-id]` + paneles de detalle |
 
 ### Muestras de timestamp parseadas
 
@@ -67,7 +68,8 @@ Parser implementado en `parseRelativeAgeHours()` — soporta EN/ES abreviado.
 `docs/fixtures/notifications-capture-2026-07-24.json` — self-test:
 
 ```bash
-npm run discover-notifications -- --test-fixtures
+cd projects/qa-job-hunter
+npm run discover:notifications -- --test-fixtures
 ```
 
 ### Nota EN vs ES
@@ -81,14 +83,16 @@ En cuenta `locale: es-AR`, los **job alerts siguen en inglés** (`new opportunit
 ### Comandos
 
 ```bash
-# Dry-run (default): no escribe jobs.json
-npm run discover-notifications -- --max-items=3 --lookback-hours=336
+cd projects/qa-job-hunter
 
-# Persistir en local/qa-job-applied-list/jobs.json
-npm run discover-notifications -- --max-items=5 --lookback-hours=24 --merge
+# Dry-run (default): no escribe output/spike-notifications/jobs-found.json
+npm run discover:notifications -- --max-items=3 --lookback-hours=336
+
+# Persistir artefacto del spike (solo jobs-found.json local del PoC)
+npm run discover:notifications -- --max-items=5 --lookback-hours=24 --merge
 
 # Ver browser (debug)
-npm run discover-notifications -- --headed --max-items=1
+npm run discover:notifications -- --headed --max-items=1
 ```
 
 ### Variables / flags
@@ -97,7 +101,7 @@ npm run discover-notifications -- --headed --max-items=1
 |-----------|---------|-----|-------------|
 | `--lookback-hours` / `NOTIFICATIONS_LOOKBACK_HOURS` | `24` | `336` (14 días) | Ventana temporal sobre timestamp relativo |
 | `--max-items` | `3` | — | Tope de ítems job-alert a procesar por corrida |
-| `--merge` | off | — | Mergea en `jobs.json` (sin flag = dry-run) |
+| `--merge` | off | — | Escribe `output/spike-notifications/jobs-found.json` (sin flag = dry-run) |
 | `--headed` | off | — | Browser visible |
 
 ### Loop implementado
@@ -105,7 +109,7 @@ npm run discover-notifications -- --headed --max-items=1
 1. `goto /notifications` + scroll feed  
 2. Extraer `.nt-card` → filtrar por patrón + lookback  
 3. Por cada ítem: `goto /notifications` → click **View jobs** (o link)  
-4. Scrape lista destino (mismo contrato `JobEntry` que `discover-list.ts`)  
+4. Scrape lista destino (contrato mínimo `{ jobId, title, company, url }`)  
 5. `goto /notifications` → siguiente ítem  
 
 ### Resultado dry-run 2026-07-25
@@ -117,7 +121,7 @@ npm run discover-notifications -- --headed --max-items=1
 | Ítems procesados | 3 |
 | Jobs scrapeados (QA) | 8 |
 | Errores navegación | 0 |
-| Artefacto | `local/qa-job-applied-list/spike-notifications/last-run.json` |
+| Artefacto | `output/spike-notifications/last-run.json` (gitignored) |
 
 **Ítems 2–3 devolvieron 0 jobs nuevos** porque los `jobId` ya habían sido vistos en el ítem 1 (solapamiento entre alertas genéricas y específicas) — comportamiento esperado para dedupe.
 
@@ -132,7 +136,7 @@ notificationsLookbackHours: number; // default 24, clamp 1..336
 
 | Valor | Uso sugerido |
 |-------|----------------|
-| `24` | Corrida diaria en `run-hunt` (bajo riesgo rate-limit) |
+| `24` | Corrida diaria en campaña (`run-campaign` / `agent:pipeline`) |
 | `72` | Recuperar fin de semana |
 | `336` | Backfill manual / spike; no recomendado en cron diario |
 
@@ -144,14 +148,14 @@ Si `ageHours === null` (timestamp no parseado), el spike **incluye** el ítem y 
 
 | Fuente | Clave | Relación con Notifications |
 |--------|-------|----------------------------|
-| `local/.../jobs.json` | `jobId` | Mismo merge `Map<jobId, JobEntry>` que `discover-gmail.ts` / `discover-list.ts` |
-| Gmail (`discover-gmail`) | `jobId` desde mail | **Alta superposición** con alertas `new opportunities` (mismo origen LinkedIn Job Alert) |
-| `discover-list` | `jobId` desde search | Baja superposición; search es keyword-driven |
-| Notifications | `jobId` desde alert/recommendation landing | Aporta **recommendations for you** que Gmail puede no enviar |
+| `output/jobs-result.json` (hunter v2) | `jobId` | Destino productivo post-`agent:pipeline` |
+| Gmail (`npm run agent:gmail-fetch` → applied-list) | `jobId` desde mail | **Alta superposición** con alertas `new opportunities` |
+| LinkedIn search (`DISCOVERY=linkedin_search` en campaña) | `jobId` desde search | Baja superposición; keyword-driven |
+| Notifications (spike) | `jobId` desde alert/recommendation landing | Aporta **recommendations for you** que Gmail puede no enviar |
 
 ### Estrategia recomendada (implementación futura)
 
-1. Correr Notifications **después** de Gmail en el pipeline → dedupe natural por `jobId`.  
+1. Correr Notifications **después** de `agent:gmail-fetch` en la campaña → dedupe natural por `jobId`.  
 2. Tag opcional en `JobEntry`: `source: "notifications" | "gmail" | "search"` (requiere extender tipo — fuera de scope spike).  
 3. No re-procesar ítems cuyo `notificationUrn` ya se visitó en la sesión (cache local `processed-notifications.json`).  
 4. Nunca escribir `Descartado` en Excel — política tracker existente.
@@ -165,7 +169,7 @@ Si `ageHours === null` (timestamp no parseado), el spike **incluye** el ítem y 
 | Descubre **recommendations for you** no siempre mailadas | Mucho solapamiento con Gmail Job Alerts |
 | Un click → lista scrapeable (mismo stack que list search) | DOM frágil (`.nt-card`, clases `artdeco`) |
 | Filtro textual simple y testeable con fixtures | Timestamps relativos sin `datetime` ISO |
-| Complementa sin reemplazar discover-gmail | Scroll + N clicks = más lento y más visible que Gmail |
+| Complementa sin reemplazar Gmail fetch | Scroll + N clicks = más lento y más visible que Gmail |
 | | Riesgo **ToS / automatización** LinkedIn (igual que resto del hunter) |
 | | **Rate-limit** si lookback alto + muchos View jobs |
 | | UI EN mezclada en locale ES — mantener patrones bilingües |
@@ -177,7 +181,7 @@ Si `ageHours === null` (timestamp no parseado), el spike **incluye** el ítem y 
 
 ### Implementar (story futura)
 
-- Paso opcional en `run-hunt.ts` **post-`discover-gmail`**, pre-scrape.  
+- Paso opcional en `run-campaign.ts` **post-`agent:gmail-fetch`**, pre-`agent:pipeline`.  
 - `notificationsLookbackHours: 24`, `maxNotificationItems: 5`.  
 - Guardrails: `sleep` 1–2s entre ítems; tope diario de clicks.  
 - Métricas: `notificationsItemsSeen`, `notificationsJobsAdded`, `notificationsDuplicates`.
@@ -190,7 +194,7 @@ Si `ageHours === null` (timestamp no parseado), el spike **incluye** el ítem y 
 
 ### Criterio de éxito productivo
 
-En 1 semana de uso: **≥1 jobId nuevo/semana** que no entró por Gmail ni discover-list, con **0 bloqueos de sesión**.
+En 1 semana de uso: **≥1 jobId nuevo/semana** que no entró por Gmail ni LinkedIn search, con **0 bloqueos de sesión**.
 
 ---
 
@@ -201,6 +205,6 @@ En 1 semana de uso: **≥1 jobId nuevo/semana** que no entró por Gmail ni disco
 | `scripts/discover-notifications.ts` | Orquestación PoC |
 | `scripts/notifications-browser.js` | Funciones `page.evaluate` (evita bug `__name` de tsx) |
 | `docs/fixtures/notifications-capture-2026-07-24.json` | Fixtures filtro |
-| `local/.../spike-notifications/last-run.json` | Último reporte (gitignored vía `local/`) |
+| `output/spike-notifications/last-run.json` | Último reporte (gitignored vía `output/`) |
 
-**No modificado:** `run-hunt.ts`, producción, `Empleos_Tracker.xlsx`.
+**No modificado:** `run-campaign.ts`, `agent:pipeline`, producción, `Empleos_Tracker.xlsx`.

@@ -7,24 +7,16 @@ import { fileURLToPath } from "url";
 
 const HUNTER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-/** Default: sibling under QA-portfolio (mismo usuario). Override con APPLIED_LIST_ROOT. */
+/** Default: hermano en monorepo GGZenLab. Override con APPLIED_LIST_ROOT. */
 export function resolveAppliedListRoot(): string {
   if (process.env.APPLIED_LIST_ROOT) {
     return path.resolve(process.env.APPLIED_LIST_ROOT);
   }
-  const sibling = path.resolve(
-    HUNTER_ROOT,
-    "..",
-    "..",
-    "..",
-    "QA-portfolio",
-    "projects",
-    "qa-job-applied-list"
-  );
+  const sibling = path.resolve(HUNTER_ROOT, "..", "qa-job-applied-list");
   const alt = path.resolve(
     process.env.USERPROFILE ?? "",
     "projects",
-    "QA-portfolio",
+    "GGZenLab-Portfolio",
     "projects",
     "qa-job-applied-list"
   );

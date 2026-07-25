@@ -29,7 +29,6 @@ export const RECORDINGS_DIR = path.join(ROOT, "recordings", "easy-apply");
 const SESSION_CANDIDATES = [
   path.join(ROOT, "session", "linkedin-session.json"),
   "C:/Users/gabri/projects/GGZenLab-Portfolio/projects/qa-job-hunter/session/linkedin-session.json",
-  "C:/Users/gabri/projects/QA-portfolio/projects/qa-job-hunter/session/linkedin-session.json",
 ];
 
 export function resolveSessionPath(): string {

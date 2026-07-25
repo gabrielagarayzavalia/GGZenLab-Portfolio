@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B38 PoC — AG Grid</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@33.1.1/styles/ag-grid.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@33.1.1/styles/ag-theme-alpine.css">
+  <link rel="stylesheet" href="/poc/poc.css">
+  <style>
+    .ag-theme-alpine-dark { --ag-background-color: #1a2332; --ag-header-background-color: #243044; }
+    #grid.ag-theme-alpine-dark { height: calc(100vh - 72px); }
+    .match-high { color: #34d399; font-weight: 600; }
+    .match-mid { color: #fbbf24; }
+    .match-low { color: #f87171; }
+  </style>
+</head>
+<body>
+  <header class="poc-header">
+    <div>
+      <h1>AG Grid Community — Empleos_Tracker PoC</h1>
+      <p>Edición inline · dropdown Estado · import .xlsx</p>
+    </div>
+    <div class="poc-actions">
+      <a href="/poc/">← PoC hub</a>
+      <a href="/poc/tabulator.html">Tabulator →</a>
+      <label class="btn">Importar .xlsx<input type="file" id="file-input" accept=".xlsx,.xls"></label>
+      <button type="button" id="btn-reset">Datos demo</button>
+    </div>
+    <span class="poc-status" id="status">5 filas demo</span>
+  </header>
+  <div id="grid" class="ag-theme-alpine-dark"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.1.1/dist/ag-grid-community.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script type="module">
+    import { SAMPLE_ROWS, ESTADO_OPTIONS } from "./sample-data.js";
+    import { importEmpleosXlsx } from "./xlsx-import.js";
+
+    const statusEl = document.getElementById("status");
+    let gridApi = null;
+
+    function matchClass(p) {
+      if (p >= 85) return "match-high";
+      if (p >= 75) return "match-mid";
+      return "match-low";
+    }
+
+    const columnDefs = [
+      {
+        field: "matchPercent",
+        headerName: "Match %",
+        width: 100,
+        editable: true,
+        cellClass: (p) => matchClass(p.value),
+        valueFormatter: (p) => (p.value != null ? `${p.value}%` : ""),
+        valueParser: (p) => parseInt(String(p.newValue).replace("%", ""), 10) || 0,
+      },
+      { field: "puesto", headerName: "Puesto", flex: 1.2, editable: true, filter: true },
+      { field: "empresa", headerName: "Empresa", flex: 1, editable: true, filter: true },
+      {
+        field: "linkedinUrl",
+        headerName: "LinkedIn",
+        flex: 1.2,
+        cellRenderer: (p) => {
+          if (!p.value) return "";
+          const a = document.createElement("a");
+          a.href = p.value;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.textContent = p.value.replace(/^https?:\/\/(www\.)?linkedin\.com\/jobs\/view\//, "").slice(0, 24) + "…";
+          return a;
+        },
+      },
+      { field: "canal", headerName: "Canal", width: 110, editable: true },
+      {
+        field: "estado",
+        headerName: "Estado",
+        width: 140,
+        editable: true,
+        cellEditor: "agSelectCellEditor",
+        cellEditorParams: { values: ESTADO_OPTIONS },
+        filter: true,
+      },
+      { field: "fechaAplicacion", headerName: "Fecha aplicación", width: 130, editable: true },
+      { field: "portalExterno", headerName: "Portal externo", flex: 0.8, editable: true },
+      { field: "proximoPaso", headerName: "Próximo paso", flex: 1, editable: true },
+      { field: "notas", headerName: "Notas", flex: 1.2, editable: true },
+      { field: "misComentarios", headerName: "Mis comentarios", flex: 1, editable: true },
+    ];
+
+    const gridOptions = {
+      columnDefs,
+      rowData: structuredClone(SAMPLE_ROWS),
+      defaultColDef: { sortable: true, resizable: true },
+      animateRows: true,
+      onCellValueChanged: (e) => {
+        statusEl.textContent = `Editado: ${e.colDef.field} fila ${e.node.rowIndex + 1}`;
+      },
+    };
+
+    gridApi = agGrid.createGrid(document.getElementById("grid"), gridOptions);
+
+    function setRows(rows) {
+      gridApi.setGridOption("rowData", rows);
+      statusEl.textContent = `${rows.length} filas`;
+    }
+
+    document.getElementById("file-input").addEventListener("change", async (ev) => {
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      try {
+        const rows = await importEmpleosXlsx(file);
+        setRows(rows);
+        statusEl.textContent = `Importadas ${rows.length} filas desde ${file.name}`;
+      } catch (err) {
+        statusEl.textContent = `Error import: ${err.message}`;
+      }
+      ev.target.value = "";
+    });
+
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      setRows(structuredClone(SAMPLE_ROWS));
+    });
+  </script>
+</body>
+</html>

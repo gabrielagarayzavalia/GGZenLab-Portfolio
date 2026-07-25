@@ -50,6 +50,7 @@ import {
   scoreResumeForJob,
 } from "./resume-match.js";
 import { getCvFilePath } from "../config/cvs-store.js";
+import { captureFieldOptions } from "./field-options.js";
 
 export interface CapturedField {
   label: string;
@@ -66,6 +67,8 @@ export interface CapturedField {
   optional?: boolean;
   /** radio / checkbox / text / select / combobox / textarea / unknown */
   scenarioKind?: string;
+  /** Opciones capturadas en apply (<select>, radios, texto del bloque). */
+  options?: string[];
 }
 
 /** Pseudo-respuestas (ampliar a mano hasta B17-2 con apply-answers.json). */
@@ -413,6 +416,8 @@ async function collectVisibleFields(
     const required = ariaRequired || htmlRequired || starred || Boolean(errorText);
     const optional = !required;
 
+    const options = await captureFieldOptions(page, el, tag, inputType, label);
+
     // Modo legacy: solo obligatorios / error / vacíos relevantes
     if (opts.onlyBlockingCandidates) {
       if (!ariaRequired && !htmlRequired && !errorText && !starred && value) continue;
@@ -431,6 +436,7 @@ async function collectVisibleFields(
       ariaLabel,
       placeholder,
       errorText,
+      ...(options.length > 0 ? { options } : {}),
     });
   }
 

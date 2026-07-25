@@ -16,15 +16,34 @@ test("portugués select sin options → dropdown idioma", () => {
   assert.match(s.hint || "", /idioma/i);
 });
 
-test("select con options capturadas → dropdown esas opciones", () => {
+test("select con una opción capturada → dropdown", () => {
+  const s = resolveAnswerStrategy({
+    label: "D365 experience",
+    kind: "select",
+    options: ["No experience"],
+  });
+  assert.equal(s.id, "select");
+  assert.match(s.hint, /Capturadas en apply/i);
+});
+
+test("select con varias opciones capturadas → dropdown", () => {
   const s = resolveAnswerStrategy({
     label: "Years of SQL",
     kind: "select",
     options: ["1-2", "3-5", "10+"],
   });
   assert.equal(s.id, "select");
-  assert.equal(typeof s.mount, "function");
-  assert.equal(typeof s.readValue, "function");
+  assert.match(s.hint, /Capturadas en apply/i);
+});
+
+test("select kind sin options en DOM → texto libre", () => {
+  const s = resolveAnswerStrategy({
+    label: "Custom dropdown",
+    kind: "select",
+    options: [],
+  });
+  assert.equal(s.id, "text");
+  assert.match(s.hint, /sin opciones en DOM/i);
 });
 
 test("text kind → texto libre", () => {

@@ -385,9 +385,16 @@ function rowPregunta(q) {
   const answerPreview = q.answer
     ? `<p class="config-row__meta">→ ${esc(q.answer)}</p>`
     : "";
+  const optPreview =
+    optCount > 0 && !q.answer
+      ? `<p class="config-row__meta config-row__opts">opts: ${esc(
+          (q.options || []).slice(0, 4).join(" · ")
+        )}${optCount > 4 ? "…" : ""}</p>`
+      : "";
   return `<li class="config-row" data-id="${esc(q.id)}">
     <span class="config-row__name">${esc(q.label)}</span>
     <p class="config-row__meta">${esc(meta)}</p>
+    ${optPreview}
     ${answerPreview}
     <div class="config-row__actions">
       <button type="button" class="config-btn config-btn--ghost" data-action="answer">Responder</button>

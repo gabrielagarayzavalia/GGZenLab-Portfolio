@@ -73,6 +73,39 @@ function selectStrategy(options, hint) {
   };
 }
 
+function formatCapturedOptionsHint(options, prefix) {
+  const opts = cleanOptions(options);
+  if (opts.length === 0) return prefix;
+  const quoted = opts.map((o) => `«${o}»`).join(", ");
+  return `${prefix} Capturadas en apply: ${quoted}.`;
+}
+
+function textStrategyWithSuggestions(options, hint) {
+  const opts = cleanOptions(options);
+  const base = textStrategy(hint);
+  if (opts.length === 0) return base;
+  return {
+    ...base,
+    id: opts.length === 1 ? "text-suggested" : base.id,
+    mount(container, ctx) {
+      base.mount(container, ctx);
+      const input = container.querySelector("input[name=answer]");
+      if (!input) return;
+      const dlId = `answer-suggest-${Math.random().toString(36).slice(2, 9)}`;
+      input.setAttribute("list", dlId);
+      input.placeholder = opts.length === 1 ? `Ej. ${opts[0]}` : "Escribí o elegí sugerencia…";
+      const dl = document.createElement("datalist");
+      dl.id = dlId;
+      for (const o of opts) {
+        const opt = document.createElement("option");
+        opt.value = o;
+        dl.appendChild(opt);
+      }
+      container.appendChild(dl);
+    },
+  };
+}
+
 function textStrategy(hint) {
   return {
     id: "text",
@@ -139,7 +172,14 @@ export function resolveAnswerStrategy(question) {
     if (options.length <= 3 && isYesNoOptions(options)) {
       return selectStrategy(options, "Sí / No del formulario.");
     }
-    return selectStrategy(options);
+    return selectStrategy(options, formatCapturedOptionsHint(options, "Elegí la opción exacta del dropdown."));
+  }
+
+  if (options.length === 1) {
+    return selectStrategy(
+      options,
+      formatCapturedOptionsHint(options, "Una opción vista en apply — confirmá o corregí.")
+    );
   }
 
   if (kind === "select" || kind === "listbox" || kind === "radio") {
@@ -149,10 +189,10 @@ export function resolveAnswerStrategy(question) {
     if (kind === "radio") {
       return selectStrategy(YES_NO_OPTIONS, "Sí / No.");
     }
-    return {
-      ...textStrategy("Dropdown sin opciones capturadas: pegá el texto exacto de la opción."),
-      id: "select-fallback",
-    };
+    return textStrategyWithSuggestions(
+      options,
+      "Dropdown sin opciones en DOM: escribí el texto exacto de la opción."
+    );
   }
 
   if (kind === "number" || kind === "tel") {

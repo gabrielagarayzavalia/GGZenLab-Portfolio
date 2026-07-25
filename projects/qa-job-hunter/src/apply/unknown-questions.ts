@@ -103,6 +103,7 @@ export function collectUnknownQuestions(fields: CapturedField[]): UnknownQuestio
       kind: f.scenarioKind ?? f.tag,
       required: !!f.required,
       value: (f.value || "").slice(0, 80),
+      ...(f.options?.length ? { options: f.options } : {}),
     });
   }
 

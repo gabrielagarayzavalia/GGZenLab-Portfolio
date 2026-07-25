@@ -107,7 +107,7 @@ Dual-write ([#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/is
 | ID | Título | Prioridad | Depende de | Issue |
 |----|--------|-----------|------------|-------|
 | **B-38-12** | API `GET /api/dashboard/match-jobs` (join tracker + analysis) | High | #297 (datos) | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) |
-| **B-38-13** | Extender schema `applications`: `analysis`, `matchRejected`, flags | High | — | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) |
+| **B-38-13** | Extender schema `applications`: `analysis`, `matchRejected`, flags | High | — | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) **implementado** — tipos + Mongo + índices |
 | **B-38-14** | Wire `dashboard/app.js` → nueva API (lista + detalle) | High | #311 | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) |
 | **B-38-15** | Writes dashboard → tracker (reemplazar application-status) | High | #312 | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) |
 | **B-38-16** | Sync `match-feedback` ↔ `matchRejected` + analyze lee Mongo | Medium | #314 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) |
@@ -145,6 +145,19 @@ Dual-write ([#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/is
 - [x] Diseño read/write + diagramas + contrato API (#308)
 - [x] Go/no-go + breakdown B-38-12…17 (#309)
 - [x] Spike only — sin cambios productivos en `app.js`
+
+### Schema B-38-13 (#312) — listo para #311
+
+Campos opcionales en `applications` (docs legacy sin ellos → API devuelve `matchRejected: false`, `inLatestAnalysis: false`):
+
+- `analysis?: AnalysisSnapshot` — detalle JD/análisis embebido (opción A híbrida)
+- `matchRejected`, `matchRejectedReason`, `matchRejectedAt`, `inLatestAnalysis`
+
+Tipos: `src/types/dashboard-match.ts`, `src/types/tracker-application.ts`.  
+Índices: `matchRejected+estado+matchPercent`, `inLatestAnalysis+matchPercent`.  
+Filtros API: `GET /api/tracker/applications?matchRejected=&inLatestAnalysis=&minMatchPercent=`.
+
+Verificación: `npm run qa:smoke-b38-13` · `npm run test:tracker`.
 
 ---
 

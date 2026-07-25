@@ -40,7 +40,10 @@
     "smoke:indeed": "npx tsx scripts/smoke-indeed.ts",
     "discover:indeed": "npx tsx scripts/discover-indeed.ts",
     "discover:notifications": "npx tsx scripts/discover-notifications.ts",
-    "test:notifications-merge": "npx tsx --test tests/discovery/notifications-applied-list.test.ts"
+    "test:notifications-merge": "npx tsx --test tests/discovery/notifications-applied-list.test.ts",
+    "qa:smoke-b38-13": "npx tsx scripts/qa/smoke-b38-13.ts",
+    "qa:dry-run-campaign": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
+    "qa:regression-b38-13": "npx tsx scripts/qa/regression-b38-13.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

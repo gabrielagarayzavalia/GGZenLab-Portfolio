@@ -27,6 +27,7 @@ import {
   clickButtonOrLink,
   cssPrimaryActions,
   findButtonOrLink,
+  findWizardStepAdvanceButton,
   isLanguageOnlyShell,
   MODAL_LABELS,
   resolveApplyScope,
@@ -48,7 +49,7 @@ import {
   hasPrefillValue,
   uploadCoverLetterPdf,
   fillApplicationSummary,
-  selectResumeForRole,
+  ensureResumeForRole,
 } from "./apply/fill-answers.js";
 import {
   COVER_LETTER_DEFAULT,
@@ -65,6 +66,12 @@ import {
 } from "./apply/page-ready.js";
 import { exportQueueToExcel, finishProductiveRun } from "./apply/post-run.js";
 import {
+  TIMING,
+  betweenJobsDelayMs,
+  sleep,
+  waitForEasyApplyStepSettle,
+} from "./apply/timing.js";
+import {
   canonicalJobUrl,
   ensureQueueFromMatched,
   isFinalStatus,
@@ -76,12 +83,17 @@ import {
   updateQueueRow,
 } from "./apply/apply-queue.js";
 import {
-  collectUnknownQuestions,
+  formatFailedFieldsNotes,
   logRunUnknownQuestions,
   recordJobUnknownQuestions,
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import { syncEmptyCapturedFieldsToConfig } from "./apply/config-field-sync.js";
+import {
+  applyUnknownPolicyToJob,
+  evaluateUnknownFields,
+} from "./apply/unknown-field-strategy.js";
 import { handleFailures } from "./apply/failure-handler.js";
 import type { ApplicationRecord, ApplyJob } from "./apply/types.js";
 import type { AnalysisResult, JobMatch } from "./types.js";
@@ -100,7 +112,7 @@ async function dismissEasyApplyModal(page: import("playwright").Page): Promise<v
   } else {
     await page.keyboard.press("Escape").catch(() => {});
   }
-  await sleep(500);
+  await sleep(TIMING.modalReadySettleMs);
   await handleSaveDiscardModal(page, "dry_run");
 }
 
@@ -134,8 +146,30 @@ async function leavePendingCloseContinue(
   return record;
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+/** Typeahead/mandatorio falló: Notas con nombres de campos (B30) + pendiente. */
+async function leavePendingTypeaheadFail(
+  page: import("playwright").Page,
+  job: ApplyJob,
+  record: ApplicationRecord
+): Promise<ApplicationRecord> {
+  const blocking = await hasBlockingEmptyFields(page).catch(() => []);
+  const labels = blocking
+    .map((f) => (f.label || f.ariaLabel || f.placeholder || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
+  syncEmptyCapturedFieldsToConfig(blocking, {
+    jobId: job.jobId,
+    company: job.company,
+    title: job.title,
+  });
+  if (blocking.length > 0) logCapturedFields(blocking);
+  const fieldNotes =
+    formatFailedFieldsNotes(labels) ||
+    "Campos que fallaron / faltaron completar:\n- (typeahead obligatorio; ver dump required-fields)";
+  const reason =
+    "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia" +
+    ` — ver ${path.basename(dump)}`;
+  return leavePendingCloseContinue(page, job, record, reason, fieldNotes);
 }
 
 /**
@@ -152,7 +186,7 @@ async function completeSubmitAndDone(
     .catch(() => {});
 
   const clickedDone = await clickButtonOrLink(page, MODAL_LABELS.done, 5000, page);
-  if (clickedDone) await sleep(1500);
+  if (clickedDone) await sleep(TIMING.afterDoneMs);
 
   const sentBanner = await page
     .getByText(/Application sent|Application submitted|Solicitud enviada/i)
@@ -219,7 +253,7 @@ async function afterSaveContinueToSubmit(
       fill.skipPending.notes
     );
   }
-  await sleep(800);
+  await sleep(TIMING.afterTextareaFillMs);
 
   // Next / Review hasta Submit
   for (let i = 0; i < 6; i++) {
@@ -242,7 +276,8 @@ async function afterSaveContinueToSubmit(
           "Tras Save: Submit visible pero click falló — queda pendiente"
         );
       }
-      await sleep(2500);
+      await waitForEasyApplyStepSettle(page);
+      await sleep(TIMING.afterSubmitMs);
       return completeSubmitAndDone(page, job, record);
     }
 
@@ -251,11 +286,11 @@ async function afterSaveContinueToSubmit(
       (await clickButtonOrLink(modal, MODAL_LABELS.continue, 700, page)) ||
       (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page));
     if (!advanced) break;
-    await sleep(1500);
+    await waitForEasyApplyStepSettle(page);
 
     const sd = await handleSaveDiscardModal(page, "productive");
     if (sd === "saved") {
-      await sleep(1000);
+      await sleep(TIMING.afterSaveMs);
       continue;
     }
   }
@@ -311,12 +346,12 @@ async function discardStaleDraftAndReopen(
     await discardApp.click({ timeout: 4000 }).catch(() =>
       discardApp.click({ force: true, timeout: 4000 })
     );
-    await sleep(800);
+    await sleep(TIMING.modalStepMs);
     await handleSaveDiscardModal(page, "dry_run");
   }
   await clickButtonOrLink(page, MODAL_LABELS.dismiss, 800, page);
   await page.keyboard.press("Escape").catch(() => {});
-  await sleep(600);
+  await sleep(TIMING.modalReadySettleMs);
 
   await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 45000 });
   await waitForJobPageReady(page);
@@ -437,16 +472,31 @@ async function tryEasyApply(
       if (inventory.length > 0) {
         console.log(`   ↳ inventario → ${path.basename(inventoryPath)}`);
       }
-      const unknowns = collectUnknownQuestions(inventory);
-      if (unknowns.length > 0) {
-        const notes = recordJobUnknownQuestions(
-          job.jobId,
-          job.company,
-          job.title,
-          unknowns
+      // #154 / #156: required desconocido → pendiente+Notas+banco; no quemar 8 pasos
+      const unknownDecision = evaluateUnknownFields(inventory);
+      if (unknownDecision.hits.length > 0 || unknownDecision.notes) {
+        const notes = applyUnknownPolicyToJob(
+          { jobId: job.jobId, company: job.company, title: job.title },
+          unknownDecision,
+          recordJobUnknownQuestions
         );
-        updateQueueRow(job.jobId, { notes });
-        console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+        updateQueueRow(job.jobId, { notes: notes || unknownDecision.notes });
+        console.log(
+          `   📝 Strategy unknown-fields → Notas + banco Config` +
+            (unknownDecision.pendingLabels.length
+              ? ` (pending: ${unknownDecision.pendingLabels.length})`
+              : ` (hits: ${unknownDecision.hits.length})`)
+        );
+      }
+      if (unknownDecision.action === "leave_pending") {
+        const reason =
+          "Campo(s) required desconocidos — pendiente (#154); completar en Config → siguiente aviso";
+        const notes =
+          unknownDecision.notes ||
+          formatFailedFieldsNotes(unknownDecision.pendingLabels) ||
+          reason;
+        console.log(`   ⏭ ${reason}`);
+        return leavePendingCloseContinue(page, job, record, reason, notes);
       }
 
       // Borrador atascado: solo "Select language" → descartar y reabrir (1 vez).
@@ -527,10 +577,42 @@ async function tryEasyApply(
         );
       }
 
-      // CV correcto primero; cover letter solo en su input; summary según rol
-      await selectResumeForRole(page, job.title, job.company);
+      // CV correcto primero (contrato #208); cover solo en su input; summary según rol
+      {
+        const resume = await ensureResumeForRole(
+          page,
+          job.title,
+          job.company,
+          "productive"
+        );
+        if (resume.outcome === "timeout_prod") {
+          return leavePendingCloseContinue(
+            page,
+            job,
+            record,
+            "Falla selección CV Easy Apply (timeout 30s) — pendiente",
+            resume.notes
+          );
+        }
+      }
       await uploadCoverLetterPdf(page);
-      await selectResumeForRole(page, job.title, job.company);
+      {
+        const resume2 = await ensureResumeForRole(
+          page,
+          job.title,
+          job.company,
+          "productive"
+        );
+        if (resume2.outcome === "timeout_prod") {
+          return leavePendingCloseContinue(
+            page,
+            job,
+            record,
+            "Falla selección CV Easy Apply (timeout 30s) — pendiente",
+            resume2.notes
+          );
+        }
+      }
       await fillApplicationSummary(page, job.title, job.company);
 
       if (openTextareas > 0) {
@@ -566,13 +648,13 @@ async function tryEasyApply(
           }
           if (!hasPrefillValue(current)) await area.fill(letter);
         }
-        await sleep(800);
+        await sleep(TIMING.afterTextareaFillMs);
         if (
           (await clickButtonOrLink(modal, MODAL_LABELS.review, 800, page)) ||
           (await clickButtonOrLink(modal, MODAL_LABELS.continue, 800, page)) ||
           (await clickButtonOrLink(modal, MODAL_LABELS.next, 500, page))
         ) {
-          await sleep(1500);
+          await waitForEasyApplyStepSettle(page);
           continue;
         }
         const nextAfterFill = cssPrimaryActions(modal);
@@ -582,7 +664,7 @@ async function tryEasyApply(
             (await nextAfterFill.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
             (await nextAfterFill.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
           if (ok) {
-            await sleep(1500);
+            await waitForEasyApplyStepSettle(page);
             continue;
           }
         }
@@ -610,18 +692,7 @@ async function tryEasyApply(
       if (await hasMandatoryFieldError(page)) {
         const recover = await recoverMandatoryTypeaheadOrClose(page);
         if (recover === "failed_close") {
-          record.status = "blocked";
-          record.reason =
-            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-          updateQueueRow(job.jobId, {
-            status: "pendiente",
-            easyApply: "yes",
-            reason: record.reason,
-          });
-          await page
-            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
-            .catch(() => {});
-          return record;
+          return leavePendingTypeaheadFail(page, job, record);
         }
         const fill2 = await fillPseudoAnswers(page, {
           jobTitle: job.title,
@@ -659,18 +730,14 @@ async function tryEasyApply(
             "Submit visible pero click falló (overlay) — queda pendiente"
           );
         }
-        await sleep(2500);
+        await waitForEasyApplyStepSettle(page);
+        await sleep(TIMING.afterSubmitMs);
         return completeSubmitAndDone(page, job, record);
       }
 
-      // Orden: Next mientras exista; si no → Review
-      const nextEl =
-        (await findButtonOrLink(modal, MODAL_LABELS.continue, 700)) ||
-        (await findButtonOrLink(modal, MODAL_LABELS.next, 400));
-      const reviewEl = nextEl
-        ? null
-        : await findButtonOrLink(modal, MODAL_LABELS.review, 800);
-      const advanceBtn = nextEl ?? reviewEl;
+      // Orden: Next mientras exista; si no → Review (scroll si hace falta)
+      const advance = await findWizardStepAdvanceButton(modal, page);
+      const advanceBtn = advance?.locator ?? null;
       if (advanceBtn) {
         const advanced =
           (await advanceBtn
@@ -686,24 +753,13 @@ async function tryEasyApply(
           record.reason = "Next/Review visible pero click falló";
           return record;
         }
-        await sleep(2000);
+        await waitForEasyApplyStepSettle(page);
 
         // Tras Next: error mandatorio → recover typeahead (3×) o cerrar
         if (await hasMandatoryFieldError(page)) {
           const recover = await recoverMandatoryTypeaheadOrClose(page);
           if (recover === "failed_close") {
-            record.status = "blocked";
-            record.reason =
-              "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-            updateQueueRow(job.jobId, {
-              status: "pendiente",
-              easyApply: "yes",
-              reason: record.reason,
-            });
-            await page
-              .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-typeahead-fail.png`) })
-              .catch(() => {});
-            return record;
+            return leavePendingTypeaheadFail(page, job, record);
           }
           continue;
         }
@@ -736,20 +792,12 @@ async function tryEasyApply(
         const ok =
           (await primary.click({ timeout: 4000 }).then(() => true).catch(() => false)) ||
           (await primary.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
-        if (ok) {
-          await sleep(1500);
+          if (ok) {
+          await waitForEasyApplyStepSettle(page);
           if (await hasMandatoryFieldError(page)) {
             const recover = await recoverMandatoryTypeaheadOrClose(page);
             if (recover === "failed_close") {
-              record.status = "blocked";
-              record.reason =
-                "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-              updateQueueRow(job.jobId, {
-                status: "pendiente",
-                easyApply: "yes",
-                reason: record.reason,
-              });
-              return record;
+              return leavePendingTypeaheadFail(page, job, record);
             }
           }
           continue;
@@ -760,21 +808,7 @@ async function tryEasyApply(
       if (blocking.length > 0) {
         const recover = await recoverMandatoryTypeaheadOrClose(page);
         if (recover === "failed_close") {
-          record.status = "blocked";
-          record.reason =
-            "Typeahead obligatorio falló tras 3 intentos — cerré modal; reintentar otra estrategia";
-          updateQueueRow(job.jobId, {
-            status: "pendiente",
-            easyApply: "yes",
-            reason: record.reason,
-          });
-          const dump = saveRequiredFieldsDump(job.jobId, job.url, blocking);
-          logCapturedFields(blocking);
-          record.reason += ` — ver ${path.basename(dump)}`;
-          await page
-            .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-required.png`) })
-            .catch(() => {});
-          return record;
+          return leavePendingTypeaheadFail(page, job, record);
         }
         continue;
       }
@@ -787,19 +821,25 @@ async function tryEasyApply(
     const labels = leftover
       .map((f) => (f.label || f.ariaLabel || "").replace(/\s+/g, " ").trim())
       .filter(Boolean)
-      .slice(0, 8);
+      .slice(0, 12);
+    const fieldNotes = formatFailedFieldsNotes(labels);
     const labelsNote = labels.length
       ? ` Campos sin completar: ${labels.map((l) => `"${l.slice(0, 80)}"`).join("; ")}`
       : "";
     record.reason = `Flujo incompleto tras ${steps} pasos — revisar borrador.${labelsNote}`;
     console.log(`   ✗ draft_saved — labels requeridos vacíos:${labelsNote || " (ninguno detectado)"}`);
+    const notes = recordJobUnknownQuestions(
+      job.jobId,
+      job.company,
+      job.title,
+      [],
+      fieldNotes ? [fieldNotes] : [record.reason]
+    );
     updateQueueRow(job.jobId, {
       status: "pendiente",
       easyApply: "yes",
       reason: record.reason,
-      notes: labels.length
-        ? `Pendiente campos: ${labels.map((l) => `- ${l}`).join("\n")}`
-        : record.reason,
+      notes: notes || fieldNotes || record.reason,
     });
     await page
       .screenshot({ path: path.join(SCREENSHOTS_DIR, `${job.jobId}-incomplete.png`) })
@@ -913,7 +953,7 @@ async function main() {
       /* ignore */
     }
 
-    await sleep(2000 + Math.random() * 1500);
+    await sleep(betweenJobsDelayMs());
   }
 
   fs.writeFileSync(APPLICATIONS_PATH, JSON.stringify(applications, null, 2), "utf-8");

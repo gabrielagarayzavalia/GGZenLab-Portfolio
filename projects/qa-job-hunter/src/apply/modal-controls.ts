@@ -2,6 +2,7 @@
 // UI nueva (SDUI /apply/) puede no usar role=dialog.
 
 import type { Locator, Page } from "playwright";
+import { scrollWizardStepBeforeAdvance } from "./page-ready.js";
 
 type Scope = Page | Locator;
 
@@ -230,6 +231,36 @@ async function findButtonOrLinkInScope(
     return link;
   }
   return null;
+}
+
+export type WizardAdvanceButton = { locator: Locator; which: string };
+
+/** Next/Continue o Review; si no visible → scroll vertical del paso y reintento. */
+export async function findWizardStepAdvanceButton(
+  scope: Scope,
+  page: Page
+): Promise<WizardAdvanceButton | null> {
+  async function pick(): Promise<WizardAdvanceButton | null> {
+    const nextEl =
+      (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
+      (await findButtonOrLink(scope, MODAL_LABELS.next, 350));
+    if (nextEl) return { locator: nextEl, which: "Next/Continue" };
+    const reviewEl = await findButtonOrLink(scope, MODAL_LABELS.review, 500);
+    if (reviewEl) return { locator: reviewEl, which: "Review" };
+    return null;
+  }
+
+  let hit = await pick();
+  if (hit) return hit;
+
+  const hadScroll = await scrollWizardStepBeforeAdvance(page);
+  if (hadScroll) {
+    console.log("   ↳ Wizard: scroll vertical — rebuscar Next/Review");
+  } else {
+    await scrollWizardStepBeforeAdvance(page);
+  }
+  hit = await pick();
+  return hit;
 }
 
 export async function clickButtonOrLink(

@@ -20,8 +20,48 @@ import {
   type ApplicationStatus,
   type ApplicationStatusStore,
 } from "./application-status.js";
+import {
+  loadSourcesConfig,
+  listSources,
+  patchSource,
+  upsertSource,
+  type ConfigSourceKind,
+} from "./config/sources-store.js";
+import {
+  addManualQuestion,
+  listQuestions,
+  loadQuestionsConfig,
+  patchQuestion,
+  type ConfigQuestionStatus,
+} from "./config/questions-store.js";
+import {
+  listPuestos,
+  loadPuestosConfig,
+  patchPuesto,
+  upsertPuesto,
+} from "./config/puestos-store.js";
+import {
+  listEmpleoProfiles,
+  loadEmpleoConfig,
+  patchEmpleoProfile,
+  upsertEmpleoProfile,
+} from "./config/empleo-store.js";
+import {
+  addCvFromBuffer,
+  deleteCv,
+  getCvById,
+  getCvFilePath,
+  listCvs,
+  loadCvsConfig,
+  patchCv,
+} from "./config/cvs-store.js";
 import { connect } from "./db/client.js";
 import { listJobs } from "./db/jobs.js";
+import {
+  refreshApplyRunState,
+  startApplyRun,
+  type ApplyRunMode,
+} from "./run/apply-runner.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -80,10 +120,53 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });
     res.end();
+    return;
+  }
+
+  if (pathname === "/api/health" && method === "GET") {
+    sendJson(res, 200, {
+      ok: true,
+      service: "qa-job-hunter-dashboard",
+      features: {
+        configQuestions: true,
+        configSources: true,
+        configPuestos: true,
+        configEmpleo: true,
+        configCvs: true,
+        runApply: true,
+      },
+    });
+    return;
+  }
+
+  if (pathname === "/api/run/apply/status" && method === "GET") {
+    sendJson(res, 200, refreshApplyRunState());
+    return;
+  }
+
+  if (pathname === "/api/run/apply" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        mode?: ApplyRunMode;
+        applyMax?: number;
+        jobId?: string;
+      };
+      const mode = body.mode === "productive" ? "productive" : "dry_run";
+      const state = startApplyRun({
+        mode,
+        applyMax: body.applyMax,
+        jobId: body.jobId,
+      });
+      sendJson(res, 202, state);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("en curso") ? 409 : 400;
+      sendJson(res, status, { error: message });
+    }
     return;
   }
 
@@ -196,14 +279,356 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  // --- Config: Fuentes + Sitios (B18-05 / B18-07) ---
+  if (pathname === "/api/config/sources" && method === "GET") {
+    const kind = url.searchParams.get("kind") as ConfigSourceKind | null;
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadSourcesConfig();
+    const sources = listSources({
+      kind: kind === "adapter" || kind === "site" ? kind : undefined,
+      includeArchived,
+    });
+    sendJson(res, 200, { updatedAt: store.updatedAt, sources });
+    return;
+  }
+
+  if (pathname === "/api/config/sources" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        name?: string;
+        kind?: ConfigSourceKind;
+        adapterId?: string;
+        url?: string;
+        enabled?: boolean;
+      };
+      if (!body.name?.trim() || (body.kind !== "adapter" && body.kind !== "site")) {
+        sendJson(res, 400, { error: "Faltan name o kind (adapter|site)" });
+        return;
+      }
+      const store = upsertSource({
+        name: body.name,
+        kind: body.kind,
+        adapterId: body.adapterId,
+        url: body.url,
+        enabled: body.enabled,
+      });
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/sources/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/sources/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        name?: string;
+        url?: string;
+        adapterId?: string;
+        enabled?: boolean;
+        archived?: boolean;
+      };
+      const store = patchSource(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrada") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: Preguntas Easy Apply (#97 / #154) ---
+  if (pathname === "/api/config/questions" && method === "GET") {
+    const status = url.searchParams.get("status") as ConfigQuestionStatus | null;
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadQuestionsConfig();
+    const questions = listQuestions({
+      status:
+        status === "unanswered" || status === "answered" || status === "archived"
+          ? status
+          : undefined,
+      includeArchived,
+    });
+    sendJson(res, 200, { updatedAt: store.updatedAt, questions });
+    return;
+  }
+
+  if (pathname === "/api/config/questions" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        label?: string;
+        kind?: string;
+        required?: boolean;
+        answer?: string;
+      };
+      if (!body.label?.trim()) {
+        sendJson(res, 400, { error: "Falta label" });
+        return;
+      }
+      const q = addManualQuestion({
+        label: body.label,
+        kind: body.kind,
+        required: body.required,
+        answer: body.answer,
+      });
+      sendJson(res, 200, { question: q, ...loadQuestionsConfig() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/questions/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/questions/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        answer?: string;
+        status?: ConfigQuestionStatus;
+        label?: string;
+        kind?: string;
+      };
+      const store = patchQuestion(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrada") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: Puestos objetivo (B18-08 / #197) ---
+  if (pathname === "/api/config/puestos" && method === "GET") {
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadPuestosConfig();
+    sendJson(res, 200, {
+      updatedAt: store.updatedAt,
+      puestos: listPuestos({ includeArchived }),
+    });
+    return;
+  }
+
+  if (pathname === "/api/config/puestos" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        enabled?: boolean;
+      };
+      if (!body.title?.trim()) {
+        sendJson(res, 400, { error: "Falta title" });
+        return;
+      }
+      const store = upsertPuesto({
+        title: body.title,
+        keywords: body.keywords,
+        enabled: body.enabled,
+      });
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/puestos/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/puestos/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        enabled?: boolean;
+        archived?: boolean;
+      };
+      const store = patchPuesto(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: Empleo buscado (B18-04 / #99) ---
+  if (pathname === "/api/config/empleo" && method === "GET") {
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadEmpleoConfig();
+    sendJson(res, 200, {
+      updatedAt: store.updatedAt,
+      profiles: listEmpleoProfiles({ includeArchived }),
+    });
+    return;
+  }
+
+  if (pathname === "/api/config/empleo" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        seniority?: string;
+        remote?: string;
+        location?: string;
+        notes?: string;
+        enabled?: boolean;
+      };
+      if (!body.title?.trim()) {
+        sendJson(res, 400, { error: "Falta title" });
+        return;
+      }
+      const store = upsertEmpleoProfile(body as { title: string });
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/empleo/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/empleo/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        title?: string;
+        keywords?: string;
+        seniority?: string;
+        remote?: string;
+        location?: string;
+        notes?: string;
+        enabled?: boolean;
+        archived?: boolean;
+      };
+      const store = patchEmpleoProfile(id, body as Parameters<typeof patchEmpleoProfile>[1]);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  // --- Config: CVs (B18-03 / #98) ---
+  if (pathname === "/api/config/cvs" && method === "GET") {
+    const includeArchived = url.searchParams.get("archived") === "1";
+    const store = loadCvsConfig();
+    sendJson(res, 200, {
+      updatedAt: store.updatedAt,
+      cvs: listCvs({ includeArchived }),
+    });
+    return;
+  }
+
+  if (pathname === "/api/config/cvs" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        originalName?: string;
+        contentBase64?: string;
+        label?: string;
+        empleoProfileId?: string;
+        setDefault?: boolean;
+      };
+      if (!body.originalName?.trim() || !body.contentBase64) {
+        sendJson(res, 400, { error: "Faltan originalName o contentBase64" });
+        return;
+      }
+      const buffer = Buffer.from(body.contentBase64, "base64");
+      const cv = addCvFromBuffer({
+        originalName: body.originalName,
+        buffer,
+        label: body.label,
+        empleoProfileId: body.empleoProfileId,
+        setDefault: body.setDefault,
+      });
+      sendJson(res, 200, { cv, ...loadCvsConfig() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.match(/^\/api\/config\/cvs\/[^/]+\/file$/) && method === "GET") {
+    const id = decodeURIComponent(pathname.replace("/api/config/cvs/", "").replace(/\/file$/, ""));
+    const cv = getCvById(id);
+    if (!cv) {
+      sendJson(res, 404, { error: "CV no encontrado" });
+      return;
+    }
+    const fp = getCvFilePath(cv);
+    if (!fs.existsSync(fp)) {
+      sendJson(res, 404, { error: "Archivo no encontrado en disco" });
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${cv.originalName.replace(/"/g, "")}"`,
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(fs.readFileSync(fp));
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/cvs/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.replace("/api/config/cvs/", ""));
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        label?: string;
+        empleoProfileId?: string;
+        isDefault?: boolean;
+        archived?: boolean;
+      };
+      const store = patchCv(id, body);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/config/cvs/") && method === "DELETE") {
+    const id = decodeURIComponent(pathname.replace("/api/config/cvs/", ""));
+    try {
+      const store = deleteCv(id);
+      sendJson(res, 200, store);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "JSON inválido";
+      const status = message.includes("no encontrado") ? 404 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
   if (pathname === "/" || pathname === "/index.html") {
     serveStatic(res, path.join(DASHBOARD_DIR, "index.html"));
     return;
   }
 
-  if (pathname === "/styles.css" || pathname === "/app.js") {
-    serveStatic(res, path.join(DASHBOARD_DIR, pathname.slice(1)));
+  if (pathname === "/config" || pathname === "/config.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "config.html"));
     return;
+  }
+
+  if (pathname === "/run" || pathname === "/run.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "run.html"));
+    return;
+  }
+
+  // Assets del dashboard
+  const assetName = pathname.replace(/^\//, "");
+  if (/^[a-zA-Z0-9._-]+$/.test(assetName)) {
+    const assetPath = path.resolve(DASHBOARD_DIR, assetName);
+    if (assetPath.startsWith(DASHBOARD_DIR) && fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
+      serveStatic(res, assetPath);
+      return;
+    }
   }
 
   send(res, 404, "Not found");
@@ -242,6 +667,8 @@ createServer((req, res) => {
     console.log("\n  ⚠️  No hay output/jobs-result.json — ejecutá el análisis primero.");
   }
 
-  console.log("\n  Ctrl+C para detener\n");
+  console.log("\n  Ctrl+C para detener");
+  console.log("  Config: http://localhost:" + PORT + "/config#preguntas");
+  console.log("  Run:    http://localhost:" + PORT + "/run\n");
   openBrowser(url);
 });

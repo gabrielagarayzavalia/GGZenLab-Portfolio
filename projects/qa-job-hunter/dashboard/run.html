@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Job Hunter — Ejecutar</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top-bar">
+    <div class="top-bar__brand">
+      <span class="logo">QA Job Hunter</span>
+      <span class="subtitle">Ejecutar</span>
+    </div>
+    <div class="top-bar__right">
+      <nav class="site-nav" aria-label="Principal">
+        <a class="site-nav__link" href="/">Dashboard</a>
+        <a class="site-nav__link" href="/run" aria-current="page">Ejecutar</a>
+        <a class="site-nav__link" href="/config">Configuración</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="run-page">
+    <h1>Botonera — Easy Apply</h1>
+    <p class="run-page__lead">
+      Spike #125: mínimo para apply con un flag <strong>dry-run</strong> o <strong>productivo</strong>.
+      Abre Chrome en tu máquina (sesión LinkedIn).
+    </p>
+
+    <section class="run-panel" aria-labelledby="run-apply-title">
+      <h2 id="run-apply-title">Easy Apply</h2>
+      <p class="config-status" id="run-status" hidden></p>
+
+      <fieldset class="run-mode" aria-label="Modo de ejecución">
+        <legend class="run-mode__legend">Modo</legend>
+        <label class="run-mode__option">
+          <input type="radio" name="run-mode" value="dry_run" checked />
+          <span>Dry-run</span>
+          <small>Hasta Submit, sin enviar</small>
+        </label>
+        <label class="run-mode__option">
+          <input type="radio" name="run-mode" value="productive" />
+          <span>Productivo</span>
+          <small>Submit + Excel enviada</small>
+        </label>
+      </fieldset>
+
+      <div class="run-fields">
+        <label class="config-field">
+          <span>Máx. jobs (opcional)</span>
+          <input id="run-apply-max" type="number" min="1" max="50" placeholder="Dry-run: 10 por defecto" />
+        </label>
+        <label class="config-field">
+          <span>Job ID (opcional)</span>
+          <input id="run-job-id" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 4440479550" />
+        </label>
+      </div>
+
+      <button type="button" class="config-btn run-btn" id="run-apply-btn">▶ Easy Apply</button>
+    </section>
+
+    <section class="run-panel" aria-labelledby="run-log-title">
+      <h2 id="run-log-title">Estado</h2>
+      <p class="run-state" id="run-state-text">idle</p>
+      <pre class="run-log" id="run-log" aria-live="polite">Sin corrida aún.</pre>
+    </section>
+  </main>
+
+  <script src="/run.js" type="module"></script>
+</body>
+</html>

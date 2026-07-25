@@ -21,19 +21,23 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | **EA-SPIKE-01** | Low | *Mark job as a top choice* — hoy no se toca (opcional LinkedIn). Spike: ¿auto-marcar siempre / nunca / por empresa? |
 | **EA-SPIKE-02** | Low | *Follow company* — hoy no se toca. Spike: política (seguir siempre / nunca / lista blanca). → [#142](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/142) |
 | **EA-SPIKE-03** | Medium | Mapa de **años de experiencia por skill** (SQL, Python, …). **Hecho en código** (`skills-years.ts`); ampliar skills nuevas cuando fallen. |
-| **EA-SPIKE-04** | Medium | **Estrategia campos desconocidos** (por tipo de widget). Hoy: Notas + seguir (salvo skipPending parcial) → quemar pasos / `draft_saved`. Objetivo: required+unknown → pendiente + Notas + siguiente; optional → solo Notas; **nunca inventar**. → [#154](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/154) |
+| **EA-SPIKE-04** | High | **Estrategia campos desconocidos** (Strategy pattern). Política [#154](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/154); tech debt [#156](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/156). Código: `src/apply/unknown-field-strategy.ts`. |
 
-### EA-SPIKE-04 — detalle (política propuesta)
+### EA-SPIKE-04 — detalle (política confirmada 2026-07-24 / #154)
 
 | Tipo | Required desconocido | Optional desconocido |
 |------|----------------------|----------------------|
-| select / listbox | pendiente + Notas (label + opciones) → cerrar → siguiente | solo Notas, seguir |
-| text / numeric | pendiente + Notas → cerrar → siguiente | solo Notas, seguir |
-| radio Sí/No | pendiente + Notas (salvo `MY_SKILLS` / reglas) | solo Notas |
+| select / listbox | pendiente + Notas + banco → cerrar → siguiente | Notas + banco, seguir |
+| text / numeric | idem | idem |
+| radio Sí/No | idem (salvo `MY_SKILLS` / reglas) | idem |
 | checkbox (Follow, top choice) | no tocar hasta EA-SPIKE-01/02 | no tocar |
-| typeahead | reintentos actuales; si falla → pendiente | — |
+| typeahead | reintentos; si falla → pendiente | — |
 
-Regla base: **nunca inventar** texto libre ni opción de select sin regla.
+- **Prod:** no inventar; no postular si falta respuesta required → `pendiente` (revisar y reintentar; no Stand-by por default).
+- **Dry-run:** banco + pendiente + continuar; informe final unanswered en chat/consola.
+- **Siempre** alta en banco Config sin respuesta (`config-questions.json`) + Notas Excel.
+- **Consumo:** preguntas **answered** en Config → `fill-config-bank.ts` en cada paso EA (select/text/radio).
+- Código: `unknown-field-strategy.ts`, `questions-store.ts`, `fill-config-bank.ts`, runners `easy-apply` / `easy-apply-dry-run`.
 
 ## Backlog — execution order
 

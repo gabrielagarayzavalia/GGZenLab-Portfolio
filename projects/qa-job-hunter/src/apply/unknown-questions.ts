@@ -9,41 +9,50 @@ import { APPLY_DIR, ensureDirs } from "./paths.js";
 import type { CapturedField } from "./fill-answers.js";
 import { PSEUDO_ANSWERS, isCoverOrSummaryLabel } from "./fill-answers.js";
 import { resolveSkillYesNo } from "./my-skills.js";
+import { matchConfigAnswer } from "../config/questions-store.js";
 
 /** Campos que ya contestamos o ignoramos a propósito (no pedir reglas). */
-const KNOWN_FIELD_RE: RegExp[] = [
-  PSEUDO_ANSWERS.locationCity.fieldMatch,
-  PSEUDO_ANSWERS.locationCity.hintMatch,
-  PSEUDO_ANSWERS.country.fieldMatch,
-  PSEUDO_ANSWERS.linkedinProfile.fieldMatch,
-  PSEUDO_ANSWERS.portfolio.fieldMatch,
-  PSEUDO_ANSWERS.expectedCompensation.fieldMatch,
-  PSEUDO_ANSWERS.startAvailability.fieldMatch,
-  PSEUDO_ANSWERS.workOrLiveCityFreeText.fieldMatch,
-  PSEUDO_ANSWERS.preferredWorkLocation.fieldMatch,
-  PSEUDO_ANSWERS.citySelect.fieldMatch,
-  PSEUDO_ANSWERS.howDidYouHear.fieldMatch,
-  /^(first|last|full)\s*name|nombre|apellido|email|e-?mail|phone|tel[eé]fono|mobile|celular/i,
-  /resume|curriculum|cv\b|cover\s*letter|carta de presentaci[oó]n|summary|resumen/i,
-  /select language|idioma|language\s*proficiency|english\s*(level|proficiency)|nivel de ingl[eé]s/i,
-  /i consent|consent|autorizo|acepto (los |las )?(t[eé]rminos|condiciones)|privacy|privacidad/i,
-  /follow (the )?company|seguir (a la )?empresa|mark .+ top choice|top choice/i,
-  /years?\s+of\s+experience|a[nñ]os?\s+de\s+experiencia|how many years/i,
-  /deequ|great expectations|data quality framework/i,
-  /skills assessment|online assessment|coding assessment|honeypot|\bquiz\b/i,
-  PSEUDO_ANSWERS.hybridWorkOk.fieldMatch,
-  PSEUDO_ANSWERS.programmingScripting.fieldMatch,
-  PSEUDO_ANSWERS.manualAutomationMix.fieldMatch,
-  PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch,
-  PSEUDO_ANSWERS.backendSqlTesting.fieldMatch,
-  PSEUDO_ANSWERS.phoneCountryCode.fieldMatch,
-];
+let knownFieldReCache: RegExp[] | null = null;
+
+function getKnownFieldRe(): RegExp[] {
+  if (knownFieldReCache) return knownFieldReCache;
+  knownFieldReCache = [
+    PSEUDO_ANSWERS.locationCity.fieldMatch,
+    PSEUDO_ANSWERS.locationCity.hintMatch,
+    PSEUDO_ANSWERS.country.fieldMatch,
+    PSEUDO_ANSWERS.linkedinProfile.fieldMatch,
+    PSEUDO_ANSWERS.portfolio.fieldMatch,
+    PSEUDO_ANSWERS.expectedCompensation.fieldMatch,
+    PSEUDO_ANSWERS.startAvailability.fieldMatch,
+    PSEUDO_ANSWERS.workOrLiveCityFreeText.fieldMatch,
+    PSEUDO_ANSWERS.preferredWorkLocation.fieldMatch,
+    PSEUDO_ANSWERS.citySelect.fieldMatch,
+    PSEUDO_ANSWERS.howDidYouHear.fieldMatch,
+    /^(first|last|full)\s*name|nombre|apellido|email|e-?mail|phone|tel[eé]fono|mobile|celular/i,
+    /resume|curriculum|cv\b|cover\s*letter|carta de presentaci[oó]n|summary|resumen/i,
+    /select language|idioma|language\s*proficiency|english\s*(level|proficiency)|nivel de ingl[eé]s/i,
+    /i consent|consent|autorizo|acepto (los |las )?(t[eé]rminos|condiciones)|privacy|privacidad/i,
+    /follow (the )?company|seguir (a la )?empresa|mark .+ top choice|top choice/i,
+    /years?\s+of\s+experience|a[nñ]os?\s+de\s+experiencia|how many years/i,
+    /deequ|great expectations|data quality framework/i,
+    /skills assessment|online assessment|coding assessment|honeypot|\bquiz\b/i,
+    PSEUDO_ANSWERS.hybridWorkOk.fieldMatch,
+    PSEUDO_ANSWERS.programmingScripting.fieldMatch,
+    PSEUDO_ANSWERS.manualAutomationMix.fieldMatch,
+    PSEUDO_ANSWERS.englishB2C1Confirm.fieldMatch,
+    PSEUDO_ANSWERS.backendSqlTesting.fieldMatch,
+    PSEUDO_ANSWERS.phoneCountryCode.fieldMatch,
+  ];
+  return knownFieldReCache;
+}
 
 export type UnknownQuestionHit = {
   label: string;
   kind: string;
   required: boolean;
   value: string;
+  /** Opciones de select/listbox si se capturaron. */
+  options?: string[];
 };
 
 export type RunUnknownJob = {
@@ -65,7 +74,8 @@ export function isKnownFieldLabel(blob: string): boolean {
   if (!t || t.length < 2) return true;
   if (isCoverOrSummaryLabel(t)) return true;
   if (resolveSkillYesNo(t)) return true;
-  return KNOWN_FIELD_RE.some((re) => re.test(t));
+  if (matchConfigAnswer(t)) return true;
+  return getKnownFieldRe().some((re) => re.test(t));
 }
 
 /** Preguntas / campos sin matcher propio (excluye vacíos genéricos ruidosos). */
@@ -93,10 +103,43 @@ export function collectUnknownQuestions(fields: CapturedField[]): UnknownQuestio
       kind: f.scenarioKind ?? f.tag,
       required: !!f.required,
       value: (f.value || "").slice(0, 80),
+      ...(f.options?.length ? { options: f.options } : {}),
     });
   }
 
   return out;
+}
+
+/** Limpia label de widget (quita ruido de opciones / Select an option). */
+export function cleanFieldLabel(raw: string): string {
+  const t = (raw || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const cut =
+    t.split(/\bSelect an option\b|\bChoose an option\b|\bSeleccionar\b|\bSeleccione\b/i)[0]?.trim() ??
+    t;
+  return cut.slice(0, 200);
+}
+
+/**
+ * Notas Excel cuando fallan / faltan campos concretos (B30).
+ * Lista todos los nombres; no inventa valores.
+ */
+export function formatFailedFieldsNotes(
+  fieldLabels: string[],
+  header = "Campos que fallaron / faltaron completar:"
+): string {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of fieldLabels) {
+    const label = cleanFieldLabel(raw);
+    if (label.length < 2) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(label);
+  }
+  if (labels.length === 0) return "";
+  return [header, ...labels.map((l) => `- ${l}`)].join("\n").slice(0, 1800);
 }
 
 export function formatUnknownNotes(
@@ -113,7 +156,7 @@ export function formatUnknownNotes(
     for (const u of unknowns) {
       const req = u.required ? " [req]" : "";
       const pref = u.value ? ` (prefill: ${u.value})` : "";
-      parts.push(`- ${u.label}${req}${pref}`);
+      parts.push(`- ${cleanFieldLabel(u.label) || u.label}${req}${pref}`);
     }
   }
   return parts.join("\n").slice(0, 1800);
@@ -183,11 +226,11 @@ export function logRunUnknownQuestions(): void {
     console.log("\n📝 Preguntas nuevas: ninguna (todas conocidas o sin form).");
     return;
   }
-  console.log("\n📝 Preguntas nuevas de esta corrida (también en Excel → Notas):");
+  console.log("\n📝 Preguntas nuevas de esta corrida (Excel Notas + banco Config):");
   for (const job of runAccumulator) {
     console.log(`   · ${job.company} — ${job.title} (${job.jobId})`);
     for (const n of job.extraNotes) console.log(`      ! ${n}`);
     for (const q of job.questions) console.log(`      - ${q}`);
   }
-  console.log("   → Decime cómo contestarlas para hardcodearlas.");
+  console.log("   → Completá respuestas en Config → Preguntas (o decime acá para hardcodear).");
 }

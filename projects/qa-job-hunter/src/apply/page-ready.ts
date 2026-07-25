@@ -2,10 +2,7 @@
 // Evita clicks fallidos por viewport chico o controles fuera de pantalla.
 
 import type { BrowserContext, Page } from "playwright";
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+import { TIMING, sleep } from "./timing.js";
 
 /**
  * Args de Chromium para ventana maximizada (usar con viewport: null en el context).
@@ -78,7 +75,10 @@ export async function maximizeWindow(page: Page): Promise<void> {
 export async function waitForJobPageReady(page: Page): Promise<void> {
   await page.waitForLoadState("domcontentloaded").catch(() => {});
   await page.waitForLoadState("load").catch(() => {});
-  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  // LinkedIn casi nunca llega a networkidle — soft + selectores (B24)
+  await page
+    .waitForLoadState("networkidle", { timeout: TIMING.networkIdleSoftMs })
+    .catch(() => {});
 
   await page
     .locator("main, .jobs-details, .job-view-layout, .jobs-search__job-details")
@@ -96,7 +96,7 @@ export async function waitForJobPageReady(page: Page): Promise<void> {
     .catch(() => {});
 
   await dismissTranslatorUi(page);
-  await sleep(600);
+  await sleep(TIMING.jobPageSettleMs);
 }
 
 /** Espera modal Easy Apply estable (contenido visible, no spinner eterno). */
@@ -113,16 +113,19 @@ export async function waitForEasyApplyModalReady(page: Page): Promise<boolean> {
     .waitFor({ state: "hidden", timeout: 10000 })
     .catch(() => {});
 
-  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-  await sleep(400);
+  await page
+    .waitForLoadState("networkidle", { timeout: TIMING.networkIdleSoftMs })
+    .catch(() => {});
+  await sleep(TIMING.modalReadySettleMs);
   return true;
 }
 
 /**
  * Scrolldown del contenedor del formulario hasta el final para revelar
  * campos/preguntas que no entran en el viewport del modal.
+ * @returns true si algún contenedor del modal tenía scroll vertical
  */
-export async function scrollEasyApplyFormToEnd(page: Page): Promise<void> {
+export async function scrollEasyApplyFormToEnd(page: Page): Promise<boolean> {
   // Priorizar modal Easy Apply (evitar [role=dialog] del chrome con Select language).
   const modal = page
     .locator(".jobs-easy-apply-modal")
@@ -132,9 +135,9 @@ export async function scrollEasyApplyFormToEnd(page: Page): Promise<void> {
       })
     )
     .first();
-  if (!(await modal.isVisible({ timeout: 1000 }).catch(() => false))) return;
+  if (!(await modal.isVisible({ timeout: 1000 }).catch(() => false))) return false;
 
-  await modal
+  const hadVerticalScroll = await modal
     .evaluate((node) => {
       const isScrollable = (el: Element) => {
         if (!(el instanceof HTMLElement)) return false;
@@ -146,19 +149,35 @@ export async function scrollEasyApplyFormToEnd(page: Page): Promise<void> {
         );
       };
 
+      let hadOverflow = false;
       const stack: HTMLElement[] = [];
       const walk = (el: Element) => {
-        if (isScrollable(el)) stack.push(el as HTMLElement);
+        if (isScrollable(el)) {
+          const h = el as HTMLElement;
+          if (h.scrollTop + h.clientHeight < h.scrollHeight - 8) hadOverflow = true;
+          stack.push(h);
+        }
         for (const child of Array.from(el.children)) walk(child);
       };
       walk(node);
-      if (node instanceof HTMLElement && isScrollable(node)) stack.unshift(node);
+      if (node instanceof HTMLElement && isScrollable(node)) {
+        if (node.scrollTop + node.clientHeight < node.scrollHeight - 8) hadOverflow = true;
+        stack.unshift(node);
+      }
 
       for (const s of stack) {
         s.scrollTop = s.scrollHeight;
       }
+
+      const footer = node.querySelector(
+        ".jobs-easy-apply-footer, footer, [class*='easy-apply-footer']"
+      );
+      if (footer instanceof HTMLElement) {
+        footer.scrollIntoView({ block: "end", inline: "nearest" });
+      }
+      return hadOverflow;
     })
-    .catch(() => {});
+    .catch(() => false);
 
   // Asegurar último control en vista
   const fields = modal.locator(
@@ -172,11 +191,17 @@ export async function scrollEasyApplyFormToEnd(page: Page): Promise<void> {
       .catch(() => {});
   }
 
-  // Pase Extra: End / PageDown por si el foco está en el modal
+  // Pase extra: End / PageDown por si el foco está en el modal
   await modal.click({ position: { x: 20, y: 20 }, timeout: 800 }).catch(() => {});
   await page.keyboard.press("End").catch(() => {});
   await page.keyboard.press("PageDown").catch(() => {});
-  await sleep(350);
+  await sleep(TIMING.scrollSettleMs);
+  return hadVerticalScroll;
+}
+
+/** Scroll del paso actual antes de buscar Next/Review (footer fuera de viewport). */
+export async function scrollWizardStepBeforeAdvance(page: Page): Promise<boolean> {
+  return scrollEasyApplyFormToEnd(page);
 }
 
 /** Setup de página al inicio de la corrida: maximize + listo para navegar. */

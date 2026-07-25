@@ -8,9 +8,10 @@
 // - Sin Easy Apply → Excel sigue pendiente → siguiente
 // - Con Easy Apply → dry-run hasta Submit → Excel pendiente
 // - Easy Apply visible y modal no abre → STOP (exit 2)
-// - Next bloqueado por required → captura campos, cierra sesión (exit 3)
-// - Cualquier fallo en un intento Easy Apply → STOP (exit 4); no seguir al siguiente
-
+// - Campos sin respuesta → NO show-stopper: Notas + pendiente + resumen; no exit 3
+// - Contact precargado → Next sin fill pesado
+// - Fallo hard (modal/no-submit stuck) → STOP (exit 4) solo si no hay unanswered soft
+//
 import path from "path";
 import { chromium, type Browser, type Locator, type Page } from "playwright";
 import {
@@ -25,6 +26,7 @@ import {
 } from "./apply/detect-apply.js";
 import {
   captureRequiredFields,
+  ensureResumeForRole,
   fillExpectedCompensation,
   fillPseudoAnswers,
   handleSaveDiscardModal,
@@ -33,18 +35,19 @@ import {
   isNextDisabled,
   logCapturedFields,
   logFieldInventory,
-  RequiredFieldsBlockedError,
   saveEasyApplyFieldInventory,
   saveRequiredFieldsDump,
+  shouldSkipHeavyFillForPrefill,
   uploadCoverLetterPdf,
   fillApplicationSummary,
-  selectResumeForRole,
+  type CapturedField,
 } from "./apply/fill-answers.js";
 import {
   clickButtonOrLink,
   cssPrimaryActions,
   dismissModalOverlays,
   findButtonOrLink,
+  findWizardStepAdvanceButton,
   MODAL_LABELS,
   resolveApplyScope,
 } from "./apply/modal-controls.js";
@@ -73,17 +76,27 @@ import {
 import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
 import { exportQueueToExcel } from "./apply/post-run.js";
 import {
-  collectUnknownQuestions,
+  TIMING,
+  ModalPagePerfError,
+  ModalPageTimer,
+  betweenJobsDelayMs,
+  isPerfFailHardEnabled,
+  sleep,
+  waitForEasyApplyStepSettle,
+} from "./apply/timing.js";
+import {
+  formatFailedFieldsNotes,
   logRunUnknownQuestions,
   recordJobUnknownQuestions,
   resetRunUnknownQuestions,
   saveRunUnknownQuestionsReport,
 } from "./apply/unknown-questions.js";
+import { syncEmptyCapturedFieldsToConfig } from "./apply/config-field-sync.js";
+import {
+  applyUnknownPolicyToJob,
+  evaluateUnknownFields,
+} from "./apply/unknown-field-strategy.js";
 import { setApplicationStatus } from "./application-status.js";
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 /** Frena toda la corrida: hay Easy Apply pero no entramos al modal. */
 export class EasyApplyModalNotOpenedError extends Error {
@@ -143,7 +156,7 @@ async function stepFingerprint(page: Page): Promise<string> {
   const heading = (
     await modal
       .locator("h2, h3, .t-16, [class*='title']")
-      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions/i })
+      .filter({ hasText: /Contact info|Resume|Home address|Additional Questions|Work experience|Review|Questions|top choice|Premium/i })
       .first()
       .innerText()
       .catch(() => "")
@@ -177,16 +190,26 @@ async function maybeFillOptionalTexts(
   page: Page,
   jobTitle = "",
   company = ""
-): Promise<void> {
-  // CV antes que cover upload (nunca dejar intro-GGZ como resume)
-  await selectResumeForRole(page, jobTitle, company);
+): Promise<"ok" | "resume_timeout"> {
+  // CV una sola vez; cover después (nunca dejar intro-GGZ como resume)
+  const resume = await ensureResumeForRole(page, jobTitle, company, "dry_run");
+  if (resume.outcome === "timeout_dry") {
+    console.log("   ✗ Resume timeout 30s (dry-run) — soft stop");
+    return "resume_timeout";
+  }
   await uploadCoverLetterPdf(page);
-  await selectResumeForRole(page, jobTitle, company);
+  if (resume.outcome !== "ok") {
+    const resume2 = await ensureResumeForRole(page, jobTitle, company, "dry_run");
+    if (resume2.outcome === "timeout_dry") {
+      console.log("   ✗ Resume timeout 30s (dry-run) — soft stop");
+      return "resume_timeout";
+    }
+  }
   await fillApplicationSummary(page, jobTitle, company);
   const root = page
     .locator(".jobs-easy-apply-modal, [role='dialog'], .jobs-easy-apply-content, main")
     .first();
-  if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return;
+  if (!(await root.isVisible({ timeout: 1500 }).catch(() => false))) return "ok";
   const areas = root.locator("textarea");
   const n = await areas.count();
   const summary = resolveApplicationSummary(jobTitle, company);
@@ -205,6 +228,7 @@ async function maybeFillOptionalTexts(
       continue;
     }
   }
+  return "ok";
 }
 
 async function maybeAnswerYesNo(page: Page): Promise<void> {
@@ -231,38 +255,111 @@ async function saveDebugScreenshot(
   }
 }
 
-async function stopForRequiredFields(
+function emptyOrPlaceholderValue(value: string): boolean {
+  const v = (value || "").trim();
+  if (!v) return true;
+  return /selecciona|select an option|choose an option|select\b/i.test(v);
+}
+
+function labelFromCaptured(f: CapturedField): string {
+  return (f.label || f.ariaLabel || f.placeholder || "").replace(/\s+/g, " ").trim();
+}
+
+function unansweredLabelsFromFields(fields: CapturedField[]): string[] {
+  const empty = fields
+    .filter((f) => emptyOrPlaceholderValue(f.value))
+    .map(labelFromCaptured)
+    .filter(Boolean);
+  if (empty.length > 0) return empty;
+  return fields.map(labelFromCaptured).filter(Boolean);
+}
+
+function mergeUniqueLabels(...groups: string[][]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const g of groups) {
+    for (const raw of g) {
+      const label = raw.replace(/\s+/g, " ").trim();
+      if (label.length < 2) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(label);
+    }
+  }
+  return out;
+}
+
+async function dismissEasyApplyModal(page: Page): Promise<void> {
+  if (await clickButtonOrLink(page, MODAL_LABELS.dismiss, 500)) return;
+  const dismiss = page
+    .locator(
+      "button[aria-label='Dismiss'], button[aria-label='Cerrar'], a[aria-label='Dismiss'], a[aria-label='Cerrar']"
+    )
+    .first();
+  if (await dismiss.isVisible({ timeout: 400 }).catch(() => false)) {
+    await dismiss.click().catch(() => {});
+  }
+}
+
+/**
+ * Dry-run: campos sin respuesta → Notas + pendiente (no throw / no exit 3).
+ * Devuelve labels acumulados para el resumen de corrida.
+ */
+async function recordUnansweredAndStayPending(
   page: Page,
   jobId: string,
   url: string,
-  tag = "blocked"
-): Promise<never> {
+  tag: string,
+  priorLabels: string[] = [],
+  jobMeta: { company?: string; title?: string } = {}
+): Promise<{ labels: string[]; dumpPath: string }> {
   await saveDebugScreenshot(page, jobId, tag);
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, url, fields);
+  syncEmptyCapturedFieldsToConfig(fields, {
+    jobId,
+    company: jobMeta.company,
+    title: jobMeta.title,
+  });
   logCapturedFields(fields);
-  console.error(`   Dump → ${dumpPath}`);
-  console.error(`   Screenshots → ${SCREENSHOTS_DIR}`);
-  console.error("   Completá opciones en src/apply/fill-answers.ts (PSEUDO_ANSWERS) y reintentá.");
+  const labels = mergeUniqueLabels(priorLabels, unansweredLabelsFromFields(fields));
+  const fieldNotes =
+    formatFailedFieldsNotes(labels, "Dry-run: campos sin respuesta:") ||
+    `Dry-run: campos sin respuesta (${labels.length}) — ver dump`;
   updateQueueRow(jobId, {
     status: "pendiente",
     easyApply: "yes",
-    reason: `STOP: required fields (${fields.length}) — ver required-fields-${jobId}.json + screenshot`,
+    reason: `Dry-run: ${labels.length} campo(s) sin respuesta — pendiente`,
+    notes: fieldNotes,
   });
-  throw new RequiredFieldsBlockedError(jobId, url, fields, dumpPath);
+  console.log(`   📝 ${labels.length} campo(s) sin respuesta → Excel Notas (sigue pendiente)`);
+  for (const l of labels.slice(0, 12)) console.log(`      · ${l}`);
+  if (labels.length > 12) console.log(`      … +${labels.length - 12} más`);
+  console.log(`   Dump → ${dumpPath}`);
+  await dismissEasyApplyModal(page);
+  return { labels, dumpPath };
 }
 
 async function tryAdvanceNext(
   page: Page,
   scope: Page | Locator,
   jobTitle = "",
-  company = ""
-): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit"> {
+  company = "",
+  opts: { skipFill?: boolean } = {}
+): Promise<"advanced" | "blocked" | "no_next" | "stuck" | "discarded_exit" | "resume_timeout"> {
   await scrollEasyApplyFormToEnd(page);
-  // 1) Rellenar lo conocido ANTES de cualquier Next/Review
-  await fillPseudoAnswers(page, { jobTitle, company });
-  // Remuneración a menudo bajo "top choice": segundo pase dedicado
-  await fillExpectedCompensation(page);
+  // 1) Rellenar lo conocido ANTES de cualquier Next/Review (salvo paso ya precargado)
+  if (!opts.skipFill) {
+    const fill = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fill.resumeOutcome === "timeout_dry") return "resume_timeout";
+    // Remuneración a menudo bajo "top choice": segundo pase dedicado
+    await fillExpectedCompensation(page);
+  }
 
   // 2) Si hay obligatorios vacíos → NO click (evita Save or Discard)
   let blocking = await hasBlockingEmptyFields(page);
@@ -285,15 +382,12 @@ async function tryAdvanceNext(
   const beforeFp = await stepFingerprint(page);
   const beforeUrl = page.url();
 
-  // Orden footer: Next/Continue → (si no hay) Review → (luego Submit se detecta en el loop).
-  const nextEl =
-    (await findButtonOrLink(scope, MODAL_LABELS.continue, 700)) ||
-    (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
-  const reviewEl = nextEl
-    ? null
-    : await findButtonOrLink(scope, MODAL_LABELS.review, 800);
-  const target = nextEl ?? reviewEl;
-  const which = nextEl ? "Next/Continue" : reviewEl ? "Review" : "css-primary";
+  let advance = await findWizardStepAdvanceButton(scope, page);
+  if (!advance) {
+    advance = await findWizardStepAdvanceButton(page, page);
+  }
+  const target = advance?.locator ?? null;
+  const which = advance?.which ?? "css-primary";
 
   if (!target) {
     const cssNext = cssPrimaryActions(scope);
@@ -304,7 +398,7 @@ async function tryAdvanceNext(
       (await cssNext.click({ force: true, timeout: 4000 }).then(() => true).catch(() => false));
     if (!ok) return "blocked";
   } else {
-    console.log(`   → Click ${which}`);
+    console.log(`   → Click ${which}${opts.skipFill ? " (paso precargado)" : ""}`);
     await dismissModalOverlays(page);
     await target.scrollIntoViewIfNeeded().catch(() => {});
     const ok =
@@ -313,7 +407,7 @@ async function tryAdvanceNext(
     if (!ok) return "blocked";
   }
 
-  await sleep(2500);
+  await waitForEasyApplyStepSettle(page);
 
   // Dry-run: Save/Discard → Discard y SALIR (no guardar, no enviar).
   const saveDiscard = await handleSaveDiscardModal(page, "dry_run");
@@ -321,10 +415,32 @@ async function tryAdvanceNext(
     return "discarded_exit";
   }
 
-  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos)
+  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos).
+  // Con skipFill (contact precargado) el fill del paso nuevo corre en la siguiente vuelta del wizard.
   await scrollEasyApplyFormToEnd(page);
-  await fillPseudoAnswers(page, { jobTitle, company });
-  await fillExpectedCompensation(page);
+  if (!opts.skipFill) {
+    const fillAfter = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fillAfter.resumeOutcome === "timeout_dry") return "resume_timeout";
+    await fillExpectedCompensation(page);
+  }
+
+  // Si el wizard avanzó, no bloquear por isNextDisabled / optional del paso nuevo (#245).
+  let afterFp = await stepFingerprint(page);
+  if (afterFp !== beforeFp) {
+    if (
+      (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
+      (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
+    ) {
+      console.log("   ✓ Llegamos a pantalla con Submit (post-Next)");
+      return "advanced";
+    }
+    console.log(`   ✓ Paso avanzó vía ${which}`);
+    return "advanced";
+  }
 
   if (await isNextDisabled(page)) return "blocked";
   let fields = await captureRequiredFields(page);
@@ -335,14 +451,24 @@ async function tryAdvanceNext(
   ) {
     // Tras Next/Review LinkedIn revela remuneración / textareas debajo del fold
     await fillExpectedCompensation(page);
-    await fillPseudoAnswers(page, { jobTitle, company });
+    const fillRetry = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fillRetry.resumeOutcome === "timeout_dry") return "resume_timeout";
     fields = await captureRequiredFields(page);
     hasErrors = fields.some((f) => f.errorText);
   }
   if (hasErrors && page.url() === beforeUrl) return "blocked";
   let blockingAfter = await hasBlockingEmptyFields(page);
   if (blockingAfter.length > 0) {
-    await fillPseudoAnswers(page, { jobTitle, company });
+    const fillBlock = await fillPseudoAnswers(page, {
+      jobTitle,
+      company,
+      mode: "dry_run",
+    });
+    if (fillBlock.resumeOutcome === "timeout_dry") return "resume_timeout";
     blockingAfter = await hasBlockingEmptyFields(page);
   }
   if (blockingAfter.length > 0) return "blocked";
@@ -356,7 +482,6 @@ async function tryAdvanceNext(
     return "advanced";
   }
 
-  let afterFp = await stepFingerprint(page);
   if (afterFp === beforeFp) {
     // Reintento 1×: a veces el form de CV tarda en aceptar el toggle
     const needResume = page.getByText(
@@ -364,14 +489,13 @@ async function tryAdvanceNext(
     );
     if (await needResume.isVisible({ timeout: 600 }).catch(() => false)) {
       console.log("   ↳ Next stuck + error currículum — re-fill resume y Next 1×");
-      await selectResumeForRole(page, jobTitle, company);
-      await sleep(800);
-      const next2 =
-        (await findButtonOrLink(scope, MODAL_LABELS.continue, 500)) ||
-        (await findButtonOrLink(scope, MODAL_LABELS.next, 400));
-      if (next2) {
-        await next2.click({ force: true, timeout: 4000 }).catch(() => {});
-        await sleep(2000);
+      const resumeRetry = await ensureResumeForRole(page, jobTitle, company, "dry_run");
+      if (resumeRetry.outcome === "timeout_dry") return "resume_timeout";
+      await sleep(TIMING.modalStepMs);
+      const advance2 = await findWizardStepAdvanceButton(scope, page);
+      if (advance2?.locator) {
+        await advance2.locator.click({ force: true, timeout: 4000 }).catch(() => {});
+        await waitForEasyApplyStepSettle(page);
       }
       afterFp = await stepFingerprint(page);
       if (afterFp !== beforeFp) {
@@ -380,7 +504,14 @@ async function tryAdvanceNext(
       }
     }
     // Re-fill + recheck Submit (Review a veces no avanza si faltaba remuneración)
-    await fillPseudoAnswers(page, { jobTitle, company });
+    {
+      const fillStuck = await fillPseudoAnswers(page, {
+        jobTitle,
+        company,
+        mode: "dry_run",
+      });
+      if (fillStuck.resumeOutcome === "timeout_dry") return "resume_timeout";
+    }
     if (
       (await findButtonOrLink(scope, MODAL_LABELS.submit, 600)) ||
       (await findButtonOrLink(page, MODAL_LABELS.submit, 500))
@@ -392,7 +523,7 @@ async function tryAdvanceNext(
     if (reviewAgain && (await hasBlockingEmptyFields(page)).length === 0) {
       console.log("   ↳ Reintento Review 1× tras re-fill");
       await reviewAgain.click({ force: true, timeout: 4000 }).catch(() => {});
-      await sleep(2000);
+      await waitForEasyApplyStepSettle(page);
       if (
         (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
         (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
@@ -415,24 +546,42 @@ async function tryAdvanceNext(
   return "advanced";
 }
 
+function pageLabelFromInventory(stepIndex: number, inventory: CapturedField[]): string {
+  const first = inventory
+    .map((f) => labelFromCaptured(f))
+    .find((l) => l.length >= 2);
+  if (first && /e-?mail|tel[eé]fono|c[oó]digo del pa[ií]s/i.test(first)) {
+    return `paso${stepIndex}-contact`;
+  }
+  if (inventory.some((f) => /resume|curr[ií]culum|\.pdf/i.test(f.label))) {
+    return `paso${stepIndex}-resume`;
+  }
+  if (inventory.some((f) => /top choice|primera opci[oó]n/i.test(f.label))) {
+    return `paso${stepIndex}-top-choice`;
+  }
+  if (first) return `paso${stepIndex}-${first.slice(0, 28).replace(/\s+/g, "_")}`;
+  return `paso${stepIndex}`;
+}
+
 async function dryRunThroughModal(
   page: Page,
   jobId: string,
   jobUrl: string,
   jobTitle = "",
-  company = ""
-): Promise<"ok" | "no_modal"> {
+  company = "",
+  perf?: ModalPageTimer
+): Promise<{ outcome: "ok" | "no_modal" | "unanswered"; unansweredLabels: string[] }> {
   if (!(await waitForEasyApplyModalReady(page))) {
     console.error("   ✗ Modal Easy Apply no terminó de cargar");
     console.error(`   URL actual: ${page.url()}`);
-    return "no_modal";
+    return { outcome: "no_modal", unansweredLabels: [] };
   }
 
   const scope = await resolveApplyScope(page, 12000);
   if (!scope) {
     console.error("   ✗ Modal/flujo Easy Apply NO visible tras el click");
     console.error(`   URL actual: ${page.url()}`);
-    return "no_modal";
+    return { outcome: "no_modal", unansweredLabels: [] };
   }
   console.log(
     scope === page
@@ -440,47 +589,148 @@ async function dryRunThroughModal(
       : "   Modal Easy Apply abierto"
   );
 
-  // Un solo intento por paso; si falla → STOP (sin reintentos ni siguiente job).
+  const unansweredAcc: string[] = [];
+
   for (let i = 0; i < 10; i++) {
     // Submit primero: tras Review no tocar Follow/CV (evita side-effects y evaluate).
     if (
       (await findButtonOrLink(scope, MODAL_LABELS.submit, 1000)) ||
       (await findButtonOrLink(page, MODAL_LABELS.submit, 800))
     ) {
+      perf?.end();
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
-      return "ok";
+      return { outcome: "ok", unansweredLabels: unansweredAcc };
     }
 
     await scrollEasyApplyFormToEnd(page);
     const inventory = await inventoryEasyApplyFields(page);
     saveEasyApplyFieldInventory(jobId, jobUrl, i + 1, inventory);
     logFieldInventory(inventory);
-    const unknowns = collectUnknownQuestions(inventory);
-    if (unknowns.length > 0) {
-      const notes = recordJobUnknownQuestions(jobId, company, jobTitle, unknowns);
-      updateQueueRow(jobId, { notes });
-      console.log(`   📝 ${unknowns.length} pregunta(s) nueva(s) → Excel Notas`);
+    perf?.start(pageLabelFromInventory(i + 1, inventory));
+
+    const unknownDecision = evaluateUnknownFields(inventory);
+    if (unknownDecision.hits.length > 0 || unknownDecision.notes) {
+      const notes = applyUnknownPolicyToJob(
+        { jobId, company, title: jobTitle },
+        unknownDecision,
+        recordJobUnknownQuestions
+      );
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        notes: notes || unknownDecision.notes,
+      });
+      console.log(
+        `   📝 ${unknownDecision.hits.length} pregunta(s) → Notas + banco Config` +
+          (unknownDecision.pendingLabels.length
+            ? ` (pending req: ${unknownDecision.pendingLabels.length})`
+            : "")
+      );
     }
 
-    await maybeFillOptionalTexts(page, jobTitle, company);
-    await maybeAnswerYesNo(page);
-    const { filled } = await fillPseudoAnswers(page, { jobTitle, company });
-    if (filled > 0) console.log(`   Pseudo-fill: ${filled} campo(s)`);
-    await scrollEasyApplyFormToEnd(page);
+    if (unknownDecision.action === "leave_pending") {
+      perf?.end();
+      const labels = [
+        ...unansweredAcc,
+        ...unknownDecision.pendingLabels,
+        ...unknownDecision.hits.map((h) => h.label),
+      ];
+      unansweredAcc.push(...unknownDecision.pendingLabels);
+      const notes =
+        unknownDecision.notes ||
+        formatFailedFieldsNotes(unknownDecision.pendingLabels) ||
+        "Required desconocido (dry-run #154)";
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        easyApply: "yes",
+        reason: "Dry-run: required desconocido — pendiente + banco; continuar cola",
+        notes,
+      });
+      await saveDebugScreenshot(page, jobId, "unknown-required");
+      await dismissEasyApplyModal(page);
+      console.log(
+        `   ⏭ Dry-run soft: leave_pending (#154) → pendiente + banco; sigo cola`
+      );
+      return {
+        outcome: "unanswered",
+        unansweredLabels: [...new Set(labels.filter(Boolean))],
+      };
+    }
+
+    // Vacíos required del inventario → acumular (aunque el paso aún avance)
+    const emptyRequired = inventory
+      .filter((f) => (f.required || /\*/.test(f.label)) && emptyOrPlaceholderValue(f.value))
+      .map(labelFromCaptured);
+    unansweredAcc.push(...emptyRequired);
+
+    const skipHeavy = shouldSkipHeavyFillForPrefill(inventory, {
+      jobTitle,
+      company,
+    });
+    if (skipHeavy) {
+      console.log("   ⚡ Paso precargado / CV OK / sin vacíos — Next sin fill pesado");
+    } else {
+      const optFill = await maybeFillOptionalTexts(page, jobTitle, company);
+      if (optFill === "resume_timeout") {
+        perf?.end();
+        const notes = [
+          "Falla selección CV Easy Apply (timeout 30s):",
+          `- job ${jobId}`,
+          "- dry-run soft stop (no avanzar wizard a ciegas)",
+        ].join("\n");
+        updateQueueRow(jobId, {
+          status: "pendiente",
+          easyApply: "yes",
+          reason: "Dry-run: timeout selección CV 30s — pendiente",
+          notes,
+        });
+        unansweredAcc.push("Resume/CV (timeout 30s contrato #208)");
+        await saveDebugScreenshot(page, jobId, "resume-timeout");
+        await dismissEasyApplyModal(page);
+        return { outcome: "unanswered", unansweredLabels: unansweredAcc };
+      }
+      await maybeAnswerYesNo(page);
+      const fill = await fillPseudoAnswers(page, {
+        jobTitle,
+        company,
+        mode: "dry_run",
+      });
+      if (fill.resumeOutcome === "timeout_dry") {
+        perf?.end();
+        updateQueueRow(jobId, {
+          status: "pendiente",
+          easyApply: "yes",
+          reason: fill.skipPending?.reason ?? "Dry-run: timeout selección CV 30s",
+          notes: fill.skipPending?.notes ?? "",
+        });
+        unansweredAcc.push("Resume/CV (timeout 30s contrato #208)");
+        await saveDebugScreenshot(page, jobId, "resume-timeout");
+        await dismissEasyApplyModal(page);
+        return { outcome: "unanswered", unansweredLabels: unansweredAcc };
+      }
+      if (fill.filled > 0) console.log(`   Pseudo-fill: ${fill.filled} campo(s)`);
+      await scrollEasyApplyFormToEnd(page);
+    }
 
     // Re-check post-fill (por si Submit apareció al completar el paso)
     if (
       (await findButtonOrLink(scope, MODAL_LABELS.submit, 800)) ||
       (await findButtonOrLink(page, MODAL_LABELS.submit, 600))
     ) {
+      perf?.end();
       console.log("   Submit visible — DRY-RUN: no click; Excel sigue pendiente.");
-      return "ok";
+      return { outcome: "ok", unansweredLabels: unansweredAcc };
     }
 
-    const step = await tryAdvanceNext(page, scope, jobTitle, company);
-    if (step === "advanced") continue;
+    const step = await tryAdvanceNext(page, scope, jobTitle, company, {
+      skipFill: skipHeavy,
+    });
+    if (step === "advanced") {
+      perf?.end();
+      continue;
+    }
 
     if (step === "discarded_exit") {
+      perf?.end();
       await saveDebugScreenshot(page, jobId, "discard-exit");
       updateQueueRow(jobId, {
         status: "pendiente",
@@ -490,14 +740,45 @@ async function dryRunThroughModal(
       throw new DryRunDiscardExitError(jobId, jobUrl);
     }
 
-    // Primer fallo → dump + screenshot + parar (no segundo intento)
-    console.error(`   ✗ Fallo en paso ${i + 1}: ${step} — STOP para debug`);
-    await stopForRequiredFields(page, jobId, jobUrl, step);
+    if (step === "resume_timeout") {
+      perf?.end();
+      unansweredAcc.push("Resume/CV (timeout 30s contrato #208)");
+      const { labels } = await recordUnansweredAndStayPending(
+        page,
+        jobId,
+        jobUrl,
+        "resume_timeout",
+        unansweredAcc,
+        { company, title: jobTitle }
+      );
+      updateQueueRow(jobId, {
+        status: "pendiente",
+        easyApply: "yes",
+        reason: "Dry-run: timeout selección CV 30s — pendiente",
+        notes: "Falla selección CV Easy Apply (timeout 30s) — soft stop dry-run",
+      });
+      return { outcome: "unanswered", unansweredLabels: labels };
+    }
+
+    // blocked / stuck / no_next → registrar campos, pendiente, NO show-stopper
+    console.log(`   ✗ Paso ${i + 1}: ${step} — registro campos sin respuesta (sigue pendiente)`);
+    perf?.end();
+    const { labels } = await recordUnansweredAndStayPending(
+      page,
+      jobId,
+      jobUrl,
+      step,
+      unansweredAcc,
+      { company, title: jobTitle }
+    );
+    return { outcome: "unanswered", unansweredLabels: labels };
   }
 
+  perf?.end();
   await saveDebugScreenshot(page, jobId, "no-submit");
   const fields = await captureRequiredFields(page);
   const dumpPath = saveRequiredFieldsDump(jobId, jobUrl, fields);
+  syncEmptyCapturedFieldsToConfig(fields, { jobId, company, title: jobTitle });
   logCapturedFields(fields);
   throw new DryRunDebugStopError(
     jobId,
@@ -507,13 +788,19 @@ async function dryRunThroughModal(
   );
 }
 
+type ProcessJobResult = {
+  outcome: "dry_ok" | "dry_unanswered" | "skip_no_ea" | "enviada" | "cerrada" | "skip_final";
+  unansweredLabels?: string[];
+};
+
 async function processJob(
   page: Page,
-  row: QueueRow
-): Promise<"dry_ok" | "skip_no_ea" | "enviada" | "cerrada" | "skip_final"> {
+  row: QueueRow,
+  perf: ModalPageTimer
+): Promise<ProcessJobResult> {
   if (isFinalStatus(row.status)) {
     console.log(`\n↷ Skip ${row.jobId} (estado final: ${row.status})`);
-    return "skip_final";
+    return { outcome: "skip_final" };
   }
 
   const job = toApplyJob(row);
@@ -531,7 +818,7 @@ async function processJob(
       reason: "Aviso cerrado / ya no acepta postulaciones",
     });
     console.log("   ✗ No longer accepting applications → Excel: cerrada; siguiente");
-    return "cerrada";
+    return { outcome: "cerrada" };
   }
 
   // Easy Apply visible manda: no marcar enviada/cerrada por texto del feed.
@@ -554,7 +841,7 @@ async function processJob(
       } else {
         console.log(`   ↷ Applied en UI pero Excel queda ${row.status} (final)`);
       }
-      return "enviada";
+      return { outcome: "enviada" };
     }
     if (signal === "closed") {
       updateQueueRow(row.jobId, {
@@ -563,7 +850,7 @@ async function processJob(
         reason: "Aviso cerrado / ya no acepta postulaciones",
       });
       console.log("   ✗ Aviso cerrado / no acepta → Excel: cerrada; siguiente");
-      return "cerrada";
+      return { outcome: "cerrada" };
     }
     updateQueueRow(row.jobId, {
       status: "pendiente",
@@ -571,7 +858,7 @@ async function processJob(
       reason: "Sin Easy Apply en esta visita — sigue pendiente",
     });
     console.log("   … Sin Easy Apply → Excel sigue pendiente; siguiente");
-    return "skip_no_ea";
+    return { outcome: "skip_no_ea" };
   }
 
   updateQueueRow(row.jobId, {
@@ -581,8 +868,10 @@ async function processJob(
   });
 
   console.log("   Easy Apply visible — abriendo modal…");
+  perf.start("open-modal");
   const clicked = await clickEasyApply(page);
   if (!clicked) {
+    perf.end();
     await saveDebugScreenshot(page, row.jobId, "click-failed");
     updateQueueRow(row.jobId, {
       status: "pendiente",
@@ -590,16 +879,18 @@ async function processJob(
     });
     throw new EasyApplyModalNotOpenedError(row.jobId, job.url, "click falló");
   }
-  await sleep(2000);
+  await waitForEasyApplyStepSettle(page);
 
   const result = await dryRunThroughModal(
     page,
     row.jobId,
     job.url,
     row.title,
-    row.company
+    row.company,
+    perf
   );
-  if (result === "no_modal") {
+  if (result.outcome === "no_modal") {
+    perf.end();
     await saveDebugScreenshot(page, row.jobId, "no-modal");
     updateQueueRow(row.jobId, {
       status: "pendiente",
@@ -609,25 +900,31 @@ async function processJob(
     throw new EasyApplyModalNotOpenedError(row.jobId, job.url, "modal no abrió");
   }
 
-  // result === "ok" (fallos ya tiraron STOP)
-  updateQueueRow(row.jobId, {
+  if (result.outcome === "unanswered") {
+    console.log(
+      `   ✓ Dry-run soft: ${result.unansweredLabels.length} campo(s) sin respuesta (pendiente)`
+    );
+    return { outcome: "dry_unanswered", unansweredLabels: result.unansweredLabels };
+  }
+
+  // result.outcome === "ok"
+  const okPatch: Parameters<typeof updateQueueRow>[1] = {
     status: "pendiente",
     easyApply: "yes",
     reason: "Dry-run OK hasta Submit (sin enviar) — pendiente",
-  });
-
-  if (!(await clickButtonOrLink(page, MODAL_LABELS.dismiss, 500))) {
-    const dismiss = page
-      .locator(
-        "button[aria-label='Dismiss'], button[aria-label='Cerrar'], a[aria-label='Dismiss'], a[aria-label='Cerrar']"
-      )
-      .first();
-    if (await dismiss.isVisible({ timeout: 400 }).catch(() => false)) {
-      await dismiss.click().catch(() => {});
-    }
+  };
+  if (result.unansweredLabels.length > 0) {
+    const notes = formatFailedFieldsNotes(
+      result.unansweredLabels,
+      "Dry-run: campos sin respuesta:"
+    );
+    if (notes) okPatch.notes = notes;
   }
+  updateQueueRow(row.jobId, okPatch);
 
-  return "dry_ok";
+  await dismissEasyApplyModal(page);
+
+  return { outcome: "dry_ok", unansweredLabels: result.unansweredLabels };
 }
 
 async function main() {
@@ -659,12 +956,15 @@ async function main() {
   };
 
   let dryOk = 0;
+  let dryUnanswered = 0;
   let enviada = 0;
   let cerrada = 0;
   let skipNoEa = 0;
+  const unansweredByJob: { jobId: string; labels: string[] }[] = [];
   const maxJobs = Number(process.env.DRY_RUN_MAX ?? "10");
   const forceJobId = (process.env.DRY_RUN_JOB_ID ?? "").trim();
   const seen = new Set<string>();
+  const perf = new ModalPageTimer();
   resetRunUnknownQuestions();
 
   try {
@@ -702,19 +1002,20 @@ async function main() {
       }
       seen.add(row.jobId);
 
-      let outcome: Awaited<ReturnType<typeof processJob>>;
+      let result: ProcessJobResult;
       try {
-        outcome = await processJob(page, row);
+        result = await processJob(page, row, perf);
       } catch (err) {
+        if (err instanceof ModalPagePerfError) {
+          console.error(`\n🛑 ${err.message}`);
+          perf.logSummary();
+          await closeSession("perf fail >45s por página modal");
+          process.exit(6);
+        }
         if (err instanceof EasyApplyModalNotOpenedError) {
           console.error(`\n🛑 ${err.message}`);
           await closeSession("modal no abrió — debug");
           process.exit(2);
-        }
-        if (err instanceof RequiredFieldsBlockedError) {
-          console.error(`\n🛑 ${err.message}`);
-          await closeSession("campos obligatorios — debug (no se sigue al siguiente)");
-          process.exit(3);
         }
         if (err instanceof DryRunDiscardExitError) {
           console.error(`\n🛑 ${err.message}`);
@@ -733,27 +1034,55 @@ async function main() {
         process.exit(1);
       }
 
+      const outcome = result.outcome;
       if (outcome === "dry_ok") {
         dryOk++;
+        if (result.unansweredLabels?.length) {
+          unansweredByJob.push({ jobId: row.jobId, labels: result.unansweredLabels });
+        }
         // Default: un éxito y listo (salvo DRY_RUN_ALL=1)
+        if (process.env.DRY_RUN_ALL !== "1") break;
+      } else if (outcome === "dry_unanswered") {
+        dryUnanswered++;
+        unansweredByJob.push({
+          jobId: row.jobId,
+          labels: result.unansweredLabels ?? [],
+        });
+        // Soft: no frena la sesión; con DRY_RUN_ALL sigue; si no, cierra corrida limpia
         if (process.env.DRY_RUN_ALL !== "1") break;
       } else if (outcome === "enviada") enviada++;
       else if (outcome === "cerrada") cerrada++;
       else if (outcome === "skip_no_ea") skipNoEa++;
 
-      await sleep(1500 + Math.random() * 1000);
+      await sleep(betweenJobsDelayMs());
     }
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
 
   console.log(
-    `\nResumen dry-run: dry_ok=${dryOk} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
+    `\nResumen dry-run: dry_ok=${dryOk} unanswered=${dryUnanswered} enviada=${enviada} cerrada=${cerrada} sin_EA_pendiente=${skipNoEa}`
   );
+  if (unansweredByJob.length > 0) {
+    console.log("\nCampos sin respuesta (dry-run) — completar en Config → Preguntas:");
+    for (const u of unansweredByJob) {
+      console.log(`  · job ${u.jobId}:`);
+      for (const l of u.labels.slice(0, 20)) console.log(`      - ${l}`);
+    }
+  }
+  perf.logSummary();
+  if (perf.hasFails()) {
+    console.error(
+      "\n✗ PERF: una o más páginas de modal >45s. Con PERF_TEST=1 el dry-run falla (exit 6)."
+    );
+    if (isPerfFailHardEnabled()) {
+      process.exit(6);
+    }
+  }
   saveRunUnknownQuestionsReport();
   logRunUnknownQuestions();
   exportQueueToExcel();
-  console.log(`Excel: ${APPLY_QUEUE_PATH} (+ Notas con preguntas nuevas)`);
+  console.log(`Excel: ${APPLY_QUEUE_PATH} (+ Notas; estado pendiente si hubo unanswered)`);
 }
 
 main().catch(async (err) => {

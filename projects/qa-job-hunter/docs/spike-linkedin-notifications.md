@@ -3,7 +3,7 @@
 **Story:** [US-JH-B37-0 #248](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/248)  
 **Rama:** `spike/b37-linkedin-notifications`  
 **Fecha:** 2026-07-25  
-**Estado:** spike cerrado — **no integrado** a `run-campaign` / `agent:pipeline`  
+**Estado:** integrado en campaña post-`gmail:fetch` (`NOTIFICATIONS_DISCOVERY=0` para omitir)  
 **Repo:** `GGZenLab-Portfolio/projects/qa-job-hunter` (rama `spike/b37-linkedin-notifications` → PR a `release/v2`)
 
 ## TL;DR

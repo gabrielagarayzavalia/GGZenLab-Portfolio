@@ -16,4 +16,16 @@ export async function ensureIndexes(): Promise<void> {
   await db.collection("skipped_jobs").createIndexes([
     { key: { runId: 1 }, name: "skipped_runId" },
   ]);
+
+  await db.collection("applications").createIndexes([
+    { key: { jobId: 1 }, name: "applications_jobId", sparse: true },
+    {
+      key: { linkedinUrlNorm: 1 },
+      name: "applications_linkedinUrlNorm",
+      unique: true,
+      partialFilterExpression: { linkedinUrlNorm: { $gt: "" } },
+    },
+    { key: { estado: 1, updatedAt: -1 }, name: "applications_estado_updatedAt" },
+    { key: { empresa: 1, puesto: 1 }, name: "applications_empresa_puesto" },
+  ]);
 }

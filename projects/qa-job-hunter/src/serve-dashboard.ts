@@ -621,9 +621,19 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  // Assets del dashboard
+  if (pathname === "/m-lite" || pathname === "/m-lite.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "m-lite.html"));
+    return;
+  }
+
+  if (pathname === "/poc" || pathname === "/poc/") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "poc", "index.html"));
+    return;
+  }
+
+  // Assets del dashboard (incluye subcarpeta poc/ — spike B38)
   const assetName = pathname.replace(/^\//, "");
-  if (/^[a-zA-Z0-9._-]+$/.test(assetName)) {
+  if (/^[a-zA-Z0-9._/-]+$/.test(assetName) && !assetName.includes("..")) {
     const assetPath = path.resolve(DASHBOARD_DIR, assetName);
     if (assetPath.startsWith(DASHBOARD_DIR) && fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
       serveStatic(res, assetPath);

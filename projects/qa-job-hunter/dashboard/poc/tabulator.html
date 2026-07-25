@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B38 PoC — Tabulator</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/css/tabulator_midnight.min.css">
+  <link rel="stylesheet" href="/poc/poc.css">
+  <style>
+    #grid { padding: 0 0.5rem; }
+    .tabulator { font-size: 0.85rem; background: #1a2332; }
+    .match-high { color: #34d399; font-weight: 600; }
+    .match-mid { color: #fbbf24; }
+    .match-low { color: #f87171; }
+  </style>
+</head>
+<body>
+  <header class="poc-header">
+    <div>
+      <h1>Tabulator — Empleos_Tracker PoC</h1>
+      <p>Edición inline · list editor Estado · import .xlsx</p>
+    </div>
+    <div class="poc-actions">
+      <a href="/poc/">← PoC hub</a>
+      <a href="/poc/ag-grid.html">← AG Grid</a>
+      <label class="btn">Importar .xlsx<input type="file" id="file-input" accept=".xlsx,.xls"></label>
+      <button type="button" id="btn-reset">Datos demo</button>
+    </div>
+    <span class="poc-status" id="status">5 filas demo</span>
+  </header>
+  <div id="grid"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script type="module">
+    import { SAMPLE_ROWS, ESTADO_OPTIONS } from "./sample-data.js";
+    import { importEmpleosXlsx } from "./xlsx-import.js";
+
+    const statusEl = document.getElementById("status");
+
+    function matchFormatter(cell) {
+      const v = cell.getValue();
+      const cls = v >= 85 ? "match-high" : v >= 75 ? "match-mid" : "match-low";
+      return `<span class="${cls}">${v}%</span>`;
+    }
+
+    function linkFormatter(cell) {
+      const url = cell.getValue();
+      if (!url) return "";
+      const short = url.replace(/^https?:\/\/(www\.)?linkedin\.com\/jobs\/view\//, "").slice(0, 24) + "…";
+      return `<a href="${url}" target="_blank" rel="noopener">${short}</a>`;
+    }
+
+    const table = new Tabulator("#grid", {
+      height: "calc(100vh - 72px)",
+      data: structuredClone(SAMPLE_ROWS),
+      layout: "fitDataStretch",
+      reactiveData: true,
+      columns: [
+        {
+          title: "Match %",
+          field: "matchPercent",
+          width: 90,
+          editor: "number",
+          formatter: matchFormatter,
+        },
+        { title: "Puesto", field: "puesto", editor: "input", headerFilter: "input", minWidth: 160 },
+        { title: "Empresa", field: "empresa", editor: "input", headerFilter: "input", width: 120 },
+        { title: "LinkedIn", field: "linkedinUrl", formatter: linkFormatter, minWidth: 140 },
+        { title: "Canal", field: "canal", editor: "input", width: 100 },
+        {
+          title: "Estado",
+          field: "estado",
+          editor: "list",
+          editorParams: { values: ESTADO_OPTIONS },
+          headerFilter: "list",
+          headerFilterParams: { values: ESTADO_OPTIONS, clearable: true },
+          width: 130,
+        },
+        { title: "Fecha aplicación", field: "fechaAplicacion", editor: "input", width: 120 },
+        { title: "Portal externo", field: "portalExterno", editor: "input", width: 120 },
+        { title: "Próximo paso", field: "proximoPaso", editor: "input", minWidth: 140 },
+        { title: "Notas", field: "notas", editor: "textarea", minWidth: 160 },
+        { title: "Mis comentarios", field: "misComentarios", editor: "textarea", minWidth: 140 },
+      ],
+      cellEdited: (cell) => {
+        statusEl.textContent = `Editado: ${cell.getField()} fila ${cell.getRow().getPosition()}`;
+      },
+    });
+
+    document.getElementById("file-input").addEventListener("change", async (ev) => {
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      try {
+        const rows = await importEmpleosXlsx(file);
+        table.setData(rows);
+        statusEl.textContent = `Importadas ${rows.length} filas desde ${file.name}`;
+      } catch (err) {
+        statusEl.textContent = `Error import: ${err.message}`;
+      }
+      ev.target.value = "";
+    });
+
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      table.setData(structuredClone(SAMPLE_ROWS));
+      statusEl.textContent = "5 filas demo";
+    });
+  </script>
+</body>
+</html>

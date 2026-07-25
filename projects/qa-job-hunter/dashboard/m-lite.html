@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tracker — Mobile lite (B38)</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --border: #2d3a4d;
+      --text: #e8edf4;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --ok: #34d399;
+      --warn: #fbbf24;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: env(safe-area-inset-bottom, 1rem);
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 0.85rem 1rem;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0; font-size: 1rem; }
+    header p { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--muted); }
+    .filters {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chip {
+      flex-shrink: 0;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .chip--active {
+      border-color: var(--accent);
+      background: #2563eb33;
+      color: var(--text);
+    }
+    .cards { padding: 0 1rem 1rem; display: grid; gap: 0.75rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .card__top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .card__title { margin: 0; font-size: 0.95rem; font-weight: 600; line-height: 1.3; }
+    .card__company { color: var(--muted); font-size: 0.85rem; margin: 0.15rem 0 0.5rem; }
+    .match {
+      flex-shrink: 0;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      background: #243044;
+    }
+    .match--high { color: var(--ok); }
+    .match--mid { color: var(--warn); }
+    .match--low { color: var(--danger); }
+    .estado {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      background: #243044;
+      margin-bottom: 0.5rem;
+    }
+    .estado--enviada { background: #065f4622; color: var(--ok); }
+    .estado--pendiente { background: #2563eb22; color: var(--accent); }
+    .estado--standby { background: #92400e22; color: var(--warn); }
+    .meta { font-size: 0.8rem; color: var(--muted); margin: 0.35rem 0; }
+    .meta strong { color: var(--text); font-weight: 500; }
+    .card__actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    .card__actions a, .card__actions button {
+      flex: 1;
+      text-align: center;
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #243044;
+      color: var(--text);
+      font-size: 0.8rem;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .card__actions a:hover, .card__actions button:hover { border-color: var(--accent); }
+    .empty { text-align: center; padding: 2rem; color: var(--muted); }
+    .nav-back {
+      display: inline-block;
+      margin-bottom: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="nav-back" href="/poc/">← PoC hub</a>
+    <h1>Empleos — vista mobile</h1>
+    <p id="summary">Cargando…</p>
+  </header>
+  <div class="filters" id="filters" role="tablist" aria-label="Filtrar por estado"></div>
+  <div class="cards" id="cards"></div>
+
+  <script type="module">
+    import { SAMPLE_ROWS, ESTADO_OPTIONS } from "./poc/sample-data.js";
+
+    const ALL = "Todos";
+    let activeFilter = ALL;
+    let rows = structuredClone(SAMPLE_ROWS);
+
+    const filtersEl = document.getElementById("filters");
+    const cardsEl = document.getElementById("cards");
+    const summaryEl = document.getElementById("summary");
+
+    function matchClass(p) {
+      if (p >= 85) return "match--high";
+      if (p >= 75) return "match--mid";
+      return "match--low";
+    }
+
+    function estadoClass(e) {
+      const l = (e || "").toLowerCase();
+      if (l === "enviada") return "estado--enviada";
+      if (l === "pendiente") return "estado--pendiente";
+      if (l.includes("stand")) return "estado--standby";
+      return "";
+    }
+
+    function renderFilters() {
+      const opts = [ALL, ...ESTADO_OPTIONS.filter((e) => rows.some((r) => r.estado === e))];
+      filtersEl.innerHTML = opts
+        .map(
+          (o) =>
+            `<button type="button" class="chip ${o === activeFilter ? "chip--active" : ""}" data-filter="${o}">${o}</button>`
+        )
+        .join("");
+      filtersEl.querySelectorAll(".chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeFilter = btn.dataset.filter;
+          render();
+        });
+      });
+    }
+
+    function visibleRows() {
+      if (activeFilter === ALL) return rows;
+      return rows.filter((r) => r.estado === activeFilter);
+    }
+
+    function renderCard(row) {
+      const note = row.notas || row.proximoPaso || "—";
+      return `
+        <article class="card" data-id="${row.id}">
+          <div class="card__top">
+            <div>
+              <h2 class="card__title">${escapeHtml(row.puesto)}</h2>
+              <p class="card__company">${escapeHtml(row.empresa)} · ${escapeHtml(row.canal)}</p>
+            </div>
+            <span class="match ${matchClass(row.matchPercent)}">${row.matchPercent}%</span>
+          </div>
+          <span class="estado ${estadoClass(row.estado)}">${escapeHtml(row.estado)}</span>
+          <p class="meta"><strong>Próximo:</strong> ${escapeHtml(note)}</p>
+          ${row.fechaAplicacion ? `<p class="meta"><strong>Aplicado:</strong> ${escapeHtml(row.fechaAplicacion)}</p>` : ""}
+          <div class="card__actions">
+            <a href="${row.linkedinUrl}" target="_blank" rel="noopener">LinkedIn</a>
+            <button type="button" data-action="estado">Cambiar estado</button>
+          </div>
+        </article>`;
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function render() {
+      const list = visibleRows();
+      summaryEl.textContent = `${list.length} de ${rows.length} postulaciones`;
+      if (!list.length) {
+        cardsEl.innerHTML = '<p class="empty">Ninguna fila con ese filtro.</p>';
+        return;
+      }
+      cardsEl.innerHTML = list.map(renderCard).join("");
+      cardsEl.querySelectorAll('[data-action="estado"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const card = btn.closest(".card");
+          const id = card.dataset.id;
+          const row = rows.find((r) => r.id === id);
+          const idx = ESTADO_OPTIONS.indexOf(row.estado);
+          const next = ESTADO_OPTIONS[(idx + 1) % ESTADO_OPTIONS.length];
+          row.estado = next;
+          renderFilters();
+          render();
+        });
+      });
+    }
+
+    renderFilters();
+    render();
+  </script>
+</body>
+</html>

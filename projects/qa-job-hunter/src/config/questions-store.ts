@@ -112,14 +112,48 @@ export function matchConfigAnswer(blob: string): ConfigAnswerMatch | null {
   return null;
 }
 
+function hashLabelKey(label: string): string {
+  const key = normalizeKey(label);
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** ID estable por label (evita colisión al truncar «How many years… wi»). */
 function slugId(label: string): string {
-  const base = normalizeKey(label)
+  const slug = normalizeKey(label)
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 48);
-  return `q-${base || "item"}-${Date.now().toString(36)}`;
+    .replace(/^-|-$/g, "");
+  const sig = hashLabelKey(label);
+  if (slug.length <= 40) return `q-${slug}-${sig}`;
+  const head = slug.slice(0, 24);
+  const tail = slug.slice(-16);
+  return `q-${head}-${tail}-${sig}`;
+}
+
+/** Repara ids duplicados (legacy) sin perder respuestas. */
+export function repairDuplicateQuestionIds(store: ConfigQuestionsStore): boolean {
+  const seen = new Set<string>();
+  let changed = false;
+  for (const q of store.questions) {
+    if (!seen.has(q.id)) {
+      seen.add(q.id);
+      continue;
+    }
+    let candidate = slugId(q.label);
+    while (seen.has(candidate)) {
+      candidate = `${candidate}-${Math.random().toString(36).slice(2, 5)}`;
+    }
+    q.id = candidate;
+    seen.add(candidate);
+    changed = true;
+  }
+  return changed;
 }
 
 export function loadQuestionsConfig(): ConfigQuestionsStore {
@@ -127,6 +161,9 @@ export function loadQuestionsConfig(): ConfigQuestionsStore {
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_QUESTIONS_PATH, "utf-8")) as ConfigQuestionsStore;
     if (!raw || !Array.isArray(raw.questions)) return emptyStore();
+    if (repairDuplicateQuestionIds(raw)) {
+      saveQuestionsConfig(raw);
+    }
     return raw;
   } catch {
     return emptyStore();

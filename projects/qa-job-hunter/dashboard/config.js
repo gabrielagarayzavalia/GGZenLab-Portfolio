@@ -168,7 +168,12 @@ answerForm?.addEventListener("submit", async (ev) => {
     clearAnswerDraft(id);
     answerDialogQuestionId = null;
     answerDialogStrategy = null;
-    setStatus(status, "Respuesta guardada.");
+    setStatus(
+      status,
+      document.getElementById("preguntas-only-unanswered")?.checked
+        ? "Respuesta guardada. Si no la ves en la lista, desmarcá «Solo sin respuesta»."
+        : "Respuesta guardada."
+    );
     await loadPreguntas();
   } catch (err) {
     setStatus(status, err.message || "No se pudo guardar", true);
@@ -453,7 +458,7 @@ async function loadPreguntas() {
   if (!list) return;
   setStatus(status, "Cargando…");
   try {
-    const q = onlyUnanswered ? "?status=unanswered" : "?archived=1";
+    const q = onlyUnanswered ? "?status=unanswered" : "";
     const data = await apiJson(`/api/config/questions${q}`);
     const items = onlyUnanswered
       ? data.questions

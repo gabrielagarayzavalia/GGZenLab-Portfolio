@@ -35,12 +35,9 @@ Runner: `src/run/apply-runner.ts` (sin UI).
 - Ruta `/run` — `dashboard/run.html` + `run.js`
 - Nav compartida: Dashboard | **Ejecutar** | Configuración
 
-## Fuera de spike
+## Fuera de spike (→ B-40)
 
-- Home `/` con resumen última corrida
-- Live log SSE / WebSocket
-- Pipeline / campaign desde browser
-- Wizard B19
+- Pipeline / campaign desde browser → [#318 B-40-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/318) spike workflow completo
 
 ## Definition of Done (spike)
 

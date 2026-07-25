@@ -250,7 +250,7 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | Spike | B-38-0 | [#264](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264) | High (cerrado) |
 | MVP desktop | B-38-1 | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | High — PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
 | Mobile lite | B-38-2 | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) | Medium |
-| Retiro Excel writers | B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | High |
+| Retiro Excel writers | B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | High — **Excel legacy oculto (flag), no retirar código** |
 | Dual-write pipeline | B-38-5 | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | High |
 | Dual-write EA | B-38-6 | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | High |
 | Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
@@ -275,11 +275,11 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | B-08 tracking | #17 | Columnas del tracker web, no store aparte |
 | B-14 home | #18 | Home futura = grilla tracker |
 | B-06 Mongo | #35–#53 | `applications`; #52 abierto hasta post-spike |
-| B-23 Excel canónico | #131 | Dual-write transición → supersede en B-38-3 |
+| B-23 Excel canónico | #131 | Dual-write transición → Excel **oculto por flag** (no delete writers) |
 
 ### Orden de ejecución
 
-`B-38-0 spike` (#264) → merge [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) → [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) → [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297)+[#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) dual-write → [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) mobile → [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) retiro Excel.
+`B-38-0 spike` (#264) → merge [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) → [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) → [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297)+[#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) dual-write → [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) mobile → [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) Excel legacy oculto (flag).
 
 ### Stories post-spike (issues formales)
 
@@ -287,7 +287,7 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 |----|-------|-------|
 | B-38-1 | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | — (MVP en PR #293) |
 | B-38-2 | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) | [#302](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/302)–[#304](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/304) |
-| B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | fase 4 / B38-10 |
+| B-38-3 Excel legacy (flag) | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | fase 4 / flag, no delete |
 | B-38-5 | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | — |
 | B-38-6 | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | — |
 | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | — |

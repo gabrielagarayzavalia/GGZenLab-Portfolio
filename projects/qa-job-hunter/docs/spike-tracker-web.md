@@ -223,7 +223,7 @@ Documento: ver `TrackerApplication` en `src/types/tracker-application.ts`.
 | **1 — Dual-write** | Pipeline + easy-apply escriben Mongo **y** Excel | Canónico paralelo |
 | **2 — Web primary** | Grilla `/tracker` editable; botonera abre web | Export manual / backup diario |
 | **3 — Excel read-only** | Solo import inicial + export on-demand | Deja de ser canónico |
-| **4 — Retiro** | Eliminar writers ExcelJS in-place en applied-list | Solo export |
+| **4 — Legacy oculto** | Excel Desktop solo con flag (`OPEN_DESKTOP_EXCEL`); writers **no** eliminados | Export API backup |
 
 ### Script migración inicial (MVP)
 
@@ -331,7 +331,7 @@ npm run dashboard
 
 **Decisión grillas:** AG Grid CE 1ª (producción `/tracker`); Tabulator 2ª (fallback).
 
-**Pendiente post-MVP fase 1:** dual-write pipeline (#131), mobile wired a API, retiro writers Excel.
+**Pendiente post-MVP fase 1:** dual-write pipeline (#131), mobile wired a API, Excel legacy oculto (flag).
 
 ---
 

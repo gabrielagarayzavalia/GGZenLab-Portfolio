@@ -12,9 +12,9 @@
 1. **Fuente canónica futura:** API/DB web (`applications`) — no `Empleos_Tracker.xlsx` en el día a día.
 2. **Desktop:** grilla completa — **AG Grid CE** 1ª opción; **Tabulator** 2ª.
 3. **Mobile:** vista lite cards (`/m-lite`) — misma API, sin grilla densa.
-4. **Excel:** solo import inicial, export backup, transición.
+4. **Excel:** import inicial, export backup; **legacy Desktop oculto por flag** (no retirar código).
 5. **Un store:** unificar dashboard + campaña (no `/api/results` ni `application-status.json` paralelos).
-6. **A largo plazo:** supersede [#131 B-23](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131) (Excel Escritorio canónico).
+6. **A largo plazo:** Mongo canónico; [#131 B-23](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/131) coexistencia — Excel legacy **gated**, no deleted.
 7. **B-06 Mongo:** reorientar a colección `applications` / postulaciones (no cerrar [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike).
 
 **Separado:** [#213 B33-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/213) Grafana — observabilidad; no mezclar con tracker.
@@ -28,7 +28,7 @@
 | **0 Spike** | B-38-0 (#264) | Inventario, API diseño, PoC grillas, wireframe mobile, plan migración, go/no-go (#273) | — |
 | **1 MVP desktop** | B-38-1 ([#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294)) | `/tracker` AG Grid + API CRUD + import .xlsx | Spike GO · PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
 | **2 Mobile lite** | B-38-2 ([#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295)) | `/m-lite` cards wired API | #294 |
-| **3 Retiro Excel writers** | B-38-3 ([#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296)) | Dual-write → Mongo-only; applied-list sin writer Escritorio | #297, #298 |
+| **3 Excel legacy oculto** | B-38-3 ([#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296)) | Mongo canónico; Desktop Excel solo con flag | #297, #298 |
 
 ---
 
@@ -53,14 +53,24 @@ Duplicados cerrados: #266, #268, #270, #272, #274 y segunda tanda #275–#287.
 B-38-0 spike (#264)  ──►  antes de asumir B-08 / B-14 como listas separadas
          │
          ▼ (post #273 GO)
-B-38-1 MVP desktop → B-38-2 mobile → B-38-3 retiro Excel
+B-38-1 MVP desktop → B-38-2 mobile → B-38-3 Excel legacy oculto (flag)
          │
          ├── B-08 #17 tracking → columnas del tracker (no store aparte)
          ├── B-14 #18 home → futura home puede ser `/tracker`
          └── B-06 #35–#53 → Mongo `applications`; no cerrar #52 hasta post-spike
 ```
 
-**B-23 (#131):** coexistencia dual-write en transición; **supersede futuro** cuando B-38-3 complete.
+**B-23 (#131):** dual-write en transición; Excel legacy **oculto por flag** — no retirar writers.
+
+## Flag Excel legacy (decisión producto)
+
+| Flag | Default | Efecto |
+|------|---------|--------|
+| `OPEN_DESKTOP_EXCEL=1` | off | Campaña abre `Empleos_Tracker.xlsx` mid-flow |
+| `--open-excel` | — | CLI en `npm run campaign` |
+| `ui.openDesktopExcel` (B-39) | `false` | Config centralizada |
+
+Código `openTrackerExcel` / sync **se mantiene** — solo no es el path default.
 
 ---
 
@@ -70,7 +80,7 @@ B-38-1 MVP desktop → B-38-2 mobile → B-38-3 retiro Excel
 |----|-------|-----------|
 | B-38-1 MVP desktop | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | High — PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
 | B-38-2 Mobile lite | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) + tasks [#302](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/302)–[#304](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/304) | Medium |
-| B-38-3 Retiro Excel | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | High |
+| B-38-3 Excel legacy (flag) | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | High |
 | B-38-5 Dual-write pipeline | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | High |
 | B-38-6 Dual-write EA | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | High |
 | B-38-7 Import/export xlsx | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |

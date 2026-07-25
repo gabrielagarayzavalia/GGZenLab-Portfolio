@@ -1,11 +1,16 @@
-// Spike B-37 — discovery vía LinkedIn Notifications (no productivo).
-// PoC: filtrar job alerts en /notifications → View jobs → scrape → back.
+// B-37 — discovery vía LinkedIn Notifications.
+// PoC manual: filtrar job alerts → View jobs → scrape → back.
+// Campaña: post-gmail merge en qa-job-applied-list/data/jobs.json.
 
 import { chromium, type BrowserContext, type Page } from "playwright";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { resolveSessionPath } from "../src/apply/paths.js";
+import {
+  loadAppliedListKnownJobIds,
+  mergeJobsIntoAppliedList,
+} from "./notifications-applied-list.js";
 import {
   collectDomInventoryInBrowser,
   extractNotificationItemsInBrowser,
@@ -29,9 +34,6 @@ interface JobEntry {
 function ensureDirs(): void {
   fs.mkdirSync(SPIKE_OUTPUT_DIR, { recursive: true });
 }
-
-const DEFAULT_LOOKBACK_HOURS = 24;
-const MAX_LOOKBACK_HOURS = 336; // 14 días
 
 /** Ítems de job alert según captura usuaria 2026-07-24 (#248). */
 export const JOB_ALERT_INCLUDE = [
@@ -75,7 +77,19 @@ export interface NotificationItem {
   withinLookback: boolean;
 }
 
-export interface SpikeRunReport {
+const DEFAULT_LOOKBACK_HOURS = 24;
+const MAX_LOOKBACK_HOURS = 336; // 14 días
+
+export interface NotificationsDiscoveryOptions {
+  lookbackHours: number;
+  maxItems: number;
+  dryRun: boolean;
+  mergeSpikeOutput: boolean;
+  mergeAppliedList: boolean;
+  appliedListRoot?: string;
+  headless: boolean;
+}
+export interface NotificationsDiscoveryReport {
   ranAt: string;
   lookbackHours: number;
   dryRun: boolean;
@@ -86,7 +100,11 @@ export interface SpikeRunReport {
   processed: number;
   jobsFound: JobEntry[];
   errors: string[];
+  appliedListMerge?: { added: number; total: number; jobsPath: string };
 }
+
+const DEFAULT_MAX_ITEMS_CAMPAIGN = 5;
+const DEFAULT_MAX_ITEMS_SPIKE = 3;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -289,24 +307,24 @@ async function scrapeJobsFromDestination(page: Page, seen: Set<string>): Promise
   return found;
 }
 
-export async function runNotificationsSpike(options: {
-  lookbackHours: number;
-  maxItems: number;
-  dryRun: boolean;
-  merge: boolean;
-  headless: boolean;
-}): Promise<SpikeRunReport> {
+export async function runNotificationsDiscovery(
+  options: NotificationsDiscoveryOptions
+): Promise<NotificationsDiscoveryReport> {
   ensureDirs();
   fs.mkdirSync(SPIKE_OUTPUT_DIR, { recursive: true });
 
   const sessionPath = resolveSessionPath();
-  const existing: JobEntry[] = fs.existsSync(JOBS_PATH)
-    ? JSON.parse(fs.readFileSync(JOBS_PATH, "utf-8"))
-    : [];
+  const existing: JobEntry[] =
+    !options.mergeAppliedList && fs.existsSync(JOBS_PATH)
+      ? JSON.parse(fs.readFileSync(JOBS_PATH, "utf-8"))
+      : [];
   const byId = new Map(existing.map((j) => [j.jobId, j]));
-  const seen = new Set<string>(existing.map((j) => j.jobId));
 
-  const report: SpikeRunReport = {
+  const seen = options.mergeAppliedList
+    ? loadAppliedListKnownJobIds(options.appliedListRoot)
+    : new Set<string>(existing.map((j) => j.jobId));
+
+  const report: NotificationsDiscoveryReport = {
     ranAt: new Date().toISOString(),
     lookbackHours: options.lookbackHours,
     dryRun: options.dryRun,
@@ -330,7 +348,10 @@ export async function runNotificationsSpike(options: {
 
   const page = await context.newPage();
   try {
-    console.log(`\n🔔 Notifications spike — lookback ${options.lookbackHours}h | max ${options.maxItems} ítems`);
+    const mode = options.mergeAppliedList ? "campaña" : "spike";
+    console.log(
+      `\n🔔 Notifications discovery (${mode}) — lookback ${options.lookbackHours}h | max ${options.maxItems} ítems`
+    );
     console.log(`🔐 Sesión: ${sessionPath}`);
 
     await page.goto(NOTIFICATIONS_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -367,6 +388,10 @@ export async function runNotificationsSpike(options: {
         await sleep(1200);
 
         const jobs = await scrapeJobsFromDestination(page, seen);
+        for (const job of jobs) {
+          seen.add(job.jobId);
+          seen.add(job.url.replace(/\?.*$/, "").replace(/\/$/, ""));
+        }
         report.jobsFound.push(...jobs);
         report.processed++;
         console.log(`   ✓ Jobs scrapeados: ${jobs.length} | destino: ${page.url().slice(0, 90)}`);
@@ -387,9 +412,13 @@ export async function runNotificationsSpike(options: {
 
     const reportPath = path.join(SPIKE_OUTPUT_DIR, "last-run.json");
     fs.writeFileSync(reportPath, JSON.stringify({ ...report, screenshotPath }, null, 2), "utf-8");
-    console.log(`\n📝 Reporte spike: ${reportPath}`);
+    console.log(`\n📝 Reporte: ${reportPath}`);
 
-    if (!options.dryRun && options.merge) {
+    if (!options.dryRun && options.mergeAppliedList && report.jobsFound.length > 0) {
+      const merge = mergeJobsIntoAppliedList(report.jobsFound, options.appliedListRoot);
+      report.appliedListMerge = merge;
+      console.log(`💾 applied-list merge: +${merge.added} (total ${merge.total}) → ${merge.jobsPath}`);
+    } else if (!options.dryRun && options.mergeSpikeOutput) {
       let added = 0;
       for (const job of report.jobsFound) {
         if (byId.has(job.jobId)) continue;
@@ -398,8 +427,10 @@ export async function runNotificationsSpike(options: {
       }
       fs.writeFileSync(JOBS_PATH, JSON.stringify([...byId.values()], null, 2), "utf-8");
       console.log(`💾 Merge jobs-found.json: +${added} (total ${byId.size})`);
+    } else if (options.dryRun) {
+      console.log("🧪 Dry-run: sin persistencia (usá --merge-applied-list o --merge).");
     } else {
-      console.log("🧪 Dry-run: no se escribió output/spike-notifications/jobs-found.json (usá --merge).");
+      console.log("ℹ️  Sin jobs nuevos para mergear.");
     }
   } finally {
     await browser.close();
@@ -408,10 +439,17 @@ export async function runNotificationsSpike(options: {
   return report;
 }
 
+/** @deprecated alias spike */
+export const runNotificationsSpike = runNotificationsDiscovery;
+
 async function main() {
+  const mergeAppliedList = hasFlag("--merge-applied-list");
+  const mergeSpikeOutput = hasFlag("--merge");
+  const explicitDryRun = hasFlag("--dry-run");
   const lookbackHours = clampLookbackHours(parseArg("--lookback-hours"));
-  const maxItems = Number(parseArg("--max-items") ?? "3");
-  const dryRun = !hasFlag("--merge");
+  const defaultMaxItems = mergeAppliedList ? DEFAULT_MAX_ITEMS_CAMPAIGN : DEFAULT_MAX_ITEMS_SPIKE;
+  const maxItems = Number(parseArg("--max-items") ?? String(defaultMaxItems));
+  const dryRun = explicitDryRun || (!mergeSpikeOutput && !mergeAppliedList);
   const headless = !hasFlag("--headed");
 
   if (hasFlag("--test-fixtures")) {
@@ -428,15 +466,19 @@ async function main() {
     return;
   }
 
-  const report = await runNotificationsSpike({
+  const report = await runNotificationsDiscovery({
     lookbackHours,
-    maxItems: Number.isFinite(maxItems) && maxItems > 0 ? maxItems : 3,
+    maxItems: Number.isFinite(maxItems) && maxItems > 0 ? maxItems : defaultMaxItems,
     dryRun,
-    merge: hasFlag("--merge"),
+    mergeSpikeOutput,
+    mergeAppliedList,
+    appliedListRoot: process.env.APPLIED_LIST_ROOT,
     headless,
   });
 
-  console.log(`\n📊 Resumen: ${report.processed} ítems procesados, ${report.jobsFound.length} jobs, ${report.errors.length} errores`);
+  console.log(
+    `\n📊 Resumen: ${report.processed} ítems procesados, ${report.jobsFound.length} jobs, ${report.errors.length} errores`
+  );
   if (report.jobsFound.length) {
     for (const j of report.jobsFound) console.log(`   • ${j.company} — ${j.title} (${j.jobId})`);
   }

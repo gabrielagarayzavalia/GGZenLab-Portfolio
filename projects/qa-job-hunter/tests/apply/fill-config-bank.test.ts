@@ -13,6 +13,7 @@ import {
   patchQuestion,
   upsertUnansweredFromHits,
 } from "../../src/config/questions-store.js";
+import { pickConfigSelectOption } from "../../src/apply/fill-config-bank.js";
 
 function field(partial: Partial<CapturedField> & { label: string }): CapturedField {
   return {
@@ -63,4 +64,43 @@ test("matchConfigAnswer encuentra portugués answered", () => {
   assert.equal(decision.pendingLabels.length, 0);
 
   patchQuestion(q!.id, { answer: "", status: "unanswered" });
+});
+
+test("patchQuestion guarda 0 como answered y en options", () => {
+  upsertUnansweredFromHits(
+    [
+      {
+        label: "Years with Apache",
+        kind: "text",
+        required: true,
+        value: "",
+      },
+    ],
+    { jobId: "job-zero" }
+  );
+  const store = loadQuestionsConfig();
+  const q = store.questions.find((x) => /Apache/i.test(x.label));
+  assert.ok(q);
+  patchQuestion(q!.id, { answer: "0" });
+  const after = loadQuestionsConfig().questions.find((x) => x.id === q!.id);
+  assert.equal(after?.status, "answered");
+  assert.equal(after?.answer, "0");
+  assert.ok(after?.options.includes("0"));
+  assert.ok(matchConfigAnswer("Years with Apache"));
+});
+
+test("pickConfigSelectOption: rango más próximo a años en banco", () => {
+  const opts = [
+    { text: "Select an option", value: "" },
+    { text: "1-2 years", value: "1" },
+    { text: "3-5 years", value: "2" },
+    { text: "6-10 years", value: "3" },
+  ];
+  const forZero = pickConfigSelectOption(opts, "0");
+  assert.ok(forZero);
+  assert.match(forZero!.text, /1-2/);
+
+  const forFour = pickConfigSelectOption(opts, "4");
+  assert.ok(forFour);
+  assert.match(forFour!.text, /3-5/);
 });

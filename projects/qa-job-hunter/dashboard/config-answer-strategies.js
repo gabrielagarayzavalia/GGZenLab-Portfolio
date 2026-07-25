@@ -132,7 +132,8 @@ function selectStrategy(options, hint) {
     },
     readValue(container) {
       const sel = container.querySelector("select[name=answer]");
-      return sel?.value?.trim() || "";
+      const raw = sel?.value;
+      return raw === undefined || raw === null ? "" : String(raw).trim();
     },
   };
 }
@@ -160,7 +161,8 @@ function textStrategy(hint) {
     },
     readValue(container) {
       const input = container.querySelector("input[name=answer]");
-      return input?.value?.trim() || "";
+      const raw = input?.value;
+      return raw === undefined || raw === null ? "" : String(raw).trim();
     },
   };
 }
@@ -189,7 +191,8 @@ function numberStrategy(hint) {
     },
     readValue(container) {
       const input = container.querySelector("input[name=answer]");
-      return input?.value?.trim() || "";
+      const raw = input?.value;
+      return raw === undefined || raw === null ? "" : String(raw).trim();
     },
   };
 }

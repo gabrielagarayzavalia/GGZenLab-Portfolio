@@ -152,7 +152,7 @@ answerForm?.addEventListener("submit", async (ev) => {
   const strategy = answerDialogStrategy;
   if (!id || !strategy || !answerField) return;
   const answer = strategy.readValue(answerField);
-  if (!answer) {
+  if (answer.length === 0) {
     setStatus(status, "Elegí o escribí una respuesta.", true);
     return;
   }

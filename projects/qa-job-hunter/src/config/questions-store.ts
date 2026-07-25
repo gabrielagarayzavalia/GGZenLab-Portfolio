@@ -56,6 +56,17 @@ function normalizeKey(label: string): string {
   return normalizeQuestionKey(label);
 }
 
+function hasStoredAnswer(answer: string): boolean {
+  return answer.trim().length > 0;
+}
+
+function mergeAnswerIntoOptions(existing: string[], answer: string): string[] {
+  const a = answer.trim();
+  if (!a) return existing;
+  const set = new Set([...(existing || []), a]);
+  return [...set].slice(0, 40);
+}
+
 export type ConfigAnswerMatch = {
   label: string;
   answer: string;
@@ -75,7 +86,7 @@ function loadAnsweredCache(): Map<string, ConfigAnswerMatch> {
     for (const q of loadQuestionsConfig().questions) {
       if (q.status !== "answered") continue;
       const answer = q.answer.trim();
-      if (!answer) continue;
+      if (!hasStoredAnswer(answer)) continue;
       answeredCache.set(normalizeKey(q.label), {
         label: q.label,
         answer,
@@ -233,17 +244,22 @@ export function patchQuestion(
   const answer =
     patch.answer !== undefined ? String(patch.answer).trim() : prev.answer;
   let status = patch.status ?? prev.status;
-  if (patch.answer !== undefined && answer && status === "unanswered") {
+  if (patch.answer !== undefined && hasStoredAnswer(answer) && status === "unanswered") {
     status = "answered";
   }
-  if (patch.answer !== undefined && !answer && status === "answered") {
+  if (patch.answer !== undefined && !hasStoredAnswer(answer) && status === "answered") {
     status = "unanswered";
   }
+  const options =
+    patch.answer !== undefined && hasStoredAnswer(answer)
+      ? mergeAnswerIntoOptions(prev.options, answer)
+      : prev.options;
   store.questions[idx] = {
     ...prev,
     label: patch.label?.trim() || prev.label,
     kind: patch.kind?.trim() || prev.kind,
     answer,
+    options,
     status,
     updatedAt: nowIso(),
   };
@@ -268,9 +284,9 @@ export function addManualQuestion(input: {
     kind: input.kind || "text",
     required: !!input.required,
     answer,
-    options: [],
+    options: hasStoredAnswer(answer) ? [answer] : [],
     origin: "manual",
-    status: answer ? "answered" : "unanswered",
+    status: hasStoredAnswer(answer) ? "answered" : "unanswered",
     seenCount: 1,
     createdAt: t,
     updatedAt: t,

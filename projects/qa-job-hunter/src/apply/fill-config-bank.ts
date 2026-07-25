@@ -6,6 +6,11 @@
 import type { Locator, Page } from "playwright";
 import { matchConfigAnswer } from "../config/questions-store.js";
 import { EMPTY_SELECT_RE, hasPrefillValue } from "./field-utils.js";
+import {
+  optionsLookNumeric,
+  parseYearsOptionLabel,
+  pickBestYearsOption,
+} from "./years-option.js";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -84,12 +89,37 @@ function pickOptionByAnswer(
     if (!t || EMPTY_SELECT_RE.test(opt.text)) continue;
     if (t === want) return opt;
   }
-  for (const opt of options) {
-    const t = normalizeOptionText(opt.text);
-    if (!t || EMPTY_SELECT_RE.test(opt.text)) continue;
-    if (t.includes(want) || want.includes(t)) return opt;
+  if (want.length >= 2) {
+    for (const opt of options) {
+      const t = normalizeOptionText(opt.text);
+      if (!t || EMPTY_SELECT_RE.test(opt.text)) continue;
+      if (t.includes(want) || want.includes(t)) return opt;
+    }
   }
   return null;
+}
+
+/**
+ * Elige option en select EA: match exacto/substring o rango numérico más próximo.
+ */
+export function pickConfigSelectOption(
+  options: { text: string; value: string | null }[],
+  answer: string
+): { text: string; value: string | null } | null {
+  const trimmed = answer.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const target = Number(trimmed);
+    if (Number.isFinite(target)) {
+      const texts = options.map((o) => o.text);
+      const hasNumeric = options.some((o) => parseYearsOptionLabel(o.text) != null);
+      if (hasNumeric || optionsLookNumeric(texts)) {
+        const picked = pickBestYearsOption(options, target);
+        if (picked) return picked;
+      }
+    }
+  }
+
+  return pickOptionByAnswer(options, answer);
 }
 
 async function readSelectOptions(sel: Locator): Promise<{ text: string; value: string | null }[]> {
@@ -148,7 +178,7 @@ async function fillSelectWithAnswer(
     }
   }
 
-  const picked = pickOptionByAnswer(opts, answer);
+  const picked = pickConfigSelectOption(opts, answer);
   if (!picked) {
     console.log(`   ↳ Config [${logLabel}]: sin opción para "${answer.slice(0, 40)}"`);
     return false;

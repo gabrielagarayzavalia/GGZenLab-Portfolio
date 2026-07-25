@@ -7,6 +7,7 @@ import path from "path";
 import { APPLY_DIR, MIN_MATCH, OUTPUT_PATH } from "./paths.js";
 import type { ApplyJob } from "./types.js";
 import type { AnalysisResult, JobMatch } from "../types.js";
+import { scheduleApplyQueueSync } from "../tracker/apply-sync.js";
 
 /** Estados de postulación en Excel. cerrada/descartada son finales. */
 export type QueueStatus = "pendiente" | "enviada" | "cerrada" | "descartada";
@@ -222,6 +223,7 @@ export function updateQueueRow(
       updatedAt: new Date().toISOString(),
     };
     saveQueue(rows);
+    scheduleApplyQueueSync(rows[idx]);
     return rows;
   }
 
@@ -231,6 +233,7 @@ export function updateQueueRow(
     updatedAt: new Date().toISOString(),
   };
   saveQueue(rows);
+  scheduleApplyQueueSync(rows[idx]);
   return rows;
 }
 
@@ -264,6 +267,7 @@ export function forcePendienteForRetry(
       updatedAt: new Date().toISOString(),
     };
     saveQueue(rows);
+    scheduleApplyQueueSync(rows[idx]);
     return rows[idx];
   }
   const row: QueueRow = {
@@ -279,6 +283,7 @@ export function forcePendienteForRetry(
     updatedAt: new Date().toISOString(),
   };
   saveQueue([row, ...rows]);
+  scheduleApplyQueueSync(row);
   return row;
 }
 

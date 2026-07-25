@@ -76,6 +76,7 @@ import {
 } from "./apply/apply-queue.js";
 import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
 import { exportQueueToExcel } from "./apply/post-run.js";
+import { flushApplyQueueSync } from "./tracker/apply-sync.js";
 import {
   TIMING,
   ModalPagePerfError,
@@ -1084,6 +1085,7 @@ async function main() {
   saveRunUnknownQuestionsReport();
   logRunUnknownQuestions();
   exportQueueToExcel();
+  await flushApplyQueueSync();
   console.log(`Excel: ${APPLY_QUEUE_PATH} (+ Notas; estado pendiente si hubo unanswered)`);
 }
 

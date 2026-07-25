@@ -10,7 +10,9 @@ import {
   pipelineMatchToApplicationInput,
   type PipelineMatchResult,
 } from "../tracker/pipeline-match.js";
-import { planAutomationUpsert } from "../tracker/automation-merge.js";
+import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
+import type { QueueRow } from "../apply/apply-queue.js";
+import { planAutomationUpsert, planEasyApplyUpsert } from "../tracker/automation-merge.js";
 import { isProtectedEstado } from "../tracker/protected-estado.js";
 import { getDb } from "./client.js";
 
@@ -324,4 +326,49 @@ export async function upsertPipelineMatches(
   }
 
   return { inserted, updated, skipped };
+}
+
+export interface EasyApplyUpsertResult {
+  action: "insert" | "update" | "skip";
+}
+
+/**
+ * Dual-write Easy Apply cola → Mongo (B-38-6).
+ * Usa planEasyApplyUpsert: Enviada/notas desde cola; skip estados bloqueados por usuaria.
+ */
+export async function upsertEasyApplyQueueRow(row: QueueRow): Promise<EasyApplyUpsertResult> {
+  const db = getDb();
+  const col = db.collection<ApplicationDoc>("applications");
+  const now = new Date();
+  const input = queueRowToApplicationFields(row);
+  const fields = buildDocFields(
+    { ...input, updatedBy: "easy-apply" },
+    now
+  );
+  const filter = applicationFilter(fields);
+
+  const existing = await col.findOne(filter);
+  const plan = planEasyApplyUpsert(existing, input, "easy-apply");
+
+  if (plan.action === "skip") {
+    return { action: "skip" };
+  }
+
+  if (plan.action === "insert") {
+    const doc = buildDocFields({ ...plan.fields, updatedBy: "easy-apply" }, now);
+    await col.insertOne({
+      _id: new ObjectId(),
+      ...doc,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: "easy-apply",
+    });
+    return { action: "insert" };
+  }
+
+  const result = await col.updateOne(
+    { _id: existing!._id },
+    { $set: { ...plan.update, updatedAt: now } }
+  );
+  return { action: result.modifiedCount > 0 ? "update" : "skip" };
 }

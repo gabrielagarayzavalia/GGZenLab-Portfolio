@@ -66,6 +66,7 @@ import {
   waitForJobPageReady,
 } from "./apply/page-ready.js";
 import { exportQueueToExcel, finishProductiveRun } from "./apply/post-run.js";
+import { flushApplyQueueSync } from "./tracker/apply-sync.js";
 import {
   TIMING,
   betweenJobsDelayMs,
@@ -988,6 +989,8 @@ async function main() {
       { openIde: false }
     );
   }
+
+  await flushApplyQueueSync();
 }
 
 main().catch((err) => {

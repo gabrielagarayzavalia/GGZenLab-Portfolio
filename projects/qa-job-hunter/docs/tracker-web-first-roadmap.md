@@ -86,9 +86,15 @@ Código `openTrackerExcel` / sync **se mantiene** — solo no es el path default
 | B-38-7 Import/export xlsx | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
 | B-38-8 Deprecar legacy | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | Low |
 | B-38-9 Botonera /tracker | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | Low |
-| B-38-11 Spike dashboard ↔ tracker | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) + tasks [#306](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/306)–[#309](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/309) | High — **antes de #300** |
+| B-38-11 Spike dashboard ↔ tracker | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) + tasks [#306](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/306)–[#309](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/309) | High — **GO** · PR [#310](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/310) |
+| B-38-12 API match-jobs dashboard | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) | High — post #297, #312 |
+| B-38-13 Schema analysis + matchRejected | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) | High |
+| B-38-14 Wire dashboard lista | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) | High — post #311 |
+| B-38-15 Writes dashboard → tracker | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) | High — post #312 |
+| B-38-16 Sync match-feedback | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | Medium — post #314 |
+| B-38-17 Shim /api/results | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | Low — post #313 · parte #300 |
 
-**Orden sugerido:** merge #293 → cerrar #294 → **#305 spike dashboard** → #297+#298 → #295 → #299/#301 → **#300** → #296.
+**Orden sugerido:** #294 cerrada → #305 spike (GO, PR #310) → #297 → #298 → #312 → #311 → #313 → #314/#315 → #316 → #300 → #295 mobile → #296.
 
 ---
 

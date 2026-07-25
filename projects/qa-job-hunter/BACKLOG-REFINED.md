@@ -256,6 +256,7 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
 | Deprecar legacy | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | Low |
 | Botonera /tracker | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | Low |
+| Spike dashboard ↔ tracker | B-38-11 | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) | High — **antes de #300** |
 
 ### Spike tasks (canónicos)
 
@@ -293,6 +294,7 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | — |
 | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | — |
 | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | — |
+| B-38-11 Spike dashboard ↔ tracker | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) | [#306](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/306)–[#309](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/309) |
 
 ### B-17 — Página de estadísticas (borrador)
 

@@ -86,8 +86,9 @@ Código `openTrackerExcel` / sync **se mantiene** — solo no es el path default
 | B-38-7 Import/export xlsx | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | Medium |
 | B-38-8 Deprecar legacy | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | Low |
 | B-38-9 Botonera /tracker | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | Low |
+| B-38-11 Spike dashboard ↔ tracker | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) + tasks [#306](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/306)–[#309](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/309) | High — **antes de #300** |
 
-**Orden sugerido:** merge #293 → cerrar #294 → #297+#298 → #295 → #299/#301 → #300 → #296.
+**Orden sugerido:** merge #293 → cerrar #294 → **#305 spike dashboard** → #297+#298 → #295 → #299/#301 → **#300** → #296.
 
 ---
 

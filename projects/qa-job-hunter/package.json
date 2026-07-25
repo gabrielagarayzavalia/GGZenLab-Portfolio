@@ -43,6 +43,8 @@
     "test:notifications-merge": "npx tsx --test tests/discovery/notifications-applied-list.test.ts",
     "qa:smoke-b38-13": "npx tsx scripts/qa/smoke-b38-13.ts",
     "qa:dry-run-campaign": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
+    "qa:dry-run-campaign:full": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
+    "qa:dry-run-campaign:pipeline": "npx tsx scripts/qa/dry-run-campaign-gate.ts --pipeline-only",
     "qa:regression-b38-13": "npx tsx scripts/qa/regression-b38-13.ts"
   },
   "dependencies": {

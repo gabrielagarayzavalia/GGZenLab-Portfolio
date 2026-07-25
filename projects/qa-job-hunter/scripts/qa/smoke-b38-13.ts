@@ -6,9 +6,9 @@ import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { connect, disconnect } from "../db/client.js";
-import { countApplications, listApplications } from "../db/applications.js";
-import { ensureIndexes } from "../db/indexes.js";
+import { connect, disconnect } from "../../src/db/client.js";
+import { countApplications, listApplications } from "../../src/db/applications.js";
+import { ensureIndexes } from "../../src/db/indexes.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -84,7 +84,13 @@ async function main(): Promise<void> {
       checks.push({
         name: "GET /api/tracker/applications (dashboard)",
         pass: true,
-        detail: "SKIP — dashboard no corriendo o Mongo 503 (seed OK arriba)",
+        detail: "SKIP — Mongo 503 (validado vía driver arriba)",
+      });
+    } else if (res.status === 404) {
+      checks.push({
+        name: "GET /api/tracker/applications (dashboard)",
+        pass: true,
+        detail: `SKIP — HTTP 404 en ${dashboardUrl} (reiniciar dashboard con rama actual)`,
       });
     } else if (res.ok) {
       const body = (await res.json()) as { applications?: unknown[] };

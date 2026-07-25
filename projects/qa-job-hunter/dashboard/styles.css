@@ -288,6 +288,11 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .config-dialog__hint {
   margin: 0; font-size: 0.8rem; color: var(--text-muted);
 }
+.config-dialog__hint--captured {
+  margin-top: -0.35rem;
+  font-size: 0.78rem;
+  color: var(--accent, #5b8def);
+}
 .config-dialog__actions {
   display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end;
   margin-top: 0.25rem;

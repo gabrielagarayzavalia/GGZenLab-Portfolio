@@ -4,7 +4,10 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveAnswerStrategy } from "../../dashboard/config-answer-strategies.js";
+import {
+  actionableOptions,
+  resolveAnswerStrategy,
+} from "../../dashboard/config-answer-strategies.js";
 
 test("portugués select sin options → dropdown idioma", () => {
   const s = resolveAnswerStrategy({
@@ -16,24 +19,34 @@ test("portugués select sin options → dropdown idioma", () => {
   assert.match(s.hint || "", /idioma/i);
 });
 
-test("select con una opción capturada → dropdown", () => {
+test("años experiencia con eco del label → número + hint debajo", () => {
+  const label = "How many years of work experience do you have with Microsoft Dynamics 365?";
   const s = resolveAnswerStrategy({
-    label: "D365 experience",
-    kind: "select",
-    options: ["No experience"],
+    label,
+    kind: "text",
+    options: [label],
   });
-  assert.equal(s.id, "select");
-  assert.match(s.hint, /Capturadas en apply/i);
+  assert.equal(s.id, "number");
+  assert.equal(s.capturedOptionsHint, "");
 });
 
-test("select con varias opciones capturadas → dropdown", () => {
+test("select Yes/No capturado → dropdown", () => {
+  const s = resolveAnswerStrategy({
+    label: "Hands-on Playwright and Selenium",
+    kind: "select",
+    options: ["Yes", "No", "Required"],
+  });
+  assert.equal(s.id, "select");
+  assert.equal(s.capturedOptionsHint, "");
+});
+
+test("select con opciones reales no Yes/No → dropdown", () => {
   const s = resolveAnswerStrategy({
     label: "Years of SQL",
     kind: "select",
     options: ["1-2", "3-5", "10+"],
   });
   assert.equal(s.id, "select");
-  assert.match(s.hint, /Capturadas en apply/i);
 });
 
 test("select kind sin options en DOM → texto libre", () => {
@@ -43,7 +56,7 @@ test("select kind sin options en DOM → texto libre", () => {
     options: [],
   });
   assert.equal(s.id, "text");
-  assert.match(s.hint, /sin opciones en DOM/i);
+  assert.match(s.hint, /sin opciones/i);
 });
 
 test("text kind → texto libre", () => {
@@ -51,11 +64,19 @@ test("text kind → texto libre", () => {
   assert.equal(s.id, "text");
 });
 
-test("yes/no options → select", () => {
+test("actionableOptions filtra label eco", () => {
+  const label = "How many years of work experience do you have with Playwriting?";
+  const opts = actionableOptions(label, [label, "Required"]);
+  assert.equal(opts.length, 0);
+});
+
+test("opciones capturadas → hint debajo, no en el input", () => {
   const s = resolveAnswerStrategy({
-    label: "Do you know Python?",
-    kind: "select",
-    options: ["Yes", "No"],
+    label: "Describe other tools you use",
+    kind: "text",
+    options: ["Jira", "Confluence", "Describe other tools you use"],
   });
-  assert.equal(s.id, "select");
+  assert.equal(s.id, "text");
+  assert.match(s.capturedOptionsHint || "", /Opciones vistas en apply/i);
+  assert.match(s.capturedOptionsHint || "", /Jira/);
 });

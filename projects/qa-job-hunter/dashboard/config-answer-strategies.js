@@ -1,10 +1,12 @@
 /**
  * Strategy pattern — widget de respuesta en Config Preguntas (#97 / #241).
- * select con opciones → dropdown; radio Sí/No → select; resto → texto libre.
+ * Dropdown solo para opciones reales (Sí/No, idioma). Resto → texto/número;
+ * opciones capturadas en apply van como hint debajo del campo Respuesta.
  */
 
 const EMPTY_OPTION_RE =
   /^(select an option|seleccion(a|á)|choose|eleg[ií]|pick\b|selecciona una opci)/i;
+const NOISE_OPTION_RE = /^(required|yes no)$/i;
 
 /** Sugerencias LinkedIn idiomas (cuando kind=select y options vacío). */
 export const LANGUAGE_PROFICIENCY_OPTIONS = [
@@ -21,14 +23,44 @@ export const LANGUAGE_PROFICIENCY_OPTIONS = [
 
 const YES_NO_OPTIONS = ["Sí", "No", "Yes"];
 
+function normalizeCompare(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function cleanOptions(raw) {
   return [...new Set((raw || []).map((o) => String(o).trim()).filter(Boolean))]
     .filter((o) => !EMPTY_OPTION_RE.test(o))
     .slice(0, 40);
 }
 
+/** Quita eco del label, "Required", blobs concatenados, etc. */
+export function actionableOptions(label, raw) {
+  const l = normalizeCompare(label);
+  return cleanOptions(raw).filter((o) => {
+    const n = normalizeCompare(o);
+    if (!n || NOISE_OPTION_RE.test(n)) return false;
+    if (n === l) return false;
+    if (l && n.length > 80) return false;
+    if (l && l.includes(n) && n.length >= Math.min(24, l.length * 0.55)) return false;
+    if (l && n.includes(l) && l.length >= Math.min(24, n.length * 0.55)) return false;
+    return true;
+  });
+}
+
+export function formatCapturedOptionsHint(label, options) {
+  const opts = actionableOptions(label, options);
+  if (opts.length === 0) return "";
+  const quoted = opts.map((o) => `«${o}»`).join(", ");
+  return `Opciones vistas en apply (elegí o escribí el texto exacto): ${quoted}`;
+}
+
 function isYesNoOptions(options) {
-  const norm = options.map((o) => o.toLowerCase());
+  const norm = options.map((o) => normalizeCompare(o));
   return norm.includes("sí") || norm.includes("si") || norm.includes("yes");
 }
 
@@ -38,11 +70,43 @@ function isLanguageLabel(label) {
   );
 }
 
+function isYearsExperienceLabel(label) {
+  return /how many years|years?\s+of\s+work\s+experience|a[nñ]os?\s+de\s+experiencia/i.test(
+    label || ""
+  );
+}
+
+function shouldUseDropdown(question, options) {
+  const label = question.label || "";
+  const kind = String(question.kind || "text").toLowerCase();
+  const opts = actionableOptions(label, options);
+
+  if (isYearsExperienceLabel(label)) return false;
+  if (kind === "text" || kind === "number" || kind === "textarea" || kind === "tel") {
+    return false;
+  }
+
+  if (opts.length >= 2 && opts.length <= 4 && isYesNoOptions(opts)) return true;
+
+  if ((kind === "select" || kind === "listbox") && isLanguageLabel(label) && opts.length === 0) {
+    return true;
+  }
+
+  if (opts.length >= 2 && opts.length <= 12 && opts.every((o) => o.length <= 60)) {
+    return true;
+  }
+
+  if (kind === "radio" && opts.length === 0) return true;
+
+  return false;
+}
+
 function selectStrategy(options, hint) {
   const opts = cleanOptions(options);
   return {
     id: "select",
     hint: hint || "Elegí la opción exacta del dropdown de LinkedIn.",
+    capturedOptionsHint: "",
     mount(container, { currentAnswer }) {
       container.innerHTML = "";
       const label = document.createElement("label");
@@ -73,43 +137,11 @@ function selectStrategy(options, hint) {
   };
 }
 
-function formatCapturedOptionsHint(options, prefix) {
-  const opts = cleanOptions(options);
-  if (opts.length === 0) return prefix;
-  const quoted = opts.map((o) => `«${o}»`).join(", ");
-  return `${prefix} Capturadas en apply: ${quoted}.`;
-}
-
-function textStrategyWithSuggestions(options, hint) {
-  const opts = cleanOptions(options);
-  const base = textStrategy(hint);
-  if (opts.length === 0) return base;
-  return {
-    ...base,
-    id: opts.length === 1 ? "text-suggested" : base.id,
-    mount(container, ctx) {
-      base.mount(container, ctx);
-      const input = container.querySelector("input[name=answer]");
-      if (!input) return;
-      const dlId = `answer-suggest-${Math.random().toString(36).slice(2, 9)}`;
-      input.setAttribute("list", dlId);
-      input.placeholder = opts.length === 1 ? `Ej. ${opts[0]}` : "Escribí o elegí sugerencia…";
-      const dl = document.createElement("datalist");
-      dl.id = dlId;
-      for (const o of opts) {
-        const opt = document.createElement("option");
-        opt.value = o;
-        dl.appendChild(opt);
-      }
-      container.appendChild(dl);
-    },
-  };
-}
-
 function textStrategy(hint) {
   return {
     id: "text",
     hint: hint || "Texto libre (debe coincidir con lo que acepta el formulario).",
+    capturedOptionsHint: "",
     mount(container, { currentAnswer }) {
       container.innerHTML = "";
       const label = document.createElement("label");
@@ -122,6 +154,7 @@ function textStrategy(hint) {
       input.maxLength = 400;
       input.placeholder = "Escribí la respuesta…";
       input.value = currentAnswer || "";
+      input.autocomplete = "off";
       label.append(span, input);
       container.appendChild(label);
     },
@@ -132,10 +165,11 @@ function textStrategy(hint) {
   };
 }
 
-function numberStrategy() {
+function numberStrategy(hint) {
   return {
     id: "number",
-    hint: "Número (años, cantidad, etc.).",
+    hint: hint || "Número (años, cantidad, etc.).",
+    capturedOptionsHint: "",
     mount(container, { currentAnswer }) {
       container.innerHTML = "";
       const label = document.createElement("label");
@@ -149,6 +183,7 @@ function numberStrategy() {
       input.max = "99";
       input.step = "1";
       input.value = currentAnswer || "";
+      input.autocomplete = "off";
       label.append(span, input);
       container.appendChild(label);
     },
@@ -159,45 +194,51 @@ function numberStrategy() {
   };
 }
 
+function withCapturedHint(strategy, label, rawOptions) {
+  const captured = formatCapturedOptionsHint(label, rawOptions);
+  return { ...strategy, capturedOptionsHint: captured };
+}
+
 /**
  * Resuelve estrategia por kind + options capturadas en apply (#156 / #154).
  * @param {{ label: string; kind?: string; options?: string[] }} question
  */
 export function resolveAnswerStrategy(question) {
   const kind = String(question.kind || "text").toLowerCase();
-  const options = cleanOptions(question.options);
   const label = question.label || "";
+  const rawOptions = question.options || [];
+  const actionable = actionableOptions(label, rawOptions);
 
-  if (options.length >= 2) {
-    if (options.length <= 3 && isYesNoOptions(options)) {
-      return selectStrategy(options, "Sí / No del formulario.");
-    }
-    return selectStrategy(options, formatCapturedOptionsHint(options, "Elegí la opción exacta del dropdown."));
+  if (shouldUseDropdown(question, rawOptions)) {
+    const opts =
+      actionable.length >= 2
+        ? actionable
+        : isLanguageLabel(label)
+          ? LANGUAGE_PROFICIENCY_OPTIONS
+          : kind === "radio"
+            ? YES_NO_OPTIONS
+            : actionable;
+    return selectStrategy(
+      opts,
+      actionable.length >= 2
+        ? "Elegí la opción exacta del dropdown de LinkedIn."
+        : isLanguageLabel(label)
+          ? "Nivel de idioma (opciones típicas LinkedIn)."
+          : "Sí / No del formulario."
+    );
   }
 
-  if (options.length === 1) {
-    return selectStrategy(
-      options,
-      formatCapturedOptionsHint(options, "Una opción vista en apply — confirmá o corregí.")
-    );
+  if (isYearsExperienceLabel(label) || kind === "number") {
+    return withCapturedHint(numberStrategy(), label, rawOptions);
   }
 
   if (kind === "select" || kind === "listbox" || kind === "radio") {
-    if (isLanguageLabel(label)) {
-      return selectStrategy(LANGUAGE_PROFICIENCY_OPTIONS, "Nivel de idioma (opciones típicas LinkedIn).");
-    }
-    if (kind === "radio") {
-      return selectStrategy(YES_NO_OPTIONS, "Sí / No.");
-    }
-    return textStrategyWithSuggestions(
-      options,
-      "Dropdown sin opciones en DOM: escribí el texto exacto de la opción."
+    return withCapturedHint(
+      textStrategy("Dropdown sin opciones útiles en DOM: escribí el texto exacto de la opción."),
+      label,
+      rawOptions
     );
   }
 
-  if (kind === "number" || kind === "tel") {
-    return numberStrategy();
-  }
-
-  return textStrategy();
+  return withCapturedHint(textStrategy(), label, rawOptions);
 }

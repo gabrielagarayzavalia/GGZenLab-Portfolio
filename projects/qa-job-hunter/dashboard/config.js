@@ -79,9 +79,40 @@ const answerForm = document.getElementById("pregunta-answer-form");
 const answerTitle = document.getElementById("pregunta-answer-title");
 const answerMeta = document.getElementById("pregunta-answer-meta");
 const answerHint = document.getElementById("pregunta-answer-hint");
+const answerCaptured = document.getElementById("pregunta-answer-captured");
 const answerField = document.getElementById("pregunta-answer-field");
 let answerDialogQuestionId = null;
 let answerDialogStrategy = null;
+
+const ANSWER_DRAFTS_KEY = "config-pregunta-answer-drafts";
+
+function loadAnswerDrafts() {
+  try {
+    return JSON.parse(localStorage.getItem(ANSWER_DRAFTS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveAnswerDraft(id, value) {
+  const all = loadAnswerDrafts();
+  const v = String(value || "").trim();
+  if (v) all[id] = v;
+  else delete all[id];
+  localStorage.setItem(ANSWER_DRAFTS_KEY, JSON.stringify(all));
+}
+
+function clearAnswerDraft(id) {
+  saveAnswerDraft(id, "");
+}
+
+function bindAnswerDraftAutosave(id, strategy) {
+  const el = answerField?.querySelector("input[name=answer], select[name=answer]");
+  if (!el) return;
+  const persist = () => saveAnswerDraft(id, strategy.readValue(answerField));
+  el.addEventListener("input", persist);
+  el.addEventListener("change", persist);
+}
 
 function openAnswerDialog(question) {
   if (!answerDialog || !answerField) return;
@@ -94,7 +125,15 @@ function openAnswerDialog(question) {
       .join(" · ");
   }
   if (answerHint) answerHint.textContent = answerDialogStrategy.hint || "";
-  answerDialogStrategy.mount(answerField, { currentAnswer: question.answer || "" });
+  if (answerCaptured) {
+    const cap = answerDialogStrategy.capturedOptionsHint || "";
+    answerCaptured.hidden = !cap;
+    answerCaptured.textContent = cap;
+  }
+  const drafts = loadAnswerDrafts();
+  const initial = drafts[question.id] || question.answer || "";
+  answerDialogStrategy.mount(answerField, { currentAnswer: initial });
+  bindAnswerDraftAutosave(question.id, answerDialogStrategy);
   answerDialog.showModal();
   const focusable = answerField.querySelector("select, input");
   focusable?.focus();
@@ -123,6 +162,7 @@ answerForm?.addEventListener("submit", async (ev) => {
       body: JSON.stringify({ answer }),
     });
     answerDialog?.close();
+    clearAnswerDraft(id);
     answerDialogQuestionId = null;
     answerDialogStrategy = null;
     setStatus(status, "Respuesta guardada.");

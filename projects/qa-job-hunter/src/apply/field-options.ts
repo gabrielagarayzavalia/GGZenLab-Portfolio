@@ -7,6 +7,30 @@ import type { Locator, Page } from "playwright";
 
 export const EMPTY_OPTION_RE =
   /^(select an option|seleccion(a|á)|choose|eleg[ií]|pick\b|selecciona una opci)/i;
+const NOISE_OPTION_RE = /^(required|yes no)$/i;
+
+function normalizeOptionKey(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Filtra eco del label y ruido LinkedIn antes de guardar en Config. */
+export function cleanCapturedOptionsForLabel(label: string, raw: string[]): string[] {
+  const l = normalizeOptionKey(label);
+  return cleanCapturedOptions(raw).filter((o) => {
+    const n = normalizeOptionKey(o);
+    if (NOISE_OPTION_RE.test(n)) return false;
+    if (l && n === l) return false;
+    if (l && n.length > 80) return false;
+    if (l && l.includes(n) && n.length >= Math.min(24, l.length * 0.55)) return false;
+    if (l && n.includes(l) && l.length >= Math.min(24, n.length * 0.55)) return false;
+    return true;
+  });
+}
 
 export function cleanCapturedOptions(raw: string[]): string[] {
   return [...new Set(raw.map((o) => o.replace(/\s+/g, " ").trim()).filter(Boolean))]

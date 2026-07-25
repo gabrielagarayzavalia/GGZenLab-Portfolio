@@ -4,7 +4,7 @@
  */
 
 import type { CapturedField } from "./fill-answers.js";
-import { cleanCapturedOptions } from "./field-options.js";
+import { cleanCapturedOptionsForLabel } from "./field-options.js";
 import { classifyWidget } from "./unknown-field-strategy.js";
 import { cleanFieldLabel, type UnknownQuestionHit } from "./unknown-questions.js";
 import {
@@ -35,7 +35,9 @@ export function hitsFromEmptyCapturedFields(fields: CapturedField[]): UnknownQue
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const options = field.options?.length ? cleanCapturedOptions(field.options) : undefined;
+    const options = field.options?.length
+      ? cleanCapturedOptionsForLabel(label, field.options)
+      : undefined;
     hits.push({
       label,
       kind: classifyWidget(field),

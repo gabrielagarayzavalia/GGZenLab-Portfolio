@@ -1,4 +1,7 @@
-/** Agente: pipeline match → Excel — delega a qa-job-applied-list. */
-import { runAppliedListScript } from "../../src/campaign/applied-list.js";
+/** Agente: pipeline match → Excel + dual-write Mongo tracker (B-38-5). */
+import { runPipelineWithTrackerDualWrite } from "../../src/campaign/pipeline-with-tracker.js";
 
-runAppliedListScript("run-pipeline");
+runPipelineWithTrackerDualWrite().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

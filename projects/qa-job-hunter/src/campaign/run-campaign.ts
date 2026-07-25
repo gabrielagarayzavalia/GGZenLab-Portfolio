@@ -23,6 +23,7 @@
  *   NOTIFICATIONS_DISCOVERY  1 (default con gmail) | 0 para omitir post-fetch
  *   NOTIFICATIONS_LOOKBACK_HOURS  default 24 (max 336)
  *   NOTIFICATIONS_MAX_ITEMS       default 5 en campaña
+ *   TRACKER_DUAL_WRITE_PIPELINE   1 (default) | 0 omitir sync Mongo post-pipeline
  */
 
 import { spawnSync } from "child_process";
@@ -30,6 +31,7 @@ import { createInterface } from "readline/promises";
 import { stdin as input, stdout as output } from "process";
 import { exportQueueToExcel, importQueueFromExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
+import { runPipelineWithTrackerDualWrite } from "./pipeline-with-tracker.js";
 
 type Step = "fetch" | "pipeline" | "excel" | "apply" | "reconcile";
 type Discovery = "gmail" | "linkedin_search";
@@ -227,7 +229,7 @@ async function main(): Promise<void> {
       continue;
     }
     if (step === "pipeline") {
-      runAppliedListScript("run-pipeline");
+      await runPipelineWithTrackerDualWrite();
       continue;
     }
     if (step === "excel") {

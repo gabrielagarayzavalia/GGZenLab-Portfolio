@@ -7,7 +7,7 @@ Story: [US-JH-B23 #131](https://github.com/gabrielagarayzavalia/GGZenLab-Portfol
 | Agente | Rol | Entrada npm |
 |--------|-----|-------------|
 | `gmail-fetch` | Trae mails de empleo / labels Empleo | `npm run agent:gmail-fetch` |
-| `pipeline-match` | Clasifica, match skills → Excel | `npm run agent:pipeline` |
+| `pipeline-match` | Clasifica, match skills → Excel **+ Mongo tracker** (`TRACKER_DUAL_WRITE_PIPELINE`) | `npm run agent:pipeline` |
 | `excel-bridge` | Export cola + abrir `Empleos_Tracker.xlsx` (revisión) | `npm run agent:excel` |
 | `easy-apply` | Easy Apply LinkedIn (Playwright + sesión) — **canónico** | `npm run easy-apply` |
 | `gmail-reconcile` | Reorganiza labels Gmail según Excel | `npm run agent:gmail-reconcile` |

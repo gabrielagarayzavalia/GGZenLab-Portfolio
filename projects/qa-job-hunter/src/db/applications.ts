@@ -6,6 +6,11 @@ import type {
 } from "../types/tracker-application.js";
 import { applyTrackerPatch, type TrackerWriteSource } from "../tracker/estado-policy.js";
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
+import {
+  pipelineMatchToApplicationInput,
+  type PipelineMatchResult,
+} from "../tracker/pipeline-match.js";
+import { isProtectedEstado } from "../tracker/protected-estado.js";
 import { getDb } from "./client.js";
 
 export interface ApplicationDoc {
@@ -244,4 +249,83 @@ export async function upsertApplicationsBulk(
 export async function countApplications(): Promise<number> {
   const db = getDb();
   return db.collection("applications").countDocuments();
+}
+
+export interface PipelineUpsertResult {
+  inserted: number;
+  updated: number;
+  skipped: number;
+}
+
+function applicationFilter(fields: ReturnType<typeof buildDocFields>) {
+  if (fields.linkedinUrlNorm) return { linkedinUrlNorm: fields.linkedinUrlNorm };
+  if (fields.jobId) return { jobId: fields.jobId };
+  return { puesto: fields.puesto, empresa: fields.empresa };
+}
+
+/**
+ * Dual-write pipeline → Mongo (B-38-5).
+ * Espeja lógica excel/upsert: insert Pendiente; update solo si estado no protegido.
+ */
+export async function upsertPipelineMatches(
+  matches: PipelineMatchResult[]
+): Promise<PipelineUpsertResult> {
+  const db = getDb();
+  const col = db.collection<ApplicationDoc>("applications");
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  const now = new Date();
+
+  for (const match of matches) {
+    const input = pipelineMatchToApplicationInput(match);
+    const fields = buildDocFields(input, now);
+    const filter = applicationFilter(fields);
+
+    const existing = await col.findOne(filter);
+
+    if (!existing) {
+      await col.insertOne({
+        _id: new ObjectId(),
+        ...fields,
+        createdAt: now,
+        updatedAt: now,
+      });
+      inserted++;
+      continue;
+    }
+
+    if (isProtectedEstado(existing.estado)) {
+      skipped++;
+      continue;
+    }
+
+    const update: Partial<ApplicationDoc> = {
+      matchPercent: fields.matchPercent,
+      puesto: fields.puesto,
+      empresa: fields.empresa,
+      linkedinUrl: fields.linkedinUrl,
+      linkedinUrlNorm: fields.linkedinUrlNorm,
+      jobId: fields.jobId,
+      gmailId: fields.gmailId ?? existing.gmailId,
+      canal: fields.canal,
+      cvType: fields.cvType ?? existing.cvType,
+      applyType: fields.applyType ?? existing.applyType,
+      proximoPaso: existing.proximoPaso?.trim()
+        ? existing.proximoPaso
+        : fields.proximoPaso,
+      updatedAt: now,
+      updatedBy: "pipeline",
+    };
+
+    if (!existing.estado?.trim()) {
+      update.estado = "Pendiente";
+    }
+
+    const result = await col.updateOne({ _id: existing._id }, { $set: update });
+    if (result.modifiedCount > 0) updated++;
+    else skipped++;
+  }
+
+  return { inserted, updated, skipped };
 }

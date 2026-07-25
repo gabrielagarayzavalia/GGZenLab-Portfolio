@@ -2840,9 +2840,11 @@ async function selectResumeByConfigFilename(
   const row = root.getByText(new RegExp(token, "i")).first();
   if (await row.isVisible({ timeout: 500 }).catch(() => false)) {
     await row.click({ timeout: 3000, noWaitAfter: true }).catch(() => {});
-    console.log(`   ↳ Resume: post-upload click fila → ${originalName.slice(0, 80)}`);
-    await sleep(400);
-    return true;
+    await sleep(500);
+    if (await isConfigCvFilenameSelected(page, root, originalName)) {
+      console.log(`   ↳ Resume: post-upload click fila → ${originalName.slice(0, 80)}`);
+      return true;
+    }
   }
 
   return false;
@@ -2912,17 +2914,28 @@ async function isConfigCvFilenameSelected(
   filename: string
 ): Promise<boolean> {
   if (!filename.trim()) return false;
+
   const toggles = await listDocumentCardToggles(page);
   for (const t of toggles) {
     if (!t.selected) continue;
+    if (COVER_AS_RESUME_RE.test(t.title) || COVER_AS_RESUME_RE.test(t.aria)) continue;
     if (resumeFilenamesMatch(resumeFilenameFromToggle(t), filename)) return true;
   }
-  const selected = await selectedResumeLabel(page, root);
-  return selected
-    .split("|")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .some((part) => resumeFilenamesMatch(part, filename));
+
+  const deselect = root.locator('[aria-label^="Deselect resume" i]');
+  const dn = await deselect.count().catch(() => 0);
+  for (let i = 0; i < dn; i++) {
+    const aria = ((await deselect.nth(i).getAttribute("aria-label")) ?? "").trim();
+    if (resumeFilenamesMatch(resumeFilenameFromAria(aria), filename)) return true;
+  }
+
+  const token = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 80);
+  const radio = root.getByRole("radio", { name: new RegExp(token, "i") }).first();
+  if (await radio.isVisible({ timeout: 300 }).catch(() => false)) {
+    return radio.isChecked().catch(() => false);
+  }
+
+  return false;
 }
 
 async function trySelectForcedConfigCv(

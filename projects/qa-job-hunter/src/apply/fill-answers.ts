@@ -3808,6 +3808,8 @@ export async function detectSkipPending(page: Page): Promise<SkipPendingReason |
         // Hay mapa → no bloquear; fillSkillYearsOfExperience lo rellena
         continue;
       }
+      // Banco Config (#154): años sin skill mapa pero con respuesta guardada
+      if (matchConfigAnswer(blob) != null) continue;
       const label = blob
         .replace(/\s+/g, " ")
         .trim()

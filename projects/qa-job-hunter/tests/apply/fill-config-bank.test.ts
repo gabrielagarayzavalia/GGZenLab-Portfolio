@@ -93,6 +93,25 @@ test("patchQuestion guarda 0 como answered y en options", () => {
   assert.ok(matchConfigAnswer("Years with Apache"));
 });
 
+test("matchConfigAnswer: años sin skill mapa (Playwriting) con banco", () => {
+  upsertUnansweredFromHits(
+    [
+      {
+        label: "How many years of work experience do you have with Playwriting?",
+        kind: "text",
+        required: true,
+        value: "",
+      },
+    ],
+    { jobId: "job-play" }
+  );
+  const store = loadQuestionsConfig();
+  const q = store.questions.find((x) => /Playwriting/i.test(x.label));
+  assert.ok(q);
+  patchQuestion(q!.id, { answer: "4" });
+  assert.ok(matchConfigAnswer("How many years of work experience do you have with Playwriting?"));
+});
+
 test("pickConfigSelectOption: rango más próximo a años en banco", () => {
   const opts = [
     { text: "Select an option", value: "" },

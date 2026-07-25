@@ -467,7 +467,9 @@ async function loadPreguntas() {
     for (const q of items) preguntasById.set(q.id, q);
     list.innerHTML =
       items.map(rowPregunta).join("") ||
-      "<li class=\"config-row\">Sin preguntas aún. Aparecen solas en apply (#154) o agregá abajo.</li>";
+      (onlyUnanswered
+        ? "<li class=\"config-row\">Todas respondidas — desmarcá «Solo sin respuesta» para revisar.</li>"
+        : "<li class=\"config-row\">Sin preguntas aún. Aparecen solas en apply (#154) o agregá abajo.</li>");
     setStatus(status, "");
   } catch (err) {
     setStatus(status, err.message || "Error al cargar", true);

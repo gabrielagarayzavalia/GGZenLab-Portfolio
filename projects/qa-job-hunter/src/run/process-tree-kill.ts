@@ -11,7 +11,6 @@ export function killProcessTree(pid: number): { ok: boolean; detail: string } {
   if (process.platform === "win32") {
     const r = spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
       encoding: "utf-8",
-      shell: true,
     });
     const detail = [r.stdout, r.stderr].filter(Boolean).join("\n").trim();
     if (r.status === 0) return { ok: true, detail: detail || "taskkill OK" };

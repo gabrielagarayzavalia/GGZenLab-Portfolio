@@ -7,7 +7,6 @@ import { spawnSync } from "child_process";
 function countWindowsImage(imageName: string): number {
   const r = spawnSync("tasklist", ["/FI", `IMAGENAME eq ${imageName}`, "/FO", "CSV", "/NH"], {
     encoding: "utf-8",
-    shell: true,
   });
   const out = (r.stdout || "").trim();
   if (!out || /no tasks/i.test(out) || /no hay tareas/i.test(out)) return 0;

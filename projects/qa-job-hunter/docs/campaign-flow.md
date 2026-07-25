@@ -171,6 +171,24 @@ Unificación futura: [#289 B-39](https://github.com/gabrielagarayzavalia/GGZenLa
 - Revisión Excel **antes** de Easy Apply; reconcile al final.
 - Discovery default = Gmail; LinkedIn search no se dispara por cola vacía.
 
+### Verificación dual-write pipeline (B-38-5)
+
+```bash
+cd projects/qa-job-hunter
+docker compose up -d
+
+# Campaña: solo pipeline + sync Mongo (sin apply)
+TRACKER_DUAL_WRITE=1 npm run campaign -- --from=pipeline --skip-apply --yes
+
+# O sync manual si matched.json ya existe
+npm run tracker:sync-pipeline
+
+npm run test:tracker
+npm run dashboard   # http://localhost:3847/tracker
+```
+
+Re-ejecutar `tracker:sync-pipeline` no debe pisar filas con estado protegido (Enviada, Descartado, etc.) en Mongo.
+
 ## Backlog: LinkedIn search scrape
 
 Mejorar `src/2-scrape-jobs.ts` (filtros Easy Apply / geo / menos cards basura) en PR aparte — **fuera del camino Gmail** hasta review. Ver [docs/backlog-linkedin-search-scrape.md](./backlog-linkedin-search-scrape.md).

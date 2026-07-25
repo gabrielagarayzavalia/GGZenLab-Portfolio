@@ -28,6 +28,22 @@ test("planAutomationUpsert skip estado protegido", () => {
   assert.equal(plan.action, "skip");
 });
 
+test("planAutomationUpsert skip todos los estados protegidos Excel", () => {
+  for (const estado of [
+    "Enviada",
+    "Cerrado",
+    "Descartado",
+    "Duplicado",
+    "Stand-by",
+    "Borrador abierto",
+    "A-pendiente",
+    "A-realizado",
+  ]) {
+    const plan = planAutomationUpsert({ estado }, baseFields);
+    assert.equal(plan.action, "skip", `debe skip ${estado}`);
+  }
+});
+
 test("planAutomationUpsert update sin bajar estado", () => {
   const plan = planAutomationUpsert(
     { estado: "Pendiente", proximoPaso: "Revisar CV", notas: "Nota usuaria" },

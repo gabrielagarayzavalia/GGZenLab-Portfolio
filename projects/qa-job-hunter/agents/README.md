@@ -19,7 +19,7 @@ fetch → pipeline → Excel (revisión) → easy-apply → reconcile
 ```
 
 Easy Apply canónico = **este repo** (GGZenLab). Applied-list = Gmail / pipeline / reconcile.  
-El clone bajo QA-portfolio/`qa-job-hunter` no es el motor de apply.
+El clone `QA-portfolio/projects/qa-job-hunter` está **retirado** — no recrear.
 
 Excel canónico: Escritorio (`Empleos_Tracker.xlsx`).
 

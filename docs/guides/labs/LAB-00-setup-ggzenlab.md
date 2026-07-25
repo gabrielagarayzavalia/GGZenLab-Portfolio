@@ -43,9 +43,7 @@ git status
 
 **Por qué:** el agente y las rutas de `docker compose`, `docs/` y `projects/` asumen la raíz.
 
-Si tu sesión muestra `QA-portfolio\...`, está bien **si** el código vive en `GGZenLab-Portfolio` — usá siempre el path real para comandos.
-
-**Checkpoint ✋:** ¿abrís terminal en el monorepo y ves `projects\qa-job-hunter`?
+**Checkpoint ✋:** ¿abrís terminal en el monorepo y ves `projects\qa-job-hunter` y `projects\qa-job-applied-list`?
 
 ---
 

@@ -831,7 +831,7 @@ document.getElementById("cvs-list")?.addEventListener("click", async (ev) => {
   }
 
   if (btn.dataset.action === "edit") {
-    const label = prompt("Nota interna (opcional; el matching usa el nombre del archivo)", "");
+    const label = prompt("Comentario opcional (no elige el CV en LinkedIn)", "");
     if (label == null) return;
     const empleoProfileId = prompt("ID perfil empleo (vacío = ninguno)", "") ?? "";
     try {

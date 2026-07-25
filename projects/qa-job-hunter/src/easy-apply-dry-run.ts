@@ -408,17 +408,18 @@ async function tryAdvanceNext(
     return "discarded_exit";
   }
 
-  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos)
+  // Tras Next LinkedIn suele revelar el paso siguiente (campos nuevos aún vacíos).
+  // Con skipFill (contact precargado) el fill del paso nuevo corre en la siguiente vuelta del wizard.
   await scrollEasyApplyFormToEnd(page);
-  {
+  if (!opts.skipFill) {
     const fillAfter = await fillPseudoAnswers(page, {
       jobTitle,
       company,
       mode: "dry_run",
     });
     if (fillAfter.resumeOutcome === "timeout_dry") return "resume_timeout";
+    await fillExpectedCompensation(page);
   }
-  await fillExpectedCompensation(page);
 
   // Si el wizard avanzó, no bloquear por isNextDisabled / optional del paso nuevo (#245).
   let afterFp = await stepFingerprint(page);

@@ -113,7 +113,8 @@ async function pauseForManualExcel(yes: boolean): Promise<void> {
   const rl = createInterface({ input, output });
   try {
     await rl.question(
-      "\n⏸  Revisá Excel del Escritorio (pendientes / Notas). Enter cuando termines → Easy Apply… "
+      "\n⏸  Revisá Excel del Escritorio (pendientes / Notas). " +
+        "Cerrá Empleos_Tracker.xlsx y Enter → sigue la campaña… "
     );
   } finally {
     rl.close();
@@ -237,6 +238,12 @@ async function main(): Promise<void> {
         );
         continue;
       }
+      if (yes) {
+        console.log(
+          "\n⏭  --yes: sin abrir Excel aquí (evita lock). Se abre al final si export OK."
+        );
+        continue;
+      }
       openTrackerExcel();
       await pauseForManualExcel(yes);
       continue;
@@ -253,18 +260,22 @@ async function main(): Promise<void> {
     if (step === "reconcile") {
       runAppliedListScript("gmail:reconcile");
       try {
-        runAppliedListScript("excel:refresh");
+        runAppliedListScript("excel:refresh", ["--no-open"]);
       } catch {
         console.log("   (excel:refresh omitido o falló — reconcile ya corrió)");
       }
-      exportQueueToExcel();
-      if (dryRun) {
+      const exported = exportQueueToExcel();
+      if (exported) {
         openTrackerExcel();
         console.log(
-          "\n✅ Campaña dry-run lista: reconcile OK + Excel abierto al final (sin revisión mid)."
+          dryRun
+            ? "\n✅ Campaña dry-run lista: reconcile OK + Excel abierto al final."
+            : "\n✅ Campaña lista: labels Gmail reorganizados + Excel sincronizado."
         );
       } else {
-        console.log("\n✅ Campaña lista: labels Gmail reorganizados + Excel sincronizado.");
+        console.warn(
+          "\n⚠️  Reconcile OK pero export Excel falló. Cerrá Empleos_Tracker.xlsx y re-exportá."
+        );
       }
     }
   }

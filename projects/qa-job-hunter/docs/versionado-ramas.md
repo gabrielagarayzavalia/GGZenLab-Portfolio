@@ -6,7 +6,7 @@ Política vigente tras cierre de v1 y emparejamiento v2/main. Hermano: `qa-job-a
 
 - **Path:** `GGZenLab-Portfolio/projects/qa-job-hunter`
 - **Remote:** `gabrielagarayzavalia/GGZenLab-Portfolio`
-- **No usar** el clone `QA-portfolio/projects/qa-job-hunter` (repo standalone deprecado).
+- Hermano applied-list: `GGZenLab-Portfolio/projects/qa-job-applied-list` (mismo monorepo local).
 
 ## Líneas
 

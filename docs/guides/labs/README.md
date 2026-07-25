@@ -48,20 +48,15 @@ Labs del subsitio publicado: [`docs/guides/index.html`](../index.html) · Job Hu
 - Querés un **PR / review limpio** de un cambio ya terminado
 - Arrancás un **lab distinto** sin relación (ej. JMeter hoy, Playwright mañana en sesión fresca)
 
-### Workspace: `QA-portfolio` vs `GGZenLab-Portfolio`
+### Workspace
 
 | Concepto | Path |
 |----------|------|
-| **Repo real (código, git, docker)** | `C:\Users\gabri\projects\GGZenLab-Portfolio` |
-| **Subproyecto Job Hunter** | `...\GGZenLab-Portfolio\projects\qa-job-hunter` |
-| **Cursor a veces muestra** | `...\QA-portfolio\projects\qa-job-hunter` (alias / carpeta distinta) |
+| **Monorepo (Cursor, git, docker)** | `C:\Users\gabri\projects\GGZenLab-Portfolio` |
+| **Job Hunter hunter** | `...\projects\qa-job-hunter` |
+| **Job Hunter applied-list** | `...\projects\qa-job-applied-list` |
 
-**Recomendación:** abrí en Cursor la **raíz del monorepo** `GGZenLab-Portfolio`.  
-**Chat:** podés seguir en el mismo si pegás al inicio:
-
-> Repo real: `GGZenLab-Portfolio`. Lab: LAB-0X paso N. Modo instructor.
-
-No hace falta un chat distinto solo por el nombre del workspace — importa que el agente sepa el **path real** y el **lab activo**.
+**Recomendación:** abrí en Cursor la **raíz** `GGZenLab-Portfolio`. La carpeta `QA-portfolio` está **retirada** — no recrear.
 
 ### Regla práctica (1 línea)
 

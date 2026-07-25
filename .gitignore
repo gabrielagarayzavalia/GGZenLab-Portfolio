@@ -41,9 +41,9 @@ project.lock.json
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 
-# OS
-Thumbs.db
-Captura*
+# Nested repo (remote propio qa-job-applied-list)
+projects/qa-job-applied-list/
+
 
 # Screenshots placeholder keep dir
 !projects/**/report/screenshots/.gitkeep

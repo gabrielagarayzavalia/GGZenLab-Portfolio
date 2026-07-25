@@ -12,9 +12,8 @@
     "db:seed": "npx tsx src/db/seed.ts",
     "tracker:seed": "npx tsx src/db/seed-applications.ts",
     "tracker:sync-pipeline": "npx tsx src/tracker/pipeline-sync.ts",
-    "test:tracker": "npx tsx --test tests/tracker/estado-policy.test.ts tests/tracker/pipeline-sync.test.ts tests/tracker/automation-merge.test.ts tests/tracker/apply-queue-map.test.ts tests/tracker/apply-sync.test.ts",
-    "test:api": "npx tsx --test tests/api/jobs.test.ts",
-    "playwright:ide": "npx tsx src/open-playwright-ide.ts",
+    "test:tracker": "npx tsx --test tests/tracker/estado-policy.test.ts tests/tracker/pipeline-sync.test.ts tests/tracker/automation-merge.test.ts tests/tracker/apply-queue-map.test.ts tests/tracker/apply-sync.test.ts tests/tracker/schema-b38-13.test.ts tests/tracker/applications-b38-13.test.ts",
+    "test:api": "npx tsx --test tests/api/jobs.test.ts",    "playwright:ide": "npx tsx src/open-playwright-ide.ts",
     "easy-apply": "npx tsx src/easy-apply.ts",
     "easy-apply:dry-run": "npx tsx src/easy-apply-dry-run.ts",
     "apply:sync": "npx tsx agents/excel-bridge/sync-only.ts",
@@ -41,7 +40,12 @@
     "smoke:indeed": "npx tsx scripts/smoke-indeed.ts",
     "discover:indeed": "npx tsx scripts/discover-indeed.ts",
     "discover:notifications": "npx tsx scripts/discover-notifications.ts",
-    "test:notifications-merge": "npx tsx --test tests/discovery/notifications-applied-list.test.ts"
+    "test:notifications-merge": "npx tsx --test tests/discovery/notifications-applied-list.test.ts",
+    "qa:smoke-b38-13": "npx tsx scripts/qa/smoke-b38-13.ts",
+    "qa:dry-run-campaign": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
+    "qa:dry-run-campaign:full": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
+    "qa:dry-run-campaign:pipeline": "npx tsx scripts/qa/dry-run-campaign-gate.ts --pipeline-only",
+    "qa:regression-b38-13": "npx tsx scripts/qa/regression-b38-13.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

@@ -64,6 +64,12 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
 | Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
 
+## Botonera web workflow (B-40)
+
+| Fase | Backlog ID | Issue | Notas |
+|------|------------|-------|-------|
+| Spike workflow completo | B-40-0 | [#318](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/318) | no solo EA · tasks #319–#322 |
+
 **Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
 
 **Orden:** B-38 spike **antes** de implementar B-08 / B-14 como listas o stores aparte — tracking y home futura viven en el tracker web.

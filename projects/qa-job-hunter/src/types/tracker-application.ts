@@ -2,7 +2,12 @@
  * Spike B38 — Schema canónico Application (web-first tracker).
  * Fuente de verdad futura: colección Mongo `applications`.
  * Mapeo 1:1 con columnas Empleos_Tracker.xlsx + hoja meta.
+ *
+ * B-38-13 (#312): campos `analysis` y feedback dashboard son opcionales;
+ * documentos existentes sin ellos siguen siendo válidos.
  */
+
+import type { AnalysisSnapshot, TrackerFeedbackFields } from "./dashboard-match.js";
 
 /** Estados del tracker (columna Estado en Excel). Descartado: solo usuaria. */
 export type TrackerEstado =
@@ -19,7 +24,7 @@ export type TrackerEstado =
 export type TrackerCanal = "Easy Apply" | "Externo" | "—" | string;
 
 /** Documento canónico en Mongo `applications`. */
-export interface TrackerApplication {
+export interface TrackerApplication extends TrackerFeedbackFields {
   /** ObjectId string en API; jobId LinkedIn cuando existe. */
   id: string;
   jobId?: string;
@@ -41,6 +46,9 @@ export interface TrackerApplication {
 
   cvType?: string;
   applyType?: string;
+
+  /** Snapshot análisis (detalle dashboard sin jobs-result). B-38-13. */
+  analysis?: AnalysisSnapshot;
 
   createdAt: string;
   updatedAt: string;

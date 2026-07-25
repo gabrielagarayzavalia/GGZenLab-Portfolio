@@ -27,5 +27,13 @@ export async function ensureIndexes(): Promise<void> {
     },
     { key: { estado: 1, updatedAt: -1 }, name: "applications_estado_updatedAt" },
     { key: { empresa: 1, puesto: 1 }, name: "applications_empresa_puesto" },
+    {
+      key: { matchRejected: 1, estado: 1, matchPercent: -1 },
+      name: "applications_matchRejected_estado_match",
+    },
+    {
+      key: { inLatestAnalysis: 1, matchPercent: -1 },
+      name: "applications_inLatestAnalysis_match",
+    },
   ]);
 }

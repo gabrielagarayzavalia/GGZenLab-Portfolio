@@ -317,6 +317,12 @@ Detalle de tasks futuras: ampliar en próximo refinement cuando entren a sprint.
 
 **Nivel 3 (freemium gating):** pendiente go/no-go [#225 B-36](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/225) → decidir `planLimits` local vs servicio externo (ver strategy doc).
 
+### B-40 — Botonera web workflow completo
+
+**Spike:** [#318 US-JH-B40-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/318) · Epic [#125](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/125)  
+**Doc:** [`docs/spike-botonera-workflow-web.md`](docs/spike-botonera-workflow-web.md)  
+**Problema:** `/run` solo Easy Apply; falta campaña completa → dashboard manual. Relaciona [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301), [#18 B-14](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/18).
+
 ### B-17 — Página de estadísticas (borrador)
 
 **Outcome:** Veo en una sola pantalla cómo evoluciona el mercado y mi pipeline de postulaciones.

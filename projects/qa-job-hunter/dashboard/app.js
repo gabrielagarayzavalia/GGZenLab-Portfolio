@@ -111,9 +111,12 @@ function renderList() {
   const list = visibleJobs();
   els.jobList.innerHTML = "";
 
+  if (!els.listError.hidden) return;
+
   if (jobs.length === 0) {
     els.listEmpty.classList.remove("hidden");
     els.listEmpty.hidden = false;
+    els.listEmpty.querySelector("p").textContent = "No hay empleos con 70%+ de match.";
     return;
   }
 
@@ -353,6 +356,41 @@ function serverFilterFromUI() {
   return active.length === 1 ? active[0] : null;
 }
 
+function showListError(message) {
+  els.listError.textContent = message;
+  els.listError.classList.remove("hidden");
+  els.listError.hidden = false;
+  els.listEmpty.classList.add("hidden");
+  els.listEmpty.hidden = true;
+}
+
+function clearListError() {
+  els.listError.classList.add("hidden");
+  els.listError.hidden = true;
+}
+
+function syncFilterFlagsFromUI(changed) {
+  if (changed === els.showUnmarked && els.showUnmarked.checked) {
+    els.showApplied.checked = false;
+    els.showNotApplied.checked = false;
+    els.showNotSelected.checked = false;
+    els.showRejected.checked = false;
+  } else if (changed !== els.showUnmarked && changed.checked) {
+    els.showUnmarked.checked = false;
+  }
+
+  showRejected = els.showRejected.checked;
+  showApplied = els.showApplied.checked;
+  showNotApplied = els.showNotApplied.checked;
+  showNotSelected = els.showNotSelected.checked;
+  showUnmarked = els.showUnmarked.checked;
+
+  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked) {
+    showUnmarked = true;
+    els.showUnmarked.checked = true;
+  }
+}
+
 async function loadMatchJobs(filter) {
   const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
   const url = serverFilter
@@ -361,6 +399,11 @@ async function loadMatchJobs(filter) {
   const res = await fetch(url);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 404) {
+      throw new Error(
+        "API /api/dashboard/match-jobs no encontrada (404). Reiniciá el dashboard: npm run dashboard"
+      );
+    }
     const hint = err.hint ? ` — ${err.hint}` : "";
     throw new Error((err.error ?? `HTTP ${res.status}`) + hint);
   }
@@ -515,22 +558,10 @@ async function init() {
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
 
   async function onFilterChange(changed) {
-    if (changed === els.showUnmarked && els.showUnmarked.checked) {
-      els.showApplied.checked = false;
-      els.showNotApplied.checked = false;
-      els.showNotSelected.checked = false;
-      els.showRejected.checked = false;
-    } else if (changed !== els.showUnmarked && changed.checked) {
-      els.showUnmarked.checked = false;
-    }
-
-    showRejected = els.showRejected.checked;
-    showApplied = els.showApplied.checked;
-    showNotApplied = els.showNotApplied.checked;
-    showNotSelected = els.showNotSelected.checked;
-    showUnmarked = els.showUnmarked.checked;
+    syncFilterFlagsFromUI(changed);
 
     try {
+      clearListError();
       const result = await loadMatchJobs();
       const list = visibleJobs();
       if (selectedId && !list.some((j) => j.id === selectedId)) {
@@ -540,14 +571,13 @@ async function init() {
         renderHeader(result);
       }
     } catch (e) {
-      els.listError.textContent = String(e.message ?? e);
-      els.listError.classList.remove("hidden");
-      els.listError.hidden = false;
+      showListError(String(e.message ?? e));
     }
   }
 
   try {
     const result = await loadMatchJobs(null);
+    clearListError();
 
     renderHeader(result);
 
@@ -560,9 +590,7 @@ async function init() {
     const first = visibleJobs()[0] ?? jobs[0];
     selectJob(first.id);
   } catch (e) {
-    els.listError.textContent = String(e.message ?? e);
-    els.listError.classList.remove("hidden");
-    els.listError.hidden = false;
+    showListError(String(e.message ?? e));
   }
 }
 

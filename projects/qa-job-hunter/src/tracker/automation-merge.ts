@@ -1,8 +1,9 @@
+import type { AnalysisSnapshot } from "../types/dashboard-match.js";
 import type { TrackerEstado } from "../types/tracker-application.js";
 import { applyTrackerPatch } from "./estado-policy.js";
 import { isProtectedEstado } from "./protected-estado.js";
 
-/** Campos que el pipeline puede escribir en Mongo (sin `analysis` — eso es #312). */
+/** Campos que el pipeline puede escribir en Mongo. */
 export interface AutomationApplicationFields {
   matchPercent: number;
   puesto: string;
@@ -18,6 +19,8 @@ export interface AutomationApplicationFields {
   notas?: string;
   fechaAplicacion?: string;
   estado?: TrackerEstado;
+  analysis?: AnalysisSnapshot;
+  inLatestAnalysis?: boolean;
 }
 
 export interface AutomationExistingDoc {
@@ -95,6 +98,13 @@ export function planAutomationUpsert(
 
   if (!existing.notas?.trim() && merged.notas?.trim()) {
     update.notas = merged.notas;
+  }
+
+  if (merged.analysis) {
+    update.analysis = merged.analysis;
+  }
+  if (merged.inLatestAnalysis !== undefined) {
+    update.inLatestAnalysis = merged.inLatestAnalysis;
   }
 
   return { action: "update", update };

@@ -47,7 +47,9 @@
     "qa:dry-run-campaign": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
     "qa:dry-run-campaign:full": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
     "qa:dry-run-campaign:pipeline": "npx tsx scripts/qa/dry-run-campaign-gate.ts --pipeline-only",
-    "qa:regression-b38-13": "npx tsx scripts/qa/regression-b38-13.ts"
+    "qa:regression-b38-13": "npx tsx scripts/qa/regression-b38-13.ts",
+    "e2e:dashboard-full": "npx tsx scripts/e2e/campaign-dashboard-full.ts",
+    "export:jobs-result": "npx tsx src/tracker/export-jobs-result.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

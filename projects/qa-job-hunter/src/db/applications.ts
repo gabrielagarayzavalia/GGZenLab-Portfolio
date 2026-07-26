@@ -11,6 +11,7 @@ import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import {
   pipelineMatchToApplicationInput,
   type PipelineMatchResult,
+  type PipelineScrapedJob,
 } from "../tracker/pipeline-match.js";
 import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
 import type { QueueRow } from "../apply/apply-queue.js";
@@ -362,7 +363,8 @@ function applicationFilter(fields: ReturnType<typeof buildDocFields>) {
  * Usa planAutomationUpsert: insert Pendiente; update solo si estado no protegido.
  */
 export async function upsertPipelineMatches(
-  matches: PipelineMatchResult[]
+  matches: PipelineMatchResult[],
+  scrapedByJobId: Map<string, PipelineScrapedJob> = new Map()
 ): Promise<PipelineUpsertResult> {
   const db = getDb();
   const col = db.collection<ApplicationDoc>("applications");
@@ -370,9 +372,11 @@ export async function upsertPipelineMatches(
   let updated = 0;
   let skipped = 0;
   const now = new Date();
+  const analyzedAt = now.toISOString();
 
   for (const match of matches) {
-    const input = pipelineMatchToApplicationInput(match);
+    const scraped = scrapedByJobId.get(match.jobId);
+    const input = pipelineMatchToApplicationInput(match, scraped, analyzedAt);
     const fields = buildDocFields(input, now);
     const filter = applicationFilter(fields);
 

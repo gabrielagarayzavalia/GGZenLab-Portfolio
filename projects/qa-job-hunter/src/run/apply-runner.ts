@@ -37,6 +37,12 @@ export type ApplyRunState = {
 
 let activeChild: ChildProcess | null = null;
 let runCancelled = false;
+/** @internal — override spawn en tests (#353). */
+let spawnOverride: (() => ChildProcess) | null = null;
+
+export function __testSetSpawnOverride(fn: (() => ChildProcess) | null): void {
+  spawnOverride = fn;
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -139,7 +145,7 @@ export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
   }
 
   const logStream = fs.createWriteStream(APPLY_RUN_LOG_PATH, { flags: "a" });
-  const child = spawn("npm", ["run", script], {
+  const child = spawnOverride ? spawnOverride() : spawn("npm", ["run", script], {
     cwd: HUNTER_ROOT,
     env,
     shell: true,
@@ -164,6 +170,12 @@ export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
 
   child.on("close", (code) => {
     activeChild = null;
+    const persisted = loadApplyRunState();
+    if (persisted.status === "cancelled") {
+      logStream.end();
+      runCancelled = false;
+      return;
+    }
     const finished: ApplyRunState = {
       ...running,
       status: runCancelled ? "cancelled" : code === 0 ? "done" : "error",
@@ -178,6 +190,12 @@ export function startApplyRun(req: ApplyRunRequest): ApplyRunState {
 
   child.on("error", (err) => {
     activeChild = null;
+    const persisted = loadApplyRunState();
+    if (runCancelled || persisted.status === "cancelled") {
+      logStream.end();
+      runCancelled = false;
+      return;
+    }
     logStream.write(`\n[spawn error] ${err.message}\n`);
     saveApplyRunState({
       ...running,
@@ -221,6 +239,5 @@ export function cancelApplyRun(): ApplyRunState {
     logTail: tailLog(),
   };
   saveApplyRunState(finished);
-  runCancelled = false;
   return finished;
 }

@@ -928,7 +928,7 @@ async function main() {
 
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({
-    headless: resolvePlaywrightHeadless(false),
+    headless: resolvePlaywrightHeadless(),
     slowMo: 250,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });

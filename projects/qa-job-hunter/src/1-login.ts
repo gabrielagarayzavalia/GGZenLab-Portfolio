@@ -7,6 +7,7 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import fs from "fs";
 import path from "path";
 import { LINKEDIN_CREDENTIALS, SESSION_PATH } from "./config.js";
+import { resolvePlaywrightHeadless } from "./run/playwright-headless.js";
 
 const FEED_WAIT_MS = 600_000; // 10 min (2FA / checkpoint manual)
 
@@ -87,6 +88,9 @@ async function fillLoginForm(page: Page): Promise<void> {
 
 async function loginLinkedIn() {
   console.log("🔐 Iniciando login en LinkedIn...");
+  if (resolvePlaywrightHeadless()) {
+    console.log("   (headless — si LinkedIn pide 2FA: npm run login -- --headed)\n");
+  }
 
   const sessionDir = path.dirname(SESSION_PATH);
   if (!fs.existsSync(sessionDir)) {
@@ -94,7 +98,7 @@ async function loginLinkedIn() {
   }
 
   const browser = await chromium.launch({
-    headless: false,
+    headless: resolvePlaywrightHeadless(),
     slowMo: 400,
     args: [
       "--disable-extensions",

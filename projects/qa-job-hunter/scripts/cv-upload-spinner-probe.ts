@@ -28,6 +28,7 @@ import {
 } from "../src/apply/page-ready.js";
 import { getCvFilePath, listCvs } from "../src/config/cvs-store.js";
 import { resolveSessionPath } from "../src/apply/paths.js";
+import { resolvePlaywrightHeadless } from "../src/run/playwright-headless.js";
 import { sleep } from "../src/apply/timing.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -242,7 +243,7 @@ async function main(): Promise<void> {
   const stat = fs.statSync(pdfPath);
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({
-    headless: false,
+    headless: resolvePlaywrightHeadless(),
     slowMo: 0,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });

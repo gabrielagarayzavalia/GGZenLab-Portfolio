@@ -63,6 +63,39 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const notApplied = await json(`${BASE}/api/dashboard/application-status`, {
+    method: "POST",
+    headers: HEADERS,
+    body: JSON.stringify({
+      applicationId: job.applicationId,
+      jobId: job.id,
+      status: "not_applied",
+    }),
+  });
+  const standbyEstado = (notApplied.body.application as { estado?: string } | undefined)?.estado;
+  checks.push({
+    name: "POST application-status → Stand-by",
+    pass: notApplied.status === 200 && standbyEstado === "Stand-by",
+    detail: `HTTP ${notApplied.status} estado=${standbyEstado ?? "?"}`,
+  });
+
+  const unmarkStandby = await json(`${BASE}/api/dashboard/application-status`, {
+    method: "POST",
+    headers: HEADERS,
+    body: JSON.stringify({
+      applicationId: job.applicationId,
+      jobId: job.id,
+      status: null,
+    }),
+  });
+  const unmarkStandbyEstado = (unmarkStandby.body.application as { estado?: string } | undefined)
+    ?.estado;
+  checks.push({
+    name: "Desmarcar desde Stand-by → Pendiente",
+    pass: unmarkStandby.status === 200 && unmarkStandbyEstado === "Pendiente",
+    detail: `HTTP ${unmarkStandby.status} estado=${unmarkStandbyEstado ?? "?"}`,
+  });
+
   const applied = await json(`${BASE}/api/dashboard/application-status`, {
     method: "POST",
     headers: HEADERS,
@@ -88,10 +121,11 @@ async function main(): Promise<void> {
       status: null,
     }),
   });
+  const unmarkEstado = (unmark.body.application as { estado?: string } | undefined)?.estado;
   checks.push({
-    name: "Desmarcar bloquea Enviada (409)",
-    pass: unmark.status === 409,
-    detail: `HTTP ${unmark.status} ${String(unmark.body.error ?? "")}`.slice(0, 120),
+    name: "Desmarcar desde Enviada → Pendiente",
+    pass: unmark.status === 200 && unmarkEstado === "Pendiente",
+    detail: `HTTP ${unmark.status} estado=${unmarkEstado ?? "?"}`,
   });
 
   const reject = await json(`${BASE}/api/dashboard/reject-match`, {

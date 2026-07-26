@@ -129,6 +129,32 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .header-feedback strong { color: var(--accent); }
 .empty-state { padding: 2rem; text-align: center; color: var(--text-muted); }
 .empty-state.error { color: var(--danger); }
+.app-flash {
+  margin: 0;
+  padding: 0.65rem 1.25rem 0.65rem calc(1.25rem - 3px);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-left: 3px solid var(--border);
+}
+.app-flash--error {
+  background: color-mix(in srgb, var(--surface) 90%, var(--danger) 10%);
+  border-left-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: #e8b4b4;
+}
+.app-flash--warning {
+  background: color-mix(in srgb, var(--surface) 90%, var(--match-mid) 10%);
+  border-left-color: color-mix(in srgb, var(--match-mid) 50%, var(--border));
+  color: #e0c88a;
+}
+.app-flash--success {
+  background: color-mix(in srgb, var(--surface) 90%, var(--match-high) 10%);
+  border-left-color: color-mix(in srgb, var(--match-high) 45%, var(--border));
+  color: #9fd4b0;
+}
+.app-flash.hidden { display: none; }
 .empty-state .hint { font-size: 0.85rem; margin-top: 0.5rem; }
 .empty-state code { background: var(--surface); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
 .detail__header { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }

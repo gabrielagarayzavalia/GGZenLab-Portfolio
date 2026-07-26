@@ -1,5 +1,4 @@
 import type { ApplicationStatus } from "../application-status.js";
-import { isProtectedEstado } from "../tracker/protected-estado.js";
 import type { TrackerApplication, TrackerApplicationPatch } from "../types/tracker-application.js";
 
 export type DashboardApplicationPatch = TrackerApplicationPatch & {
@@ -29,12 +28,7 @@ export function patchForApplicationStatus(
   existing: TrackerApplication
 ): { patch: DashboardApplicationPatch; error?: string } {
   if (status === null) {
-    if (isProtectedEstado(existing.estado)) {
-      return {
-        patch: {},
-        error: `Estado protegido (${existing.estado}); no se puede desmarcar desde el dashboard.`,
-      };
-    }
+    // Acción explícita usuaria — mismo criterio que PATCH en /tracker (source=user).
     return {
       patch: {
         estado: "Pendiente",

@@ -90,6 +90,7 @@ function parseDashboardMatchFilter(value: string | null): DashboardMatchFilter |
   return DASHBOARD_MATCH_FILTERS.has(filter) ? filter : undefined;
 }
 
+const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",

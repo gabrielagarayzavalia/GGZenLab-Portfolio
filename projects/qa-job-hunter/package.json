@@ -30,7 +30,7 @@
     "test:apply-notes": "npx tsx --test tests/apply/failed-fields-notes.test.ts",
     "test:unknown-strategy": "npx tsx --test tests/apply/unknown-field-strategy.test.ts",
     "test:config-bank": "npx tsx --test tests/apply/fill-config-bank.test.ts tests/config/questions-store.test.ts",
-    "test:run-apply": "npx tsx --test tests/run/apply-runner.test.ts tests/run/apply-cancel.test.ts tests/run/apply-cancel-close-race.test.ts",
+    "test:run-apply": "npx tsx --test --test-concurrency=1 tests/run/apply-runner.test.ts tests/run/apply-cancel.test.ts tests/run/apply-cancel-close-race.test.ts",
     "qa:process-audit": "npx tsx scripts/qa/process-audit.ts",
     "test:timing": "npx tsx --test tests/apply/timing.test.ts",
     "test:prefill-fast": "npx tsx --test tests/apply/prefill-fast-path.test.ts",

@@ -2,6 +2,12 @@
 
 Casos rápidos para validar que el dashboard y el tracker responden. No reemplazan regression/E2E.
 
+## PR #353 — fix cancel /run race
+
+| ID | Caso | Comando / acción | Esperado |
+|----|------|------------------|----------|
+| SMK-353-01 | Cancel + close race (estado `cancelled` persiste) | `npm run test:run-apply` | 5/5 pass (serial: comparten `output/run/apply-run.json`) |
+
 ## PR #352 — rescue bf8ad01 (#295 #296 #299)
 
 | ID | Caso | Comando / acción | Esperado |

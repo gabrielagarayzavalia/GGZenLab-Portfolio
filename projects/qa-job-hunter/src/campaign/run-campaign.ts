@@ -33,6 +33,11 @@ import { stdin as input, stdout as output } from "process";
 import { exportQueueToExcel, importQueueFromExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
 import { runPipelineWithTrackerDualWrite } from "./pipeline-with-tracker.js";
+import {
+  isDesktopExcelEnabled,
+  isExcelOpenAtEndEnabled,
+  TRACKER_WEB_URL,
+} from "../tracker/excel-legacy.js";
 
 type Step = "fetch" | "pipeline" | "excel" | "apply" | "reconcile";
 type Discovery = "gmail" | "linkedin_search";
@@ -199,7 +204,9 @@ async function main(): Promise<void> {
   console.log(
     dryRun
       ? "   orden: fetch → pipeline → export → dry-run apply → reconcile → Excel\n"
-      : "   orden: fetch → pipeline → Excel (revisión) → apply → reconcile\n"
+      : isDesktopExcelEnabled()
+        ? "   orden: fetch → pipeline → Excel (revisión) → apply → reconcile\n"
+        : "   orden: fetch → pipeline → tracker web → apply → reconcile (Excel legacy off)\n"
   );
 
   if (discovery === "linkedin_search") {
@@ -247,8 +254,15 @@ async function main(): Promise<void> {
         );
         continue;
       }
-      openTrackerExcel();
-      await pauseForManualExcel(yes);
+      if (isDesktopExcelEnabled()) {
+        openTrackerExcel();
+        await pauseForManualExcel(yes);
+      } else {
+        console.log(
+          `\n📋 Tracker web (canónico): ${TRACKER_WEB_URL}\n` +
+            "   Excel mid-campaña omitido (OPEN_DESKTOP_EXCEL=1 para legacy)."
+        );
+      }
       continue;
     }
     if (step === "apply") {
@@ -268,12 +282,18 @@ async function main(): Promise<void> {
         console.log("   (excel:refresh omitido o falló — reconcile ya corrió)");
       }
       const exported = exportQueueToExcel();
-      if (exported) {
+      if (exported && isExcelOpenAtEndEnabled()) {
         openTrackerExcel();
         console.log(
           dryRun
             ? "\n✅ Campaña dry-run lista: reconcile OK + Excel abierto al final."
             : "\n✅ Campaña lista: labels Gmail reorganizados + Excel sincronizado."
+        );
+      } else if (exported) {
+        console.log(
+          dryRun
+            ? `\n✅ Campaña dry-run lista: reconcile OK. Tracker: ${TRACKER_WEB_URL}`
+            : `\n✅ Campaña lista: reconcile OK. Tracker: ${TRACKER_WEB_URL} (OPEN_EXCEL=1 para abrir Excel).`
         );
       } else {
         console.warn(

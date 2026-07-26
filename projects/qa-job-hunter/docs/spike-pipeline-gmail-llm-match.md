@@ -94,9 +94,9 @@ Regex primero; Ollama solo si `65 ≤ match < 85` o flags `industry_review`.
 **Pros:** costo/latencia acotados.  
 **Contras:** dos scores que explicar en UI.
 
-### D — Mantener regex; mejorar granularidad sin LLM
+### D — Mejorar regex sin LLM (**#347 primero**)
 
-Afinar `fitModifier`, más requisitos, techo 95%, decimales — **no resuelve** summary/JD semántico.
+Afinar `fitModifier`, gaps geo/gig/hardware, caps — **implementación en [#347](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/347)** antes del spike. Mejoras regex #347 merged — baseline para spike #329. #329 compara Ollama contra ese baseline. No resuelve summary semántico profundo, pero reduce falsos 100%.
 
 ---
 

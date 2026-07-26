@@ -11,6 +11,7 @@ import {
   dashboardJobId,
   isVisibleMatchApplication,
   matchesDashboardFilter,
+  resolveJobFallback,
 } from "../../src/dashboard/match-jobs.js";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
@@ -128,6 +129,21 @@ test("applicationToJobMatch fallback jobs Mongo si falta analysis", () => {
   assert.equal(job.description, "Full JD from jobs collection");
   assert.deepEqual(job.matchedSkills, ["Playwright"]);
   assert.equal(job.summary, "Strong match from Mongo jobs");
+});
+
+test("resolveJobFallback une por LinkedIn jobId aunque jobs.id sea distinto", () => {
+  const mongoJob: JobMatch = {
+    ...jobFallback,
+    id: "U2VuaW9yIEF1",
+    url: "https://www.linkedin.com/jobs/search/?currentJobId=4429844674",
+  };
+  const fallback = resolveJobFallback(
+    app({ jobId: "4429844674", analysis: undefined }),
+    new Map(),
+    new Map(),
+    new Map([["4429844674", mongoJob]])
+  );
+  assert.equal(fallback?.description, "Full JD from jobs collection");
 });
 
 test("applicationToJobMatch stub histórico sin analysis ni fallback", () => {

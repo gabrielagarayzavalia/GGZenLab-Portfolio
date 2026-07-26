@@ -6,9 +6,10 @@
 import type { MatchRejection } from "../feedback.js";
 import type { ApplicationStatus, ApplicationStatusEntry } from "../application-status.js";
 import { listDashboardMatchApplications } from "../db/applications.js";
-import { findJobsByIds, findJobsByUrls } from "../db/jobs.js";
+import { findJobsByIds, findJobsByLinkedInIds, findJobsByUrls } from "../db/jobs.js";
 import { getLatestAnalysisRun } from "../db/runs.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
+import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import type { JobMatch } from "../types.js";
 import { normalizeFeedbackFields } from "../types/dashboard-match.js";
 import type { TrackerApplication, TrackerEstado } from "../types/tracker-application.js";
@@ -236,12 +237,32 @@ export function buildApplicationStatusEnvelope(
   };
 }
 
+export function resolveJobFallback(
+  app: TrackerApplication,
+  jobsByUrl: Map<string, JobMatch>,
+  jobsById: Map<string, JobMatch>,
+  jobsByLinkedInId: Map<string, JobMatch>
+): JobMatch | undefined {
+  const id = dashboardJobId(app);
+  const normUrl = app.linkedinUrl ? normalizeLinkedInUrl(app.linkedinUrl) : "";
+  const urlLinkedInId = extractJobId(app.linkedinUrl ?? "");
+
+  return (
+    jobsById.get(id) ??
+    jobsByLinkedInId.get(id) ??
+    (app.jobId ? jobsByLinkedInId.get(app.jobId) ?? jobsById.get(app.jobId) : undefined) ??
+    (normUrl ? jobsByUrl.get(normUrl) : undefined) ??
+    (urlLinkedInId ? jobsByLinkedInId.get(urlLinkedInId) : undefined)
+  );
+}
+
 export function composeMatchJobsFromApplications(
   apps: TrackerApplication[],
   jobsByUrl: Map<string, JobMatch>,
   jobsById: Map<string, JobMatch>,
   meta: { scrapedAt: string; totalAnalyzed: number },
-  options: ComposeMatchJobsOptions = {}
+  options: ComposeMatchJobsOptions = {},
+  jobsByLinkedInId: Map<string, JobMatch> = new Map()
 ): MatchJobsResponse {
   const visible = apps.filter(isVisibleMatchApplication);
   const filtered = options.filter
@@ -249,11 +270,7 @@ export function composeMatchJobsFromApplications(
     : visible;
 
   const matchedJobs = filtered.map((app) => {
-    const id = dashboardJobId(app);
-    const fallback =
-      jobsById.get(id) ??
-      (app.linkedinUrl ? jobsByUrl.get(app.linkedinUrl) : undefined) ??
-      (app.jobId ? jobsById.get(app.jobId) : undefined);
+    const fallback = resolveJobFallback(app, jobsByUrl, jobsById, jobsByLinkedInId);
     return applicationToJobMatch(app, fallback);
   });
 
@@ -310,12 +327,18 @@ export async function composeMatchJobs(
   const apps = await listDashboardMatchApplications();
   const urls = [...new Set(apps.map((a) => a.linkedinUrl).filter(Boolean))];
   const ids = [...new Set(apps.map(dashboardJobId))];
+  const linkedInIds = [
+    ...new Set(
+      apps.flatMap((a) => [dashboardJobId(a), a.jobId, extractJobId(a.linkedinUrl)].filter(Boolean))
+    ),
+  ] as string[];
 
-  const [jobsByUrl, jobsById, runMeta] = await Promise.all([
+  const [jobsByUrl, jobsById, jobsByLinkedInId, runMeta] = await Promise.all([
     findJobsByUrls(urls),
     findJobsByIds(ids),
+    findJobsByLinkedInIds(linkedInIds),
     resolveRunMeta(apps),
   ]);
 
-  return composeMatchJobsFromApplications(apps, jobsByUrl, jobsById, runMeta, options);
+  return composeMatchJobsFromApplications(apps, jobsByUrl, jobsById, runMeta, options, jobsByLinkedInId);
 }

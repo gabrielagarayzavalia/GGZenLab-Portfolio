@@ -6,11 +6,14 @@ import { upsertPipelineMatches, type PipelineUpsertResult } from "../db/applicat
 import { ensureIndexes } from "../db/indexes.js";
 import {
   type PipelineMatchResult,
+  type PipelineScrapedJob,
+  pipelineMatchToApplicationInput,
   shouldSyncPipelineMatch,
 } from "./pipeline-match.js";
 
 const MATCHED_FILE = path.join("data", "matched.json");
 const ALL_MATCHES_FILE = path.join("data", "all-matches.json");
+const SCRAPED_ALL_FILE = path.join("data", "scraped", "_all.json");
 
 /**
  * Dual-write pipeline → Mongo tracker (B-38-5).
@@ -49,6 +52,17 @@ export function loadPipelineMatches(appliedListRoot = resolveAppliedListRoot()):
   return all.filter(shouldSyncPipelineMatch);
 }
 
+/** Mapa jobId → scrape con JD para snapshot analysis. */
+export function loadPipelineScrapedJobs(
+  appliedListRoot = resolveAppliedListRoot()
+): Map<string, PipelineScrapedJob> {
+  const scrapedPath = path.join(appliedListRoot, SCRAPED_ALL_FILE);
+  if (!fs.existsSync(scrapedPath)) return new Map();
+
+  const rows = JSON.parse(fs.readFileSync(scrapedPath, "utf-8")) as PipelineScrapedJob[];
+  return new Map(rows.map((row) => [row.jobId, row]));
+}
+
 export async function syncPipelineToTracker(
   appliedListRoot = resolveAppliedListRoot()
 ): Promise<PipelineUpsertResult | null> {
@@ -58,6 +72,7 @@ export async function syncPipelineToTracker(
   }
 
   const matches = loadPipelineMatches(appliedListRoot);
+  const scrapedByJobId = loadPipelineScrapedJobs(appliedListRoot);
   if (!matches.length) {
     console.log("📋 Tracker dual-write: 0 matches para sync (filtro MIN_MATCH / skip).");
     return { inserted: 0, updated: 0, skipped: 0 };
@@ -66,7 +81,7 @@ export async function syncPipelineToTracker(
   await connect();
   await ensureIndexes();
   try {
-    const result = await upsertPipelineMatches(matches);
+    const result = await upsertPipelineMatches(matches, scrapedByJobId);
     console.log(
       `📋 Tracker Mongo: +${result.inserted} nuevas | ${result.updated} actualizadas | ${result.skipped} omitidas (estado protegido)`
     );

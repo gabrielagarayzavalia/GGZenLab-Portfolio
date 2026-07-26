@@ -180,7 +180,9 @@ Implementado en `src/dashboard/match-jobs.ts` + route en `serve-dashboard.ts`.
 
 Verificación: `npm run test:match-jobs` · `curl http://localhost:3847/api/dashboard/match-jobs`
 
-**Siguiente:** [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) wire `app.js` · **NO** deprecar `/api/results` aún (#316/#300).
+**Siguiente:** [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) writes dashboard → tracker · **NO** deprecar `/api/results` aún (#316/#300).
+
+**#313 wired:** `dashboard/app.js` consume `GET /api/dashboard/match-jobs` (sin `mergeJobsWithStoredState` en cliente).
 
 ---
 

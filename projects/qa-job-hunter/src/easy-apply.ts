@@ -5,6 +5,7 @@
 
 import { chromium } from "playwright";
 import { registerPlaywrightShutdown } from "./run/playwright-shutdown.js";
+import { resolvePlaywrightHeadless } from "./run/playwright-headless.js";
 import fs from "fs";
 import path from "path";
 import {
@@ -927,7 +928,7 @@ async function main() {
 
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({
-    headless: false,
+    headless: resolvePlaywrightHeadless(),
     slowMo: 250,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });

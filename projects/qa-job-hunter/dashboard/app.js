@@ -321,7 +321,7 @@ async function saveApplicationStatus(job, status) {
       }),
     });
     if (!res.ok) throw new Error("No se pudo guardar el estado");
-    applyApplicationStatus(await res.json());
+    await loadMatchJobs();
     if (status && !isVisibleInList(job.id)) {
       focusNextVisibleJob(job.id);
     } else {
@@ -339,67 +339,42 @@ function applyApplicationStatus(store) {
   applicationStatus = new Map(store.entries.map((e) => [e.jobId, e.status]));
 }
 
-function stubJobFromRejection(rejection) {
-  const reason = rejection.reason?.trim();
-  return {
-    id: rejection.jobId,
-    title: rejection.title,
-    company: rejection.company,
-    location: "—",
-    modality: "—",
-    datePosted: "—",
-    url: "",
-    description: reason
-      ? `Empleo de una corrida anterior. Motivo del rechazo: ${reason}`
-      : "Empleo de una corrida anterior marcado como match incorrecto.",
-    searchTerm: rejection.searchTerm ?? "—",
-    matchPercent: rejection.matchPercent ?? 0,
-    matchedSkills: [],
-    gaps: [],
-    cvSuggestions: [],
-    summary: "Ya no está en el último análisis; visible por feedback guardado.",
-  };
+/**
+ * Filtros: un solo checkbox activo → ?filter= en el server; varios → lista completa
+ * y visibilidad con isVisibleInList() en cliente.
+ */
+function serverFilterFromUI() {
+  const active = [];
+  if (showRejected) active.push("rejected");
+  if (showApplied) active.push("applied");
+  if (showNotApplied) active.push("not_applied");
+  if (showNotSelected) active.push("not_selected");
+  if (showUnmarked) active.push("unmarked");
+  return active.length === 1 ? active[0] : null;
 }
 
-function stubJobFromApplicationEntry(entry, rejectionById) {
-  const rejection = rejectionById.get(entry.jobId);
-  return {
-    id: entry.jobId,
-    title: entry.title,
-    company: entry.company,
-    location: "—",
-    modality: "—",
-    datePosted: "—",
-    url: "",
-    description: "Empleo de una corrida anterior con estado de postulación guardado.",
-    searchTerm: rejection?.searchTerm ?? "—",
-    matchPercent: rejection?.matchPercent ?? 0,
-    matchedSkills: [],
-    gaps: [],
-    cvSuggestions: [],
-    summary: "Ya no está en el último análisis; visible por el estado de postulación guardado.",
-  };
-}
-
-/** Incluye empleos históricos con feedback o postulación aunque no estén en el último análisis. */
-function mergeJobsWithStoredState(matchedJobs, feedback, applicationStatusStore) {
-  const byId = new Map(matchedJobs.map((j) => [j.id, j]));
-  const rejections = feedback?.rejections ?? [];
-  const rejectionById = new Map(rejections.map((r) => [r.jobId, r]));
-
-  for (const rejection of rejections) {
-    if (!byId.has(rejection.jobId)) {
-      byId.set(rejection.jobId, stubJobFromRejection(rejection));
-    }
+async function loadMatchJobs(filter) {
+  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
+  const url = serverFilter
+    ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
+    : "/api/dashboard/match-jobs";
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const hint = err.hint ? ` — ${err.hint}` : "";
+    throw new Error((err.error ?? `HTTP ${res.status}`) + hint);
   }
-
-  for (const entry of applicationStatusStore?.entries ?? []) {
-    if (!byId.has(entry.jobId)) {
-      byId.set(entry.jobId, stubJobFromApplicationEntry(entry, rejectionById));
-    }
+  const result = await res.json();
+  window.__scrapedAt = result.scrapedAt;
+  window.__totalAnalyzed = result.totalAnalyzed;
+  if (result.feedback) {
+    applyFeedback({ rejections: result.feedback.rejections, updatedAt: "" });
   }
-
-  return [...byId.values()];
+  if (result.applicationStatus) {
+    applyApplicationStatus(result.applicationStatus);
+  }
+  jobs = result.matchedJobs ?? result.jobs ?? [];
+  return result;
 }
 
 function countJobsByStatus(status) {
@@ -485,7 +460,7 @@ async function rejectMatch(job) {
       }),
     });
     if (!res.ok) throw new Error("No se pudo guardar el feedback");
-    applyFeedback(await res.json());
+    await loadMatchJobs();
     focusNextVisibleJob(job.id);
   } catch (e) {
     alert(String(e.message ?? e));
@@ -496,7 +471,7 @@ async function undoReject(job) {
   try {
     const res = await fetch(`/api/feedback/reject/${encodeURIComponent(job.id)}`, { method: "DELETE" });
     if (!res.ok) throw new Error("No se pudo deshacer");
-    applyFeedback(await res.json());
+    await loadMatchJobs();
     renderList();
     renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
     renderDetail(job);
@@ -539,7 +514,7 @@ async function init() {
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
 
-  function onFilterChange(changed) {
+  async function onFilterChange(changed) {
     if (changed === els.showUnmarked && els.showUnmarked.checked) {
       els.showApplied.checked = false;
       els.showNotApplied.checked = false;
@@ -554,38 +529,25 @@ async function init() {
     showNotApplied = els.showNotApplied.checked;
     showNotSelected = els.showNotSelected.checked;
     showUnmarked = els.showUnmarked.checked;
-    const list = visibleJobs();
-    if (selectedId && !list.some((j) => j.id === selectedId)) {
-      focusNextVisibleJob(selectedId);
-    } else {
-      renderList();
-      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+
+    try {
+      const result = await loadMatchJobs();
+      const list = visibleJobs();
+      if (selectedId && !list.some((j) => j.id === selectedId)) {
+        focusNextVisibleJob(selectedId);
+      } else {
+        renderList();
+        renderHeader(result);
+      }
+    } catch (e) {
+      els.listError.textContent = String(e.message ?? e);
+      els.listError.classList.remove("hidden");
+      els.listError.hidden = false;
     }
   }
 
   try {
-    const res = await fetch("/api/results");
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error ?? `HTTP ${res.status}`);
-    }
-
-    const result = await res.json();
-    window.__scrapedAt = result.scrapedAt;
-    window.__totalAnalyzed = result.totalAnalyzed;
-
-    if (result.feedback) {
-      applyFeedback({ rejections: result.feedback.rejections, updatedAt: "" });
-    }
-    if (result.applicationStatus) {
-      applyApplicationStatus(result.applicationStatus);
-    }
-
-    jobs = mergeJobsWithStoredState(
-      result.matchedJobs ?? [],
-      result.feedback,
-      result.applicationStatus
-    );
+    const result = await loadMatchJobs(null);
 
     renderHeader(result);
 

@@ -41,13 +41,14 @@ test("patchForApplicationStatus not_selected → Cerrado", () => {
   assert.match(patch.proximoPaso ?? "", /No seleccionada\/o/);
 });
 
-test("patchForApplicationStatus desmarcar bloquea estado protegido", () => {
-  const { error } = patchForApplicationStatus(null, app({ estado: "Enviada" }));
-  assert.ok(error?.includes("protegido"));
+test("patchForApplicationStatus desmarcar desde Enviada → Pendiente", () => {
+  const { patch, error } = patchForApplicationStatus(null, app({ estado: "Enviada" }));
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "Pendiente");
 });
 
-test("patchForApplicationStatus desmarcar → Pendiente", () => {
-  const { patch, error } = patchForApplicationStatus(null, app({ estado: "Pendiente" }));
+test("patchForApplicationStatus desmarcar desde Stand-by → Pendiente", () => {
+  const { patch, error } = patchForApplicationStatus(null, app({ estado: "Stand-by" }));
   assert.equal(error, undefined);
   assert.equal(patch.estado, "Pendiente");
 });

@@ -88,10 +88,11 @@ async function main(): Promise<void> {
       status: null,
     }),
   });
+  const unmarkEstado = (unmark.body.application as { estado?: string } | undefined)?.estado;
   checks.push({
-    name: "Desmarcar bloquea Enviada (409)",
-    pass: unmark.status === 409,
-    detail: `HTTP ${unmark.status} ${String(unmark.body.error ?? "")}`.slice(0, 120),
+    name: "Desmarcar desde Enviada → Pendiente",
+    pass: unmark.status === 200 && unmarkEstado === "Pendiente",
+    detail: `HTTP ${unmark.status} estado=${unmarkEstado ?? "?"}`,
   });
 
   const reject = await json(`${BASE}/api/dashboard/reject-match`, {

@@ -35,6 +35,32 @@ const els = {
   listError: document.getElementById("list-error"),
 };
 
+let appFlashTimer = null;
+
+/** @param {"error"|"warning"|"success"} kind */
+function showAppFlash(message, kind = "error") {
+  const el = document.getElementById("app-flash");
+  if (!el || !message) return;
+  clearTimeout(appFlashTimer);
+  el.className = `app-flash app-flash--${kind}`;
+  el.hidden = false;
+  el.classList.remove("hidden");
+  el.textContent = message;
+  appFlashTimer = setTimeout(() => clearAppFlash(), kind === "error" ? 12_000 : 6_000);
+}
+
+function clearAppFlash() {
+  const el = document.getElementById("app-flash");
+  if (!el) return;
+  el.textContent = "";
+  el.hidden = true;
+  el.classList.add("hidden");
+}
+
+function showApiWarnings(warnings) {
+  if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
+}
+
 function matchClass(pct) {
   if (pct >= 85) return "match-badge__pct--high";
   if (pct >= 75) return "match-badge__pct--mid";
@@ -345,7 +371,7 @@ function wireApplicationChecks(job) {
 async function saveApplicationStatus(job, status) {
   const applicationId = job.applicationId;
   if (!applicationId) {
-    alert("Sin applicationId en tracker — no se puede guardar el estado.");
+    showAppFlash("Sin applicationId en tracker — no se puede guardar el estado.");
     return;
   }
   try {
@@ -360,6 +386,7 @@ async function saveApplicationStatus(job, status) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
+    showApiWarnings(data.warnings);
     await loadMatchJobs();
     if (status && !isVisibleInList(job.id)) {
       focusNextVisibleJob(job.id);
@@ -369,8 +396,9 @@ async function saveApplicationStatus(job, status) {
       renderDetail(job);
     }
   } catch (e) {
-    alert(String(e.message ?? e));
-    renderDetail(job);
+    showAppFlash(String(e.message ?? e));
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    renderDetail(refreshed);
   }
 }
 
@@ -536,10 +564,11 @@ async function rejectMatch(job) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
+    showApiWarnings(data.warnings);
     await loadMatchJobs();
     focusNextVisibleJob(job.id);
   } catch (e) {
-    alert(String(e.message ?? e));
+    showAppFlash(String(e.message ?? e));
   }
 }
 
@@ -551,12 +580,14 @@ async function undoReject(job) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
+    showApiWarnings(data.warnings);
     await loadMatchJobs();
     renderList();
     renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
-    renderDetail(job);
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    renderDetail(refreshed);
   } catch (e) {
-    alert(String(e.message ?? e));
+    showAppFlash(String(e.message ?? e));
   }
 }
 

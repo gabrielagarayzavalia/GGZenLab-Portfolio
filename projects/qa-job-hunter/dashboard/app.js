@@ -3,6 +3,7 @@ const TRACKER_USER_HEADERS = {
   "Content-Type": "application/json",
   "X-Tracker-User": "1",
 };
+let jobs = [];
 let selectedId = null;
 let sortOrder = "desc";
 let showRejected = false;

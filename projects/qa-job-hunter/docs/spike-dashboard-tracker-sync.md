@@ -109,7 +109,7 @@ Dual-write ([#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/is
 | **B-38-12** | API `GET /api/dashboard/match-jobs` (join tracker + analysis) | High | #297 (datos) | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) |
 | **B-38-13** | Extender schema `applications`: `analysis`, `matchRejected`, flags | High | — | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) **implementado** — tipos + Mongo + índices |
 | **B-38-14** | Wire `dashboard/app.js` → nueva API (lista + detalle) | High | #311 | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) |
-| **B-38-15** | Writes dashboard → tracker (reemplazar application-status) | High | #312 | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) |
+| **B-38-15** | Writes dashboard → tracker (reemplazar application-status) | High | #312 | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) — en rama `feature/b38-15-dashboard-writes` |
 | **B-38-16** | Sync `match-feedback` ↔ `matchRejected` + analyze lee Mongo | Medium | #314 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) |
 | **B-38-17** | Shim deprecación `/api/results` → match-jobs | Low | #313 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) |
 

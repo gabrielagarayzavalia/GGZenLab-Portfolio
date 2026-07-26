@@ -23,6 +23,8 @@ export interface JobMatch extends JobListing {
   gaps: string[];
   cvSuggestions: string[];
   summary: string;
+  /** Mongo `applications._id` — writes dashboard (#314). */
+  applicationId?: string;
 }
 
 export interface AnalysisResult {

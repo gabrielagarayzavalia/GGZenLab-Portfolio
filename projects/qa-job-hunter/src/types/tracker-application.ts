@@ -70,6 +70,10 @@ export type TrackerApplicationPatch = Partial<
     | "puesto"
     | "empresa"
     | "matchPercent"
+    | "matchRejected"
+    | "matchRejectedReason"
+    | "matchRejectedAt"
+    | "inLatestAnalysis"
   >
 >;
 

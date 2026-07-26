@@ -119,6 +119,7 @@ test("applicationToJobMatch usa analysis snapshot", () => {
   );
 
   assert.equal(job.location, "AR");
+  assert.equal(job.applicationId, "507f1f77bcf86cd799439011");
   assert.equal(job.description, "JD snapshot");
   assert.deepEqual(job.matchedSkills, ["TS"]);
   assert.equal(job.summary, "Buen fit");

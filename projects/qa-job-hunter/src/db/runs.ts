@@ -23,3 +23,13 @@ export async function saveRun(result: AnalysisResult, provider?: string): Promis
   const inserted = await db.collection<AnalysisRunDoc>("analysis_runs").insertOne(doc);
   return inserted.insertedId;
 }
+
+export async function getLatestAnalysisRun(): Promise<AnalysisRunDoc | null> {
+  const db = getDb();
+  return db
+    .collection<AnalysisRunDoc>("analysis_runs")
+    .find()
+    .sort({ createdAt: -1 })
+    .limit(1)
+    .next();
+}

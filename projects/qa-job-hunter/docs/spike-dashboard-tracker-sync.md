@@ -159,6 +159,29 @@ Filtros API: `GET /api/tracker/applications?matchRejected=&inLatestAnalysis=&min
 
 Verificación: `npm run qa:smoke-b38-13` · `npm run test:tracker`.
 
+### API B-38-12 (#311) — `GET /api/dashboard/match-jobs`
+
+Implementado en `src/dashboard/match-jobs.ts` + route en `serve-dashboard.ts`.
+
+| Query | Criterio |
+|-------|----------|
+| *(sin filter)* | Todos los visibles (match≥70 base + históricos) |
+| `filter=rejected` | `matchRejected === true` |
+| `filter=applied` | `Enviada`, `A-realizado`, `Borrador abierto` |
+| `filter=not_applied` | `Stand-by` sin reject |
+| `filter=not_selected` | `Cerrado` |
+| `filter=unmarked` | Sin reject + sin clasificación aplicación |
+
+**Umbral lista dashboard:** `70` (`DASHBOARD_MIN_MATCH`). Sync pipeline #297 sigue en **65** — no mezclar.
+
+**Envelope** (compatible `dashboard/app.js` ~L567): `scrapedAt`, `totalAnalyzed`, `matchedJobs`/`jobs`, `feedback`, `applicationStatus`.
+
+**Fallback:** sin `analysis` en application → join colección `jobs` por `url`/`jobId`.
+
+Verificación: `npm run test:match-jobs` · `curl http://localhost:3847/api/dashboard/match-jobs`
+
+**Siguiente:** [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) wire `app.js` · **NO** deprecar `/api/results` aún (#316/#300).
+
 ---
 
 ## 5. Tasks spike

@@ -56,7 +56,12 @@ import {
   patchCv,
 } from "./config/cvs-store.js";
 import { connect } from "./db/client.js";
+import { ensureIndexes } from "./db/indexes.js";
 import { listJobs } from "./db/jobs.js";
+import {
+  composeMatchJobs,
+  type DashboardMatchFilter,
+} from "./dashboard/match-jobs.js";
 import {
   cancelApplyRun,
   refreshApplyRunState,
@@ -70,6 +75,20 @@ const ROOT = path.resolve(__dirname, "..");
 const DASHBOARD_DIR = path.join(ROOT, "dashboard");
 const RESULTS_PATH = path.join(ROOT, "output", "jobs-result.json");
 const PORT = Number(process.env.DASHBOARD_PORT ?? 3847);
+
+const DASHBOARD_MATCH_FILTERS = new Set<DashboardMatchFilter>([
+  "unmarked",
+  "applied",
+  "not_applied",
+  "not_selected",
+  "rejected",
+]);
+
+function parseDashboardMatchFilter(value: string | null): DashboardMatchFilter | undefined {
+  if (!value?.trim()) return undefined;
+  const filter = value.trim() as DashboardMatchFilter;
+  return DASHBOARD_MATCH_FILTERS.has(filter) ? filter : undefined;
+}
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -198,6 +217,29 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     } catch (err) {
       const message = err instanceof Error ? err.message : "MongoDB unavailable";
       sendJson(res, 503, { error: message, hint: "Run docker compose up and npm run db:seed" });
+    }
+    return;
+  }
+
+  if (pathname === "/api/dashboard/match-jobs" && method === "GET") {
+    const filterParam = url.searchParams.get("filter");
+    const filter = parseDashboardMatchFilter(filterParam);
+    if (filterParam?.trim() && !filter) {
+      sendJson(res, 400, {
+        error: "filter inválido",
+        allowed: [...DASHBOARD_MATCH_FILTERS],
+      });
+      return;
+    }
+
+    try {
+      await connect();
+      await ensureIndexes();
+      const payload = await composeMatchJobs({ filter });
+      sendJson(res, 200, payload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "MongoDB unavailable";
+      sendJson(res, 503, { error: message, hint: "docker compose up -d && npm run tracker:seed" });
     }
     return;
   }

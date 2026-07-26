@@ -69,6 +69,7 @@ import {
   type ApplyRunMode,
 } from "./run/apply-runner.js";
 import { handleTrackerApi } from "./tracker/handle-api.js";
+import { handleDashboardWrites } from "./dashboard/handle-dashboard-writes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -200,6 +201,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       const status = message.includes("No hay") ? 409 : 400;
       sendJson(res, status, { error: message });
     }
+    return;
+  }
+
+  if (await handleDashboardWrites(req, res, pathname, method, readBody, sendJson)) {
     return;
   }
 

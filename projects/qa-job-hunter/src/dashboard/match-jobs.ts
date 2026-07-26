@@ -134,6 +134,7 @@ export function applicationToJobMatch(
   if (analysis) {
     return {
       id,
+      applicationId: app.id,
       title: app.puesto,
       company: app.empresa,
       location: analysis.location ?? jobFallback?.location ?? "—",
@@ -159,6 +160,7 @@ export function applicationToJobMatch(
     return {
       ...jobFallback,
       id,
+      applicationId: app.id,
       title: app.puesto || jobFallback.title,
       company: app.empresa || jobFallback.company,
       matchPercent: app.matchPercent,
@@ -170,6 +172,7 @@ export function applicationToJobMatch(
 
   return {
     id,
+    applicationId: app.id,
     title: app.puesto,
     company: app.empresa,
     location: "—",

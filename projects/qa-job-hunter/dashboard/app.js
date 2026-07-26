@@ -1,4 +1,8 @@
-let jobs = [];
+/** Headers writes tracker (US-JH-B38-15 #314). */
+const TRACKER_USER_HEADERS = {
+  "Content-Type": "application/json",
+  "X-Tracker-User": "1",
+};
 let selectedId = null;
 let sortOrder = "desc";
 let showRejected = false;
@@ -338,18 +342,23 @@ function wireApplicationChecks(job) {
 }
 
 async function saveApplicationStatus(job, status) {
+  const applicationId = job.applicationId;
+  if (!applicationId) {
+    alert("Sin applicationId en tracker — no se puede guardar el estado.");
+    return;
+  }
   try {
-    const res = await fetch("/api/application-status", {
+    const res = await fetch("/api/dashboard/application-status", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: TRACKER_USER_HEADERS,
       body: JSON.stringify({
+        applicationId,
         jobId: job.id,
-        title: job.title,
-        company: job.company,
         status,
       }),
     });
-    if (!res.ok) throw new Error("No se pudo guardar el estado");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
     await loadMatchJobs();
     if (status && !isVisibleInList(job.id)) {
       focusNextVisibleJob(job.id);
@@ -516,19 +525,16 @@ function renderDescriptionBlock(description) {
 async function rejectMatch(job) {
   const reason = document.getElementById("feedback-reason")?.value?.trim() || undefined;
   try {
-    const res = await fetch("/api/feedback/reject", {
+    const res = await fetch("/api/dashboard/reject-match", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: TRACKER_USER_HEADERS,
       body: JSON.stringify({
         jobId: job.id,
-        title: job.title,
-        company: job.company,
-        searchTerm: job.searchTerm,
-        matchPercent: job.matchPercent,
         reason,
       }),
     });
-    if (!res.ok) throw new Error("No se pudo guardar el feedback");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
     await loadMatchJobs();
     focusNextVisibleJob(job.id);
   } catch (e) {
@@ -538,8 +544,12 @@ async function rejectMatch(job) {
 
 async function undoReject(job) {
   try {
-    const res = await fetch(`/api/feedback/reject/${encodeURIComponent(job.id)}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("No se pudo deshacer");
+    const res = await fetch(`/api/dashboard/reject-match/${encodeURIComponent(job.id)}`, {
+      method: "DELETE",
+      headers: TRACKER_USER_HEADERS,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
     await loadMatchJobs();
     renderList();
     renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });

@@ -26,6 +26,15 @@ test("applyTrackerPatch automation bloquea misComentarios", () => {
   assert.ok(warnings.some((w) => w.includes("misComentarios")));
 });
 
+test("applyTrackerPatch automation bloquea matchRejected", () => {
+  const { patch, warnings } = applyTrackerPatch(
+    { matchRejected: true, matchRejectedReason: "x", estado: "Stand-by" },
+    "automation"
+  );
+  assert.equal(patch.matchRejected, undefined);
+  assert.ok(warnings.some((w) => w.includes("matchRejected")));
+});
+
 test("applyTrackerPatch user permite Descartado", () => {
   const { patch } = applyTrackerPatch({ estado: "Descartado" }, "user");
   assert.equal(patch.estado, "Descartado");

@@ -59,6 +59,16 @@ export function applyTrackerPatch(
       delete out.misComentarios;
       warnings.push("misComentarios ignorado (solo usuaria)");
     }
+    if ("matchRejected" in out) {
+      delete out.matchRejected;
+      warnings.push("matchRejected ignorado (solo usuaria/dashboard)");
+    }
+    if ("matchRejectedReason" in out) {
+      delete out.matchRejectedReason;
+    }
+    if ("matchRejectedAt" in out) {
+      delete out.matchRejectedAt;
+    }
     if (out.estado != null) {
       const coerced = coerceAutomationEstado(out.estado);
       if (coerced.redirectedFromDescartado) {

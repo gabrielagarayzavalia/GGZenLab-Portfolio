@@ -229,6 +229,23 @@ export async function getApplicationById(id: string): Promise<TrackerApplication
   return doc ? toApi(doc) : null;
 }
 
+/** Resuelve por LinkedIn jobId o Mongo id (dashboard `job.id`). */
+export async function resolveApplicationByDashboardJobId(
+  dashboardJobId: string
+): Promise<TrackerApplication | null> {
+  const trimmed = dashboardJobId.trim();
+  if (!trimmed) return null;
+  if (ObjectId.isValid(trimmed) && trimmed.length === 24) {
+    const byOid = await getApplicationById(trimmed);
+    if (byOid) return byOid;
+  }
+  const db = getDb();
+  const doc = await db.collection<ApplicationDoc>("applications").findOne({
+    jobId: trimmed,
+  });
+  return doc ? toApi(doc) : null;
+}
+
 export async function createApplication(
   input: UpsertApplicationInput,
   source: TrackerWriteSource = "user"
@@ -261,7 +278,7 @@ export async function patchApplication(
   if (!existing) return null;
 
   const { patch: safePatch, warnings } = applyTrackerPatch(patch, source);
-  if (!Object.keys(safePatch).length) {
+  if (!Object.keys(safePatch).length && patch.matchRejected === undefined) {
     return { application: toApi(existing), warnings };
   }
 
@@ -272,6 +289,26 @@ export async function patchApplication(
     updatedBy: source === "user" ? "user" : source,
   };
 
+  if (safePatch.matchRejected === false) {
+    update.matchRejected = false;
+    update.matchRejectedReason = undefined;
+    update.matchRejectedAt = undefined;
+  } else if (safePatch.matchRejected === true) {
+    update.matchRejected = true;
+    if (safePatch.matchRejectedReason !== undefined) {
+      update.matchRejectedReason = safePatch.matchRejectedReason;
+    }
+    if (safePatch.matchRejectedAt !== undefined) {
+      update.matchRejectedAt = safePatch.matchRejectedAt;
+    }
+  }
+
+  const unset: Record<string, 1> = {};
+  if (safePatch.matchRejected === false) {
+    unset.matchRejectedReason = 1;
+    unset.matchRejectedAt = 1;
+  }
+
   if (safePatch.linkedinUrl != null) {
     update.linkedinUrlNorm = normalizeLinkedInUrl(safePatch.linkedinUrl);
     update.jobId = extractJobId(safePatch.linkedinUrl);
@@ -279,7 +316,10 @@ export async function patchApplication(
 
   await db.collection<ApplicationDoc>("applications").updateOne(
     { _id: existing._id },
-    { $set: update }
+    {
+      $set: update,
+      ...(Object.keys(unset).length ? { $unset: unset } : {}),
+    }
   );
 
   const saved = await db.collection<ApplicationDoc>("applications").findOne({

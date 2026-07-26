@@ -63,6 +63,39 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const notApplied = await json(`${BASE}/api/dashboard/application-status`, {
+    method: "POST",
+    headers: HEADERS,
+    body: JSON.stringify({
+      applicationId: job.applicationId,
+      jobId: job.id,
+      status: "not_applied",
+    }),
+  });
+  const standbyEstado = (notApplied.body.application as { estado?: string } | undefined)?.estado;
+  checks.push({
+    name: "POST application-status → Stand-by",
+    pass: notApplied.status === 200 && standbyEstado === "Stand-by",
+    detail: `HTTP ${notApplied.status} estado=${standbyEstado ?? "?"}`,
+  });
+
+  const unmarkStandby = await json(`${BASE}/api/dashboard/application-status`, {
+    method: "POST",
+    headers: HEADERS,
+    body: JSON.stringify({
+      applicationId: job.applicationId,
+      jobId: job.id,
+      status: null,
+    }),
+  });
+  const unmarkStandbyEstado = (unmarkStandby.body.application as { estado?: string } | undefined)
+    ?.estado;
+  checks.push({
+    name: "Desmarcar desde Stand-by → Pendiente",
+    pass: unmarkStandby.status === 200 && unmarkStandbyEstado === "Pendiente",
+    detail: `HTTP ${unmarkStandby.status} estado=${unmarkStandbyEstado ?? "?"}`,
+  });
+
   const applied = await json(`${BASE}/api/dashboard/application-status`, {
     method: "POST",
     headers: HEADERS,

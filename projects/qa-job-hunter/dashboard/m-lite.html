@@ -128,112 +128,13 @@
 </head>
 <body>
   <header>
-    <a class="nav-back" href="/poc/">← PoC hub</a>
+    <a class="nav-back" href="/tracker">← Tracker desktop</a>
     <h1>Empleos — vista mobile</h1>
     <p id="summary">Cargando…</p>
   </header>
   <div class="filters" id="filters" role="tablist" aria-label="Filtrar por estado"></div>
   <div class="cards" id="cards"></div>
 
-  <script type="module">
-    import { SAMPLE_ROWS, ESTADO_OPTIONS } from "./poc/sample-data.js";
-
-    const ALL = "Todos";
-    let activeFilter = ALL;
-    let rows = structuredClone(SAMPLE_ROWS);
-
-    const filtersEl = document.getElementById("filters");
-    const cardsEl = document.getElementById("cards");
-    const summaryEl = document.getElementById("summary");
-
-    function matchClass(p) {
-      if (p >= 85) return "match--high";
-      if (p >= 75) return "match--mid";
-      return "match--low";
-    }
-
-    function estadoClass(e) {
-      const l = (e || "").toLowerCase();
-      if (l === "enviada") return "estado--enviada";
-      if (l === "pendiente") return "estado--pendiente";
-      if (l.includes("stand")) return "estado--standby";
-      return "";
-    }
-
-    function renderFilters() {
-      const opts = [ALL, ...ESTADO_OPTIONS.filter((e) => rows.some((r) => r.estado === e))];
-      filtersEl.innerHTML = opts
-        .map(
-          (o) =>
-            `<button type="button" class="chip ${o === activeFilter ? "chip--active" : ""}" data-filter="${o}">${o}</button>`
-        )
-        .join("");
-      filtersEl.querySelectorAll(".chip").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          activeFilter = btn.dataset.filter;
-          render();
-        });
-      });
-    }
-
-    function visibleRows() {
-      if (activeFilter === ALL) return rows;
-      return rows.filter((r) => r.estado === activeFilter);
-    }
-
-    function renderCard(row) {
-      const note = row.notas || row.proximoPaso || "—";
-      return `
-        <article class="card" data-id="${row.id}">
-          <div class="card__top">
-            <div>
-              <h2 class="card__title">${escapeHtml(row.puesto)}</h2>
-              <p class="card__company">${escapeHtml(row.empresa)} · ${escapeHtml(row.canal)}</p>
-            </div>
-            <span class="match ${matchClass(row.matchPercent)}">${row.matchPercent}%</span>
-          </div>
-          <span class="estado ${estadoClass(row.estado)}">${escapeHtml(row.estado)}</span>
-          <p class="meta"><strong>Próximo:</strong> ${escapeHtml(note)}</p>
-          ${row.fechaAplicacion ? `<p class="meta"><strong>Aplicado:</strong> ${escapeHtml(row.fechaAplicacion)}</p>` : ""}
-          <div class="card__actions">
-            <a href="${row.linkedinUrl}" target="_blank" rel="noopener">LinkedIn</a>
-            <button type="button" data-action="estado">Cambiar estado</button>
-          </div>
-        </article>`;
-    }
-
-    function escapeHtml(s) {
-      return String(s ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
-    function render() {
-      const list = visibleRows();
-      summaryEl.textContent = `${list.length} de ${rows.length} postulaciones`;
-      if (!list.length) {
-        cardsEl.innerHTML = '<p class="empty">Ninguna fila con ese filtro.</p>';
-        return;
-      }
-      cardsEl.innerHTML = list.map(renderCard).join("");
-      cardsEl.querySelectorAll('[data-action="estado"]').forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const card = btn.closest(".card");
-          const id = card.dataset.id;
-          const row = rows.find((r) => r.id === id);
-          const idx = ESTADO_OPTIONS.indexOf(row.estado);
-          const next = ESTADO_OPTIONS[(idx + 1) % ESTADO_OPTIONS.length];
-          row.estado = next;
-          renderFilters();
-          render();
-        });
-      });
-    }
-
-    renderFilters();
-    render();
-  </script>
+  <script type="module" src="/m-lite.js"></script>
 </body>
 </html>

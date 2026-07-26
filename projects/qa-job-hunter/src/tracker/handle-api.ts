@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { TrackerApplicationPatch } from "../types/tracker-application.js";
+import { buildApplicationsXlsxBuffer } from "./export-xlsx.js";
 import {
   countApplications,
   createApplication,
@@ -79,6 +80,23 @@ export async function handleTrackerApi(
     } catch (err) {
       const message = err instanceof Error ? err.message : "JSON inválido";
       sendJson(res, 400, { error: message });
+    }
+    return true;
+  }
+
+  if (pathname === "/api/tracker/export/xlsx" && method === "GET") {
+    try {
+      const buffer = await buildApplicationsXlsxBuffer();
+      res.writeHead(200, {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": 'attachment; filename="Empleos_Tracker_export.xlsx"',
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(buffer);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Export falló";
+      sendJson(res, 500, { error: message });
     }
     return true;
   }

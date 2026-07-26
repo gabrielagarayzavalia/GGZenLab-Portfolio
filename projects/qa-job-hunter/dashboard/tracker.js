@@ -132,6 +132,27 @@ document.getElementById("btn-reload").addEventListener("click", () => {
   });
 });
 
+document.getElementById("btn-export").addEventListener("click", async () => {
+  try {
+    statusEl.textContent = "Exportando…";
+    const res = await fetch("/api/tracker/export/xlsx");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Empleos_Tracker_export.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = "Export descargado";
+  } catch (err) {
+    statusEl.textContent = `Export error: ${err.message}`;
+  }
+});
+
 document.getElementById("btn-import-desktop").addEventListener("click", async () => {
   try {
     statusEl.textContent = "Importando desde Desktop…";

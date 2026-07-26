@@ -284,23 +284,20 @@ export async function patchApplication(
 
   const now = new Date();
   const update: Partial<ApplicationDoc> = {
-    ...safePatch,
     updatedAt: now,
     updatedBy: source === "user" ? "user" : source,
   };
 
+  for (const [key, value] of Object.entries(safePatch)) {
+    if (value !== undefined) {
+      (update as Record<string, unknown>)[key] = value;
+    }
+  }
+
   if (safePatch.matchRejected === false) {
     update.matchRejected = false;
-    update.matchRejectedReason = undefined;
-    update.matchRejectedAt = undefined;
   } else if (safePatch.matchRejected === true) {
     update.matchRejected = true;
-    if (safePatch.matchRejectedReason !== undefined) {
-      update.matchRejectedReason = safePatch.matchRejectedReason;
-    }
-    if (safePatch.matchRejectedAt !== undefined) {
-      update.matchRejectedAt = safePatch.matchRejectedAt;
-    }
   }
 
   const unset: Record<string, 1> = {};

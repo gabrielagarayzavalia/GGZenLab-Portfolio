@@ -16,6 +16,13 @@ import {
 
 type SendJson = (res: ServerResponse, status: number, data: unknown) => void;
 
+function isDashboardWriteRoute(pathname: string, method: string): boolean {
+  if (pathname === "/api/dashboard/application-status" && method === "POST") return true;
+  if (pathname === "/api/dashboard/reject-match" && method === "POST") return true;
+  if (method === "DELETE" && /^\/api\/dashboard\/reject-match\/.+/.test(pathname)) return true;
+  return false;
+}
+
 function isUserRequest(req: IncomingMessage): boolean {
   const h = req.headers["x-tracker-user"];
   return h === "1" || h === "true";
@@ -34,7 +41,7 @@ export async function handleDashboardWrites(
   readBody: (req: IncomingMessage) => Promise<string>,
   sendJson: SendJson
 ): Promise<boolean> {
-  if (!pathname.startsWith("/api/dashboard/")) return false;
+  if (!isDashboardWriteRoute(pathname, method)) return false;
 
   if (!isUserRequest(req)) {
     sendJson(res, 403, { error: "Requiere header X-Tracker-User: 1" });

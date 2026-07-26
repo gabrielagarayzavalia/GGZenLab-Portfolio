@@ -88,11 +88,7 @@ export function patchForRejectMatch(
 }
 
 export function patchForUndoReject(existing: TrackerApplication): DashboardApplicationPatch {
-  const patch: DashboardApplicationPatch = {
-    matchRejected: false,
-    matchRejectedReason: undefined,
-    matchRejectedAt: undefined,
-  };
+  const patch: DashboardApplicationPatch = { matchRejected: false };
   if (existing.estado === "Stand-by" && existing.matchRejected) {
     patch.estado = "Pendiente";
   }

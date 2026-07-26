@@ -4,13 +4,13 @@
 
 import fs from "fs";
 import { CSV_PATH, MIN_MATCH, MY_PROFILE } from "./config.js";
-import { buildFeedbackLearningBlock, loadFeedback } from "./feedback.js";
+import { buildFeedbackLearningBlock, loadFeedback, type MatchFeedbackStore } from "./feedback.js";
 import type { JobListing, JobMatch } from "./types.js";
 
 export { MIN_MATCH };
 
-export function buildMatchPrompt(job: JobListing): string {
-  const feedbackBlock = buildFeedbackLearningBlock(loadFeedback());
+export function buildMatchPrompt(job: JobListing, feedback?: MatchFeedbackStore): string {
+  const feedbackBlock = buildFeedbackLearningBlock(feedback ?? loadFeedback());
 
   return `Eres un experto senior en reclutamiento de QA y Testing con 20 años de experiencia.
 

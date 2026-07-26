@@ -36,6 +36,35 @@ function matchClass(pct) {
   return "match-badge__pct--low";
 }
 
+/** Valores scrape/API sin dato real — no mostrar en meta (confunden). */
+const META_PLACEHOLDERS = new Set(["no especificado", "desconocida", "—", "-", "n/a", "na"]);
+
+function isMeaningfulMeta(value) {
+  if (value == null) return false;
+  const t = String(value).trim();
+  if (!t) return false;
+  return !META_PLACEHOLDERS.has(t.toLowerCase());
+}
+
+function formatListMeta(job) {
+  return [job.modality, job.datePosted]
+    .filter(isMeaningfulMeta)
+    .map(escapeHtml)
+    .join(" · ");
+}
+
+function renderDetailMeta(job) {
+  const spans = [];
+  if (isMeaningfulMeta(job.location)) spans.push(`<span>${escapeHtml(job.location)}</span>`);
+  if (isMeaningfulMeta(job.modality)) spans.push(`<span>${escapeHtml(job.modality)}</span>`);
+  if (isMeaningfulMeta(job.datePosted)) spans.push(`<span>${escapeHtml(job.datePosted)}</span>`);
+  if (isMeaningfulMeta(job.searchTerm)) {
+    spans.push(`<span>Búsqueda: ${escapeHtml(job.searchTerm)}</span>`);
+  }
+  if (!spans.length) return "";
+  return `<div class="detail__meta">${spans.join("")}</div>`;
+}
+
 function isRejected(jobId) {
   return rejectedIds.has(jobId);
 }
@@ -151,6 +180,8 @@ function renderList() {
             ? `<span class="badge-not-selected">No seleccionada/o</span>`
             : "";
 
+    const listMeta = formatListMeta(job);
+
     li.innerHTML = `
       <div class="match-badge">
         <span class="match-badge__pct ${pctClass}">${job.matchPercent}%</span>
@@ -161,7 +192,7 @@ function renderList() {
       <div>
         <p class="job-item__title">${escapeHtml(job.title)}</p>
         <p class="job-item__company">${escapeHtml(job.company)}</p>
-        <p class="job-item__meta">${escapeHtml(job.modality)} · ${escapeHtml(job.datePosted)}</p>
+        ${listMeta ? `<p class="job-item__meta">${listMeta}</p>` : ""}
         ${rejectedBadge}
         ${appBadge}
       </div>`;
@@ -237,12 +268,7 @@ function renderDetail(job) {
         <div class="detail__header-main">
           <h1 class="detail__title">${escapeHtml(job.title)}</h1>
           <p class="detail__company">${escapeHtml(job.company)}</p>
-          <div class="detail__meta">
-            <span>${escapeHtml(job.location)}</span>
-            <span>${escapeHtml(job.modality)}</span>
-            <span>${escapeHtml(job.datePosted)}</span>
-            <span>Búsqueda: ${escapeHtml(job.searchTerm)}</span>
-          </div>
+          ${renderDetailMeta(job)}
           ${linkedInLink}
         </div>
         <aside class="detail__header-aside" aria-label="Acciones">

@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import type { JobMatch } from "../types.js";
+import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import { getDb } from "./client.js";
 
 export interface JobDoc extends JobMatch {
@@ -67,7 +68,16 @@ export async function findJobsByUrls(urls: string[]): Promise<Map<string, JobMat
     .find({ url: { $in: unique } }, { projection: JOB_PROJECTION })
     .toArray();
 
-  return new Map(docs.map((doc) => [doc.url, stripJobDoc(doc)]));
+  const map = new Map<string, JobMatch>();
+  for (const doc of docs) {
+    const job = stripJobDoc(doc);
+    map.set(doc.url, job);
+    const norm = normalizeLinkedInUrl(job.url);
+    if (norm) map.set(norm, job);
+    const linkedInId = extractJobId(job.url);
+    if (linkedInId) map.set(linkedInId, job);
+  }
+  return map;
 }
 
 export async function findJobsByIds(ids: string[]): Promise<Map<string, JobMatch>> {
@@ -80,5 +90,31 @@ export async function findJobsByIds(ids: string[]): Promise<Map<string, JobMatch
     .find({ id: { $in: unique } }, { projection: JOB_PROJECTION })
     .toArray();
 
-  return new Map(docs.map((doc) => [doc.id, stripJobDoc(doc)]));
+  const map = new Map(docs.map((doc) => [doc.id, stripJobDoc(doc)] as const));
+  return map;
+}
+
+/** Join por ID numérico LinkedIn aunque `jobs.id` sea otro (p. ej. base64 del scraper). */
+export async function findJobsByLinkedInIds(linkedInIds: string[]): Promise<Map<string, JobMatch>> {
+  const unique = [...new Set(linkedInIds.filter(Boolean))];
+  if (!unique.length) return new Map();
+
+  const db = getDb();
+  const or = unique.flatMap((id) => [
+    { url: { $regex: `currentJobId=${id}(?:&|$)` } },
+    { url: { $regex: `/jobs/view/${id}/?` } },
+  ]);
+  const docs = await db
+    .collection<JobDoc>("jobs")
+    .find({ $or: or }, { projection: JOB_PROJECTION })
+    .toArray();
+
+  const map = new Map<string, JobMatch>();
+  for (const doc of docs) {
+    const job = stripJobDoc(doc);
+    const linkedInId = extractJobId(job.url);
+    if (linkedInId) map.set(linkedInId, job);
+    map.set(job.id, job);
+  }
+  return map;
 }

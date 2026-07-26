@@ -76,6 +76,22 @@ Sin diálogos hablados; solo música jazz ligera opcional.
 
 Pedir escena por escena y unir en CapCut o DaVinci (gratis).
 
+### Carpeta de trabajo (local, fuera del repo)
+
+Assets pesados (PNG, MP4) **no** van al monorepo. Usar proyecto local independiente:
+
+```
+C:\Users\gabri\projects\qa-job-hunter-demo\animacion\
+  ancla/       → personaje-ancla.png
+  keyframes/   → escena-01 … escena-04
+  clips/       → MP4 por escena (Leonardo / Kling)
+  export/      → video final CapCut
+```
+
+El repo guarda guion, prompts y checklist; los binarios quedan en esa carpeta.
+
+**Checklist para ir tildando pasos:** [`checklist-leonardo-animacion.md`](checklist-leonardo-animacion.md)
+
 ---
 
 ## IAs gratis sugeridas

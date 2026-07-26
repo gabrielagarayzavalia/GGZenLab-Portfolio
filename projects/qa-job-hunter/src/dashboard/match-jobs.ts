@@ -1,0 +1,321 @@
+/**
+ * B-38-12 (#311) — Compositor GET /api/dashboard/match-jobs
+ * Join applications + analysis snapshot (+ fallback jobs Mongo).
+ */
+
+import type { MatchRejection } from "../feedback.js";
+import type { ApplicationStatus, ApplicationStatusEntry } from "../application-status.js";
+import { listDashboardMatchApplications } from "../db/applications.js";
+import { findJobsByIds, findJobsByUrls } from "../db/jobs.js";
+import { getLatestAnalysisRun } from "../db/runs.js";
+import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
+import type { JobMatch } from "../types.js";
+import { normalizeFeedbackFields } from "../types/dashboard-match.js";
+import type { TrackerApplication, TrackerEstado } from "../types/tracker-application.js";
+
+export type DashboardMatchFilter =
+  | "unmarked"
+  | "applied"
+  | "not_applied"
+  | "not_selected"
+  | "rejected";
+
+const HIDDEN_ESTADOS: TrackerEstado[] = ["Duplicado", "Descartado"];
+
+const APPLIED_ESTADOS: TrackerEstado[] = ["Enviada", "A-realizado", "Borrador abierto"];
+const NOT_SELECTED_ESTADOS: TrackerEstado[] = ["Cerrado"];
+const NOT_APPLIED_ESTADOS: TrackerEstado[] = ["Stand-by"];
+
+export interface MatchJobsResponse {
+  scrapedAt: string;
+  totalAnalyzed: number;
+  jobs: JobMatch[];
+  /** Alias para compatibilidad con dashboard/app.js (#313). */
+  matchedJobs: JobMatch[];
+  feedback: {
+    rejectionCount: number;
+    rejectedJobIds: string[];
+    rejections: MatchRejection[];
+  };
+  applicationStatus: {
+    updatedAt: string;
+    entries: ApplicationStatusEntry[];
+  };
+  meta?: {
+    count: number;
+    filter?: DashboardMatchFilter;
+    source: "mongo";
+  };
+}
+
+export interface ComposeMatchJobsOptions {
+  filter?: DashboardMatchFilter;
+}
+
+/** Mapeo spike § B38-11-02 — lectura tracker → filtros legacy dashboard. */
+export function deriveApplicationStatus(app: TrackerApplication): ApplicationStatus | null {
+  if (APPLIED_ESTADOS.includes(app.estado)) return "applied";
+  if (NOT_SELECTED_ESTADOS.includes(app.estado)) return "not_selected";
+  if (NOT_APPLIED_ESTADOS.includes(app.estado) && !app.matchRejected) return "not_applied";
+  return null;
+}
+
+export function dashboardJobId(app: TrackerApplication): string {
+  return app.jobId?.trim() || app.id;
+}
+
+export function matchesDashboardFilter(
+  app: TrackerApplication,
+  filter: DashboardMatchFilter
+): boolean {
+  const feedback = normalizeFeedbackFields(app);
+  const status = deriveApplicationStatus(app);
+
+  switch (filter) {
+    case "rejected":
+      return feedback.matchRejected;
+    case "applied":
+      return status === "applied" && !feedback.matchRejected;
+    case "not_applied":
+      return status === "not_applied" && !feedback.matchRejected;
+    case "not_selected":
+      return status === "not_selected" && !feedback.matchRejected;
+    case "unmarked":
+      return status === null && !feedback.matchRejected;
+    default:
+      return true;
+  }
+}
+
+export function isVisibleMatchApplication(app: TrackerApplication): boolean {
+  if (HIDDEN_ESTADOS.includes(app.estado)) return false;
+
+  const feedback = normalizeFeedbackFields(app);
+  const status = deriveApplicationStatus(app);
+  const inLatest = feedback.inLatestAnalysis;
+  const meetsThreshold = app.matchPercent >= DASHBOARD_MIN_MATCH;
+
+  if (meetsThreshold && (inLatest || status !== null || feedback.matchRejected)) return true;
+  if (feedback.matchRejected) return true;
+  if (status !== null) return true;
+  return false;
+}
+
+function stubSummary(app: TrackerApplication, rejected: boolean): string {
+  if (rejected) {
+    return "Ya no está en el último análisis; visible por feedback guardado.";
+  }
+  if (!normalizeFeedbackFields(app).inLatestAnalysis) {
+    return "Ya no está en el último análisis; visible por el estado de postulación guardado.";
+  }
+  return "Sin análisis detallado disponible.";
+}
+
+function stubDescription(app: TrackerApplication, rejected: boolean): string {
+  const reason = app.matchRejectedReason?.trim();
+  if (rejected) {
+    return reason
+      ? `Empleo de una corrida anterior. Motivo del rechazo: ${reason}`
+      : "Empleo de una corrida anterior marcado como match incorrecto.";
+  }
+  return "Empleo de una corrida anterior con estado de postulación guardado.";
+}
+
+export function applicationToJobMatch(
+  app: TrackerApplication,
+  jobFallback?: JobMatch | null
+): JobMatch {
+  const id = dashboardJobId(app);
+  const feedback = normalizeFeedbackFields(app);
+  const analysis = app.analysis;
+  const rejected = feedback.matchRejected;
+
+  if (analysis) {
+    return {
+      id,
+      title: app.puesto,
+      company: app.empresa,
+      location: analysis.location ?? jobFallback?.location ?? "—",
+      modality: analysis.modality ?? jobFallback?.modality ?? "—",
+      datePosted: analysis.datePosted ?? jobFallback?.datePosted ?? "—",
+      url: app.linkedinUrl || jobFallback?.url || "",
+      description:
+        analysis.description ??
+        jobFallback?.description ??
+        stubDescription(app, rejected),
+      searchTerm: analysis.searchTerm ?? jobFallback?.searchTerm ?? "—",
+      source: analysis.source ?? jobFallback?.source,
+      externalId: analysis.externalId ?? jobFallback?.externalId,
+      matchPercent: app.matchPercent,
+      matchedSkills: analysis.matchedSkills ?? jobFallback?.matchedSkills ?? [],
+      gaps: analysis.gaps ?? jobFallback?.gaps ?? [],
+      cvSuggestions: analysis.cvSuggestions ?? jobFallback?.cvSuggestions ?? [],
+      summary: analysis.summary ?? jobFallback?.summary ?? stubSummary(app, rejected),
+    };
+  }
+
+  if (jobFallback) {
+    return {
+      ...jobFallback,
+      id,
+      title: app.puesto || jobFallback.title,
+      company: app.empresa || jobFallback.company,
+      matchPercent: app.matchPercent,
+      url: app.linkedinUrl || jobFallback.url,
+      description: jobFallback.description || stubDescription(app, rejected),
+      summary: jobFallback.summary || stubSummary(app, rejected),
+    };
+  }
+
+  return {
+    id,
+    title: app.puesto,
+    company: app.empresa,
+    location: "—",
+    modality: "—",
+    datePosted: "—",
+    url: app.linkedinUrl,
+    description: stubDescription(app, rejected),
+    searchTerm: "—",
+    matchPercent: app.matchPercent,
+    matchedSkills: [],
+    gaps: [],
+    cvSuggestions: [],
+    summary: stubSummary(app, rejected),
+  };
+}
+
+export function buildFeedbackEnvelope(apps: TrackerApplication[]): MatchJobsResponse["feedback"] {
+  const rejections: MatchRejection[] = [];
+
+  for (const app of apps) {
+    const feedback = normalizeFeedbackFields(app);
+    if (!feedback.matchRejected) continue;
+    rejections.push({
+      jobId: dashboardJobId(app),
+      title: app.puesto,
+      company: app.empresa,
+      searchTerm: app.analysis?.searchTerm ?? "—",
+      matchPercent: app.matchPercent,
+      reason: feedback.matchRejectedReason,
+      rejectedAt: feedback.matchRejectedAt ?? app.updatedAt,
+    });
+  }
+
+  const rejectedJobIds = rejections.map((r) => r.jobId);
+  return {
+    rejectionCount: rejections.length,
+    rejectedJobIds,
+    rejections,
+  };
+}
+
+export function buildApplicationStatusEnvelope(
+  apps: TrackerApplication[]
+): MatchJobsResponse["applicationStatus"] {
+  let latestUpdated = "";
+  const entries: ApplicationStatusEntry[] = [];
+
+  for (const app of apps) {
+    const status = deriveApplicationStatus(app);
+    if (!status) continue;
+    const updatedAt = app.updatedAt;
+    if (!latestUpdated || updatedAt > latestUpdated) latestUpdated = updatedAt;
+    entries.push({
+      jobId: dashboardJobId(app),
+      title: app.puesto,
+      company: app.empresa,
+      status,
+      updatedAt,
+    });
+  }
+
+  return {
+    updatedAt: latestUpdated || new Date().toISOString(),
+    entries,
+  };
+}
+
+export function composeMatchJobsFromApplications(
+  apps: TrackerApplication[],
+  jobsByUrl: Map<string, JobMatch>,
+  jobsById: Map<string, JobMatch>,
+  meta: { scrapedAt: string; totalAnalyzed: number },
+  options: ComposeMatchJobsOptions = {}
+): MatchJobsResponse {
+  const visible = apps.filter(isVisibleMatchApplication);
+  const filtered = options.filter
+    ? visible.filter((app) => matchesDashboardFilter(app, options.filter!))
+    : visible;
+
+  const matchedJobs = filtered.map((app) => {
+    const id = dashboardJobId(app);
+    const fallback =
+      jobsById.get(id) ??
+      (app.linkedinUrl ? jobsByUrl.get(app.linkedinUrl) : undefined) ??
+      (app.jobId ? jobsById.get(app.jobId) : undefined);
+    return applicationToJobMatch(app, fallback);
+  });
+
+  matchedJobs.sort((a, b) => b.matchPercent - a.matchPercent);
+
+  const feedback = buildFeedbackEnvelope(visible);
+  const applicationStatus = buildApplicationStatusEnvelope(visible);
+
+  return {
+    scrapedAt: meta.scrapedAt,
+    totalAnalyzed: meta.totalAnalyzed,
+    jobs: matchedJobs,
+    matchedJobs,
+    feedback,
+    applicationStatus,
+    meta: {
+      count: matchedJobs.length,
+      filter: options.filter,
+      source: "mongo",
+    },
+  };
+}
+
+async function resolveRunMeta(apps: TrackerApplication[]): Promise<{
+  scrapedAt: string;
+  totalAnalyzed: number;
+}> {
+  const latestRun = await getLatestAnalysisRun();
+  if (latestRun) {
+    return {
+      scrapedAt: latestRun.scrapedAt,
+      totalAnalyzed: latestRun.totalAnalyzed,
+    };
+  }
+
+  const latestApps = apps.filter((a) => normalizeFeedbackFields(a).inLatestAnalysis);
+  const analyzedAts = latestApps
+    .map((a) => a.analysis?.analyzedAt)
+    .filter((v): v is string => Boolean(v?.trim()));
+  const scrapedAt =
+    analyzedAts.sort().at(-1) ??
+    latestApps.map((a) => a.updatedAt).sort().at(-1) ??
+    new Date().toISOString();
+
+  return {
+    scrapedAt,
+    totalAnalyzed: latestApps.length || apps.filter((a) => a.matchPercent >= DASHBOARD_MIN_MATCH).length,
+  };
+}
+
+export async function composeMatchJobs(
+  options: ComposeMatchJobsOptions = {}
+): Promise<MatchJobsResponse> {
+  const apps = await listDashboardMatchApplications();
+  const urls = [...new Set(apps.map((a) => a.linkedinUrl).filter(Boolean))];
+  const ids = [...new Set(apps.map(dashboardJobId))];
+
+  const [jobsByUrl, jobsById, runMeta] = await Promise.all([
+    findJobsByUrls(urls),
+    findJobsByIds(ids),
+    resolveRunMeta(apps),
+  ]);
+
+  return composeMatchJobsFromApplications(apps, jobsByUrl, jobsById, runMeta, options);
+}

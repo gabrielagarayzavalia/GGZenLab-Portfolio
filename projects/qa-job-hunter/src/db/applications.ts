@@ -15,8 +15,18 @@ import {
 import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
 import type { QueueRow } from "../apply/apply-queue.js";
 import { planAutomationUpsert, planEasyApplyUpsert } from "../tracker/automation-merge.js";
+import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
 import { isProtectedEstado } from "../tracker/protected-estado.js";
 import { getDb } from "./client.js";
+
+const DASHBOARD_HIDDEN_ESTADOS: TrackerEstado[] = ["Duplicado", "Descartado"];
+const DASHBOARD_HISTORICAL_ESTADOS: TrackerEstado[] = [
+  "Enviada",
+  "A-realizado",
+  "Borrador abierto",
+  "Cerrado",
+  "Stand-by",
+];
 
 export interface ApplicationDoc {
   _id: ObjectId;
@@ -138,6 +148,29 @@ function buildDocFields(
   };
   appendB38Fields(doc, input);
   return doc;
+}
+
+/**
+ * Applications visibles en dashboard match-jobs (#311):
+ * match≥70 en última corrida, feedback reject o estado de postulación histórico.
+ */
+export async function listDashboardMatchApplications(): Promise<TrackerApplication[]> {
+  const db = getDb();
+  const docs = await db
+    .collection<ApplicationDoc>("applications")
+    .find({
+      estado: { $nin: DASHBOARD_HIDDEN_ESTADOS },
+      $or: [
+        { matchPercent: { $gte: DASHBOARD_MIN_MATCH } },
+        { matchRejected: true },
+        { estado: { $in: DASHBOARD_HISTORICAL_ESTADOS } },
+      ],
+    })
+    .sort({ matchPercent: -1 })
+    .limit(5000)
+    .toArray();
+
+  return docs.map(toApi);
 }
 
 export async function listApplications(

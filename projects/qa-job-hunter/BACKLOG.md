@@ -152,7 +152,7 @@ Spike = doc only (`docs/spike-monetization-research.md`). Entregable: **go/no-go
 
 - **Free:** dashboard + tracker web (1 fuente, sin Easy Apply, límite de filas/historial).
 - **Pro (~USD 12–19/mes o early-bird anual):** campañas automáticas, multi-fuente (B-13), CV/cover IA (B-15), agente programado (B-07).
-- **Demo (backlog / wireframe):** video 60–90 s “Excel caótico → pipeline en 30 s” como hero del landing y CTA “probá gratis”.
+- **Demo (backlog / wireframe):** guion + animación en [`docs/demo-guion-animacion.md`](docs/demo-guion-animacion.md); video 60–90 s como hero del landing y CTA “probá gratis”.
 - **Métricas de validación:** % signup → activación tracker; % free → trial Pro; churn 30 días.
 - **Dependencias técnicas:** B-16 (cloud), B-12 (multi-user/OAuth) antes de cobrar en producción.
 

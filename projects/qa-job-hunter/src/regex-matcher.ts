@@ -20,6 +20,7 @@ interface RegexProfile {
   modalityPreference: string;
   experienceYears: { qa: number };
   seniority: string;
+  location: string;
 }
 
 // Perfil estructurado equivalente a MY_PROFILE de config.ts.
@@ -38,6 +39,7 @@ const PROFILE: RegexProfile = {
   modalityPreference: "remote",
   experienceYears: { qa: 25 },
   seniority: "senior",
+  location: "Buenos Aires, Argentina",
 };
 
 const AUTOMATION_TOOLS = ["selenium", "playwright", "cypress", "testng", "junit", "mocha", "jest", "cucumber"];
@@ -73,6 +75,15 @@ const SKILL_PATTERNS: { label: string; patterns: RegExp[]; weight: number }[] = 
 
 const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|indispensable|m[ií]nimo|minimum|essential/i;
 const NICE_HINTS = /preferred|nice to have|plus|deseable|valorado|bonus/i;
+const AUTOMATION_JD = /automation|automatiz|selenium|playwright|cypress|sdet/i;
+const GIG_SIGNALS = /\b(freelance|freelancer|freelancers|gig|espor[aá]dic)\b/i;
+const CONTRACT_EMPLOYMENT = /\bcontract\b(?!\s*(testing|qa|role))/i;
+const ENTRY_LEVEL = /\bentry[\s-]?level\b/i;
+const HARDWARE_SIGNALS = /smart\s*tv|whale\s*os|zeasn|saphi/i;
+const ACCESS_CONTEXT = /subscription|suscripci[oó]n|acceso|access|setup|instal/i;
+const GEO_SUBSCRIPTION = /liberty\s+costa\s+rica/i;
+const FOREIGN_COUNTRY =
+  /\b(costa\s+rica|mexico|m[eé]xico|chile|colombia|per[uú]|uruguay|paraguay|ecuador|bolivia|venezuela|guatemala|honduras|nicaragua|el\s+salvador|panama|panam[aá])\b/i;
 
 // Aísla la JD real, descartando el chrome de LinkedIn que ensucia el regex.
 const JD_START_MARKERS = ["About the job", "Acerca del empleo"];
@@ -161,10 +172,51 @@ function specialFlags(job: JobListing): string[] {
   return flags;
 }
 
+function jobBlob(job: JobListing, text: string): string {
+  return `${job.title} ${job.company} ${job.location} ${job.modality} ${text}`.toLowerCase();
+}
+
+function profileCountry(): string {
+  return PROFILE.location.toLowerCase();
+}
+
+function isForeignGeo(blob: string): boolean {
+  if (FOREIGN_COUNTRY.test(blob) && !profileCountry().includes("argentina")) return true;
+  if (GEO_SUBSCRIPTION.test(blob)) return true;
+  if (/subscription/i.test(blob) && FOREIGN_COUNTRY.test(blob) && !/argentina|buenos\s+aires/i.test(blob)) {
+    return true;
+  }
+  return false;
+}
+
+function detectContextGaps(job: JobListing, text: string): { gaps: string[]; caps: number[] } {
+  const blob = jobBlob(job, text);
+  const gaps: string[] = [];
+  const caps: number[] = [];
+
+  if (HARDWARE_SIGNALS.test(blob) && ACCESS_CONTEXT.test(blob)) {
+    gaps.push("hardware específico");
+    caps.push(45);
+  }
+
+  if (isForeignGeo(blob)) {
+    gaps.push("requisito regional");
+    caps.push(40);
+  }
+
+  const hasManualOrMobile = /manual\s+test|mobile\s+test|app\s+test/i.test(blob);
+  if (hasManualOrMobile && !AUTOMATION_JD.test(blob)) {
+    caps.push(55);
+  }
+
+  return { gaps, caps };
+}
+
 // Calibración de prioridad: separa empates según fit real (modalidad, seniority, coding).
-function fitModifier(job: JobListing): { delta: number; reasons: string[] } {
+function fitModifier(job: JobListing, text: string): { delta: number; reasons: string[] } {
   let delta = 0;
   const reasons: string[] = [];
+  const blob = jobBlob(job, text);
   const modality = (job.modality || "").toLowerCase();
   const title = job.title.toLowerCase();
 
@@ -178,6 +230,16 @@ function fitModifier(job: JobListing): { delta: number; reasons: string[] } {
     reasons.push("modalidad presencial");
   }
 
+  if (GIG_SIGNALS.test(blob) || CONTRACT_EMPLOYMENT.test(blob)) {
+    delta -= 18;
+    reasons.push("gig/freelance no full-time");
+  }
+
+  if (ENTRY_LEVEL.test(blob)) {
+    delta -= 15;
+    reasons.push("entry-level vs perfil senior");
+  }
+
   if (/\bjr\b|junior|trainee|becari|pasant/.test(title)) {
     delta -= 20;
     reasons.push("rol junior (sobre-calificada)");
@@ -189,6 +251,18 @@ function fitModifier(job: JobListing): { delta: number; reasons: string[] } {
   if (/sdet|software development engineer in test/.test(title)) {
     delta -= 6;
     reasons.push("rol SDET, coding intensivo a validar");
+  }
+
+  const lines = text.split(/[\n.;]/).map((l) => l.trim()).filter((l) => l.length > 8);
+  const optionalExperience = lines.some(
+    (line) =>
+      NICE_HINTS.test(line) &&
+      /experien|qa|quality|testing|ux/i.test(line) &&
+      !/selenium|playwright|cypress|python|javascript|typescript|automation|automatiz/i.test(line),
+  );
+  if (optionalExperience) {
+    delta -= 8;
+    reasons.push("experiencia opcional (rol junior)");
   }
 
   return { delta, reasons };
@@ -224,8 +298,11 @@ export function analyzeJobRegex(job: JobListing): RegexAnalysis {
     }
   }
 
+  const context = detectContextGaps(job, text);
+  gaps.push(...context.gaps);
+
   const coveragePercent = total > 0 ? Math.round((covered / total) * 100) : 0;
-  const fit = fitModifier(job);
+  const fit = fitModifier(job, text);
   let matchPercent = Math.max(0, Math.min(100, coveragePercent + fit.delta));
 
   if (gaps.includes("english fluent") && !flags.some((f) => f.startsWith("english_process"))) {
@@ -234,6 +311,9 @@ export function analyzeJobRegex(job: JobListing): RegexAnalysis {
   if (flags.some((f) => f.startsWith("industry_review"))) matchPercent = Math.min(matchPercent, 60);
   if (flags.some((f) => f.startsWith("data_domain")) && !meetsRequirement("data quality")) {
     matchPercent = Math.min(matchPercent, 50);
+  }
+  for (const cap of context.caps) {
+    matchPercent = Math.min(matchPercent, cap);
   }
 
   const uniqueMatched = [...new Set(matchedSkills)];

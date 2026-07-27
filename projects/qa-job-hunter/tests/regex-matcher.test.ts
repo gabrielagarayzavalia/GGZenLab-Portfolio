@@ -72,3 +72,42 @@ test("job automation remote de control no se degrada fuerte", () => {
   assert.ok(result.matchPercent >= 65, `esperado >=65%, obtuvo ${result.matchPercent}%`);
   assert.ok(result.matchedSkills.some((s) => /automation|playwright|selenium/i.test(s)));
 });
+
+test("aviso con reqs extra no alcanza 100% y lista gaps legibles", () => {
+  const job: JobListing = {
+    id: "8888888888",
+    title: "QA Engineer",
+    company: "StartupX",
+    location: "Remote",
+    modality: "Remote",
+    datePosted: "1d",
+    url: "https://www.linkedin.com/jobs/view/8888888888/",
+    description: `
+About the job
+
+Requirements:
+- Playwright and Selenium automation required
+- AWS cloud infrastructure experience mandatory
+- Kubernetes and Docker expertise required
+- ISTQB certification preferred
+    `.trim(),
+    searchTerm: "qa",
+  };
+
+  const result = analyzeJobRegex(job);
+
+  assert.ok(result.matchPercent < 100, `esperado <100%, obtuvo ${result.matchPercent}%`);
+  assert.ok(result.gaps.length > 0, "gaps no deberían estar vacíos");
+  const gapText = result.gaps.join(" ").toLowerCase();
+  assert.ok(
+    gapText.includes("aws") || gapText.includes("kubernetes") || gapText.includes("docker") || gapText.includes("istqb"),
+    `gaps deberían mencionar reqs faltantes, obtuvo: ${result.gaps.join("; ")}`
+  );
+});
+
+test("100% solo cuando no quedan gaps de requisitos", () => {
+  const result = analyzeJobRegex(goodAutomationJob());
+  if (result.gaps.length > 0) {
+    assert.ok(result.matchPercent < 100, "con gaps no debería ser 100%");
+  }
+});

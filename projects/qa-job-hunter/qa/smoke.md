@@ -2,6 +2,17 @@
 
 Casos rápidos para validar que el dashboard y el tracker responden. No reemplazan regression/E2E.
 
+## PR #316 — B-38-17 shim `/api/results` → match-jobs
+
+| ID | Caso | Comando / acción | Esperado |
+|----|------|------------------|----------|
+| SMK-316-01 | Shim deprecación `/api/results` | `curl -s -D - -o NUL http://localhost:3847/api/results` y `curl -s -D - -o NUL http://localhost:3847/api/dashboard/match-jobs` | Ambos `200`; `/api/results` incluye `Deprecation: true` y `Link: </api/dashboard/match-jobs>; rel="successor-version"`; body envelope mongo (mismo shape que match-jobs). **Skip/documentar** si dashboard corre código viejo (404 en match-jobs o sin headers Deprecation). Cubierto también en `npm run test:api` test «delegates to match-jobs». |
+
+### Notas B-38-17
+
+- Parte de deprecación legacy `/api/results` (#300).
+- `console.warn` en servidor al invocar el shim.
+
 ## PR #315 — B-38-16 sync match-feedback ↔ matchRejected
 
 | ID | Caso | Comando / acción | Esperado |

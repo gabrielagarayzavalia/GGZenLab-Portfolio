@@ -111,8 +111,39 @@ function send(
   res.end(body);
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown): void {
-  send(res, status, JSON.stringify(data), "application/json");
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  data: unknown,
+  extraHeaders?: Record<string, string>
+): void {
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    ...extraHeaders,
+  });
+  res.end(JSON.stringify(data));
+}
+
+const DEPRECATED_RESULTS_HEADERS: Record<string, string> = {
+  Deprecation: "true",
+  Link: '</api/dashboard/match-jobs>; rel="successor-version"',
+};
+
+async function handleComposeMatchJobs(
+  res: ServerResponse,
+  options: { filter?: DashboardMatchFilter } = {},
+  extraHeaders?: Record<string, string>
+): Promise<void> {
+  try {
+    await connect();
+    await ensureIndexes();
+    const payload = await composeMatchJobs(options);
+    sendJson(res, 200, payload, extraHeaders);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "MongoDB unavailable";
+    sendJson(res, 503, { error: message, hint: "docker compose up -d && npm run tracker:seed" });
+  }
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -237,39 +268,15 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    try {
-      await connect();
-      await ensureIndexes();
-      const payload = await composeMatchJobs({ filter });
-      sendJson(res, 200, payload);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "MongoDB unavailable";
-      sendJson(res, 503, { error: message, hint: "docker compose up -d && npm run tracker:seed" });
-    }
+    await handleComposeMatchJobs(res, { filter });
     return;
   }
 
   if (pathname === "/api/results" && method === "GET") {
-    if (!fs.existsSync(RESULTS_PATH)) {
-      sendJson(res, 404, { error: "No se encontró output/jobs-result.json" });
-      return;
-    }
-    const result = JSON.parse(fs.readFileSync(RESULTS_PATH, "utf-8"));
-    const feedback = loadFeedback();
-    const applicationStatus = loadApplicationStatus();
-    const rejectedIds = new Set(feedback.rejections.map((r) => r.jobId));
-    sendJson(res, 200, {
-      ...result,
-      feedback: {
-        rejectionCount: feedback.rejections.length,
-        rejectedJobIds: [...rejectedIds],
-        rejections: feedback.rejections,
-      },
-      applicationStatus: {
-        updatedAt: applicationStatus.updatedAt,
-        entries: applicationStatus.entries,
-      },
-    });
+    console.warn(
+      "[deprecation] GET /api/results delega a match-jobs — migrar a GET /api/dashboard/match-jobs (#316)"
+    );
+    await handleComposeMatchJobs(res, {}, DEPRECATED_RESULTS_HEADERS);
     return;
   }
 

@@ -31,7 +31,7 @@ export interface MatchJobsResponse {
   scrapedAt: string;
   totalAnalyzed: number;
   jobs: JobMatch[];
-  /** Alias para compatibilidad con dashboard/app.js (#313). */
+  /** Alias para compatibilidad con dashboard/app.js (#313) y GET /api/results legacy (#316). */
   matchedJobs: JobMatch[];
   feedback: {
     rejectionCount: number;
@@ -52,6 +52,13 @@ export interface MatchJobsResponse {
 export interface ComposeMatchJobsOptions {
   filter?: DashboardMatchFilter;
 }
+
+/**
+ * Shim GET /api/results (#316): payload idéntico a match-jobs.
+ * Legacy leía jobs-result.json + feedback/applicationStatus; el compositor ya los incluye.
+ * Campos extra `jobs` (alias de matchedJobs) y `meta` son superset seguro para clientes viejos.
+ */
+export type LegacyResultsResponse = MatchJobsResponse;
 
 /** Mapeo spike § B38-11-02 — lectura tracker → filtros legacy dashboard. */
 export function deriveApplicationStatus(app: TrackerApplication): ApplicationStatus | null {

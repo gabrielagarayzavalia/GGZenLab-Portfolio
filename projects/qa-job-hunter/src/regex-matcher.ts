@@ -110,13 +110,68 @@ function cleanDescription(desc: string): string {
   return text.slice(0, cut).replace(/…\s*more\s*$/i, "").trim();
 }
 
-function profileHasSkill(label: string): boolean {
-  return PROFILE.skills.some((s) => s.includes(label) || label.includes(s));
+interface JobRequirement {
+  label: string;
+  weight: number;
+  sourceLine?: string;
 }
 
-function extractRequirements(text: string): { label: string; weight: number }[] {
-  const reqs: { label: string; weight: number }[] = [];
-  const lines = text.split(/[\n.;]/).map((l) => l.trim()).filter((l) => l.length > 8);
+const REQUIREMENT_SECTION =
+  /(?:^|\n)\s*(?:requirements?|qualifications?|requisitos?|lo que buscamos|must have|what you.?ll need)[:\s]*/i;
+
+const GAP_LABELS: Record<string, string> = {
+  english_fluent: "Inglés fluido requerido",
+  hardware_specific: "Hardware específico (Smart TV / plataforma)",
+  regional_requirement: "Requisito regional / suscripción geo-restringida",
+  gig_freelance: "Contrato freelance/gig (no full-time)",
+  entry_level_role: "Rol entry-level vs perfil senior",
+  junior_title: "Rol junior vs perfil senior",
+  hybrid_modality: "Modalidad híbrida requerida",
+  onsite_modality: "Modalidad presencial requerida",
+  remote_ok: "Trabajo remoto",
+  senior_level: "Nivel senior/lead",
+};
+
+function splitLines(text: string): string[] {
+  return text.split(/[\n.;]/).map((l) => l.trim()).filter((l) => l.length > 8);
+}
+
+function findSourceLine(text: string, patterns: RegExp | RegExp[]): string | undefined {
+  const pats = Array.isArray(patterns) ? patterns : [patterns];
+  const line = splitLines(text).find((l) => pats.some((p) => p.test(l)));
+  return line?.replace(/^[-•*–]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
+}
+
+function skillDisplayText(req: JobRequirement): string {
+  if (req.label.startsWith("experience_")) {
+    const years = req.label.split("_")[1];
+    return `${years} años de experiencia`;
+  }
+  return GAP_LABELS[req.label] ?? req.label.replace(/_/g, " ");
+}
+
+function gapDisplayText(req: JobRequirement): string {
+  if (req.sourceLine) {
+    return req.sourceLine.length > 120 ? `${req.sourceLine.slice(0, 117)}...` : req.sourceLine;
+  }
+  return GAP_LABELS[req.label] ?? req.label.replace(/^bullet:/, "").replace(/_/g, " ");
+}
+
+function meetsBulletRequirement(sourceLine: string): boolean {
+  const lower = sourceLine.toLowerCase();
+  if (PROFILE.skills.some((s) => lower.includes(s))) return true;
+  if (/qa|quality|testing|tester/i.test(lower) && PROFILE.experienceYears.qa > 0) return true;
+  if (/english|ingl[eé]s/i.test(lower) && /intermediate|advanced|fluent|alto|b2|c1/i.test(PROFILE.languages.en)) {
+    return true;
+  }
+  if (/remote|remoto/i.test(lower) && PROFILE.modalityPreference === "remote") return true;
+  if (/ux/i.test(lower) && PROFILE.skills.some((s) => /ux|user experience/i.test(s))) return true;
+  return false;
+}
+
+function extractSkillRequirements(text: string): JobRequirement[] {
+  const reqs: JobRequirement[] = [];
+  const lines = splitLines(text);
 
   for (const def of SKILL_PATTERNS) {
     if (!def.patterns.some((p) => p.test(text))) continue;
@@ -124,25 +179,206 @@ function extractRequirements(text: string): { label: string; weight: number }[] 
     const line = lines.find((l) => def.patterns.some((p) => p.test(l)));
     if (line && MUST_HAVE_HINTS.test(line)) weight = Math.max(weight, 2);
     else if (line && NICE_HINTS.test(line)) weight = Math.min(weight, 1);
-    reqs.push({ label: def.label, weight });
+    reqs.push({
+      label: def.label,
+      weight,
+      sourceLine: line ? line.replace(/^[-•*–]\s*/, "").replace(/^\d+[.)]\s*/, "").trim() : undefined,
+    });
   }
 
   const yearsMatch = text.match(/(\d+)\+?\s*(years|a[nñ]os)/i);
-  if (yearsMatch) reqs.push({ label: `experience_${yearsMatch[1]}y`, weight: 2 });
-  if (/english|ingl[eé]s|fluent english|native english/i.test(text)) reqs.push({ label: "english_fluent", weight: 2 });
-  if (/remote|remoto|work from home/i.test(text)) reqs.push({ label: "remote_ok", weight: 1 });
-  if (/senior|sr\.?|lead/i.test(text)) reqs.push({ label: "senior_level", weight: 1 });
+  if (yearsMatch) {
+    reqs.push({ label: `experience_${yearsMatch[1]}y`, weight: 2, sourceLine: yearsMatch[0] });
+  }
+  if (/english|ingl[eé]s|fluent english|native english/i.test(text)) {
+    reqs.push({
+      label: "english_fluent",
+      weight: 2,
+      sourceLine: findSourceLine(text, [/english|ingl[eé]s|fluent english/i]),
+    });
+  }
+  if (/remote|remoto|work from home/i.test(text)) {
+    reqs.push({
+      label: "remote_ok",
+      weight: 1,
+      sourceLine: findSourceLine(text, [/remote|remoto|work from home/i]),
+    });
+  }
+  if (/senior|sr\.?|lead/i.test(text)) {
+    reqs.push({
+      label: "senior_level",
+      weight: 1,
+      sourceLine: findSourceLine(text, [/senior|sr\.?|lead/i]),
+    });
+  }
+  return reqs;
+}
+
+function extractBulletRequirements(text: string): JobRequirement[] {
+  const sectionMatch = text.match(REQUIREMENT_SECTION);
+  const sectionStart = sectionMatch ? text.indexOf(sectionMatch[0]) + sectionMatch[0].length : 0;
+  const sectionText = sectionMatch ? text.slice(sectionStart) : text;
+  const lines = sectionText.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 8);
+  const bulletLines = lines.filter((l) => /^[-•*–]\s/.test(l) || /^\d+[.)]\s/.test(l));
+  const reqs: JobRequirement[] = [];
+
+  for (const line of bulletLines) {
+    const sourceLine = line.replace(/^[-•*–]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
+    if (sourceLine.length < 10) continue;
+    const coveredByPattern = SKILL_PATTERNS.some((def) => def.patterns.some((p) => p.test(sourceLine)));
+    if (coveredByPattern) continue;
+
+    let weight = 2;
+    if (NICE_HINTS.test(line) || NICE_HINTS.test(sourceLine)) weight = 1;
+    else if (MUST_HAVE_HINTS.test(line) || MUST_HAVE_HINTS.test(sourceLine)) weight = 2;
+
+    reqs.push({
+      label: `bullet:${sourceLine.slice(0, 80).toLowerCase()}`,
+      weight,
+      sourceLine,
+    });
+  }
+  return reqs;
+}
+
+function extractContextRequirements(job: JobListing, text: string): { reqs: JobRequirement[]; caps: number[] } {
+  const blob = jobBlob(job, text);
+  const reqs: JobRequirement[] = [];
+  const caps: number[] = [];
+
+  if (HARDWARE_SIGNALS.test(blob) && ACCESS_CONTEXT.test(blob)) {
+    reqs.push({
+      label: "hardware_specific",
+      weight: 2,
+      sourceLine:
+        findSourceLine(text, HARDWARE_SIGNALS) ??
+        "Acceso a hardware específico (Smart TV / plataforma de streaming)",
+    });
+    caps.push(45);
+  }
+
+  if (isForeignGeo(blob)) {
+    reqs.push({
+      label: "regional_requirement",
+      weight: 2,
+      sourceLine:
+        findSourceLine(text, GEO_SUBSCRIPTION) ??
+        findSourceLine(text, FOREIGN_COUNTRY) ??
+        "Requisito regional o suscripción geo-restringida",
+    });
+    caps.push(40);
+  }
+
+  const hasManualOrMobile = /manual\s+test|mobile\s+test|app\s+test/i.test(blob);
+  if (hasManualOrMobile && !AUTOMATION_JD.test(blob)) {
+    caps.push(55);
+  }
+
+  return { reqs, caps };
+}
+
+function extractFitRequirements(job: JobListing, text: string): JobRequirement[] {
+  const reqs: JobRequirement[] = [];
+  const blob = jobBlob(job, text);
+  const modality = (job.modality || "").toLowerCase();
+  const title = job.title.toLowerCase();
+
+  if (GIG_SIGNALS.test(blob) || CONTRACT_EMPLOYMENT.test(blob)) {
+    reqs.push({
+      label: "gig_freelance",
+      weight: 2,
+      sourceLine: findSourceLine(text, GIG_SIGNALS) ?? "Employment type: freelance/gig contract",
+    });
+  }
+
+  if (ENTRY_LEVEL.test(blob)) {
+    reqs.push({
+      label: "entry_level_role",
+      weight: 2,
+      sourceLine: findSourceLine(text, ENTRY_LEVEL) ?? "Entry-level role",
+    });
+  }
+
+  if (/\bjr\b|junior|trainee|becari|pasant/i.test(title)) {
+    reqs.push({
+      label: "junior_title",
+      weight: 2,
+      sourceLine: `Rol junior: ${job.title}`,
+    });
+  } else if (/middle|intermediate|semi[\s-]?senior|\bssr\b/i.test(title) && !/\bsr\b|senior/i.test(title)) {
+    reqs.push({
+      label: "junior_title",
+      weight: 1,
+      sourceLine: `Rol semi-senior: ${job.title}`,
+    });
+  }
+
+  if (/hybrid|h[ií]brido/.test(modality)) {
+    reqs.push({
+      label: "hybrid_modality",
+      weight: 1,
+      sourceLine: findSourceLine(text, [/hybrid|h[ií]brido/i]) ?? "Modalidad híbrida",
+    });
+  } else if (/on-?site|presencial/.test(modality) && !/remote|remoto/.test(modality)) {
+    reqs.push({
+      label: "onsite_modality",
+      weight: 2,
+      sourceLine: findSourceLine(text, [/on-?site|presencial/i]) ?? "Modalidad presencial",
+    });
+  }
 
   return reqs;
 }
 
-function meetsRequirement(label: string): boolean {
+function mergeRequirements(...lists: JobRequirement[][]): JobRequirement[] {
+  const seen = new Map<string, JobRequirement>();
+  for (const list of lists) {
+    for (const req of list) {
+      const existing = seen.get(req.label);
+      if (!existing || (req.sourceLine && !existing.sourceLine)) {
+        seen.set(req.label, req);
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+function extractRequirements(job: JobListing, text: string): JobRequirement[] {
+  return mergeRequirements(
+    extractSkillRequirements(text),
+    extractBulletRequirements(text),
+    extractContextRequirements(job, text).reqs,
+    extractFitRequirements(job, text),
+  );
+}
+
+function meetsRequirement(req: JobRequirement): boolean {
+  const { label, sourceLine } = req;
+
+  if (label.startsWith("bullet:") && sourceLine) {
+    return meetsBulletRequirement(sourceLine);
+  }
+
   if (label.startsWith("experience_")) {
     return PROFILE.experienceYears.qa >= parseInt(label.split("_")[1], 10);
   }
   if (label === "english_fluent") return /intermediate|advanced|fluent|alto|b2|c1/i.test(PROFILE.languages.en);
   if (label === "remote_ok") return PROFILE.modalityPreference === "remote";
   if (label === "senior_level") return PROFILE.seniority === "senior";
+
+  if (label === "gig_freelance" || label === "entry_level_role" || label === "junior_title") {
+    return false;
+  }
+  if (label === "hardware_specific" || label === "regional_requirement") {
+    return false;
+  }
+  if (label === "hybrid_modality") {
+    return PROFILE.modalityPreference === "hybrid" || PROFILE.modalityPreference === "onsite";
+  }
+  if (label === "onsite_modality") {
+    return PROFILE.modalityPreference === "onsite";
+  }
+
   if (label === "automation") {
     return AUTOMATION_TOOLS.some((t) => PROFILE.skills.includes(t)) || PROFILE.skills.some((s) => /automation|automatiz/i.test(s));
   }
@@ -151,7 +387,21 @@ function meetsRequirement(label: string): boolean {
   }
   if (label === "ai/ml testing") return PROFILE.skills.some((s) => /\bai\b|machine learning|\bml\b|\bllm\b/i.test(s));
   if (label === "istqb") return PROFILE.skills.some((s) => /istqb/i.test(s));
-  return profileHasSkill(label);
+  return PROFILE.skills.some((s) => s.includes(label) || label.includes(s));
+}
+
+function fitFlags(job: JobListing, text: string): string[] {
+  const reasons: string[] = [];
+  const blob = jobBlob(job, text);
+  const modality = (job.modality || "").toLowerCase();
+  const title = job.title.toLowerCase();
+
+  if (/hybrid|h[ií]brido/.test(modality)) reasons.push("modalidad híbrida");
+  else if (/on-?site|presencial/.test(modality)) reasons.push("modalidad presencial");
+  if (GIG_SIGNALS.test(blob) || CONTRACT_EMPLOYMENT.test(blob)) reasons.push("gig/freelance no full-time");
+  if (ENTRY_LEVEL.test(blob)) reasons.push("entry-level vs perfil senior");
+  if (/\bjr\b|junior|trainee|becari|pasant/.test(title)) reasons.push("rol junior (sobre-calificada)");
+  return reasons;
 }
 
 function specialFlags(job: JobListing): string[] {
@@ -189,96 +439,17 @@ function isForeignGeo(blob: string): boolean {
   return false;
 }
 
-function detectContextGaps(job: JobListing, text: string): { gaps: string[]; caps: number[] } {
-  const blob = jobBlob(job, text);
-  const gaps: string[] = [];
-  const caps: number[] = [];
-
-  if (HARDWARE_SIGNALS.test(blob) && ACCESS_CONTEXT.test(blob)) {
-    gaps.push("hardware específico");
-    caps.push(45);
-  }
-
-  if (isForeignGeo(blob)) {
-    gaps.push("requisito regional");
-    caps.push(40);
-  }
-
-  const hasManualOrMobile = /manual\s+test|mobile\s+test|app\s+test/i.test(blob);
-  if (hasManualOrMobile && !AUTOMATION_JD.test(blob)) {
-    caps.push(55);
-  }
-
-  return { gaps, caps };
-}
-
-// Calibración de prioridad: separa empates según fit real (modalidad, seniority, coding).
-function fitModifier(job: JobListing, text: string): { delta: number; reasons: string[] } {
-  let delta = 0;
-  const reasons: string[] = [];
-  const blob = jobBlob(job, text);
-  const modality = (job.modality || "").toLowerCase();
-  const title = job.title.toLowerCase();
-
-  if (/remote|remoto/.test(modality)) {
-    // preferido, sin penalidad
-  } else if (/hybrid|h[ií]brido/.test(modality)) {
-    delta -= 6;
-    reasons.push("modalidad híbrida");
-  } else if (/on-?site|presencial/.test(modality)) {
-    delta -= 12;
-    reasons.push("modalidad presencial");
-  }
-
-  if (GIG_SIGNALS.test(blob) || CONTRACT_EMPLOYMENT.test(blob)) {
-    delta -= 18;
-    reasons.push("gig/freelance no full-time");
-  }
-
-  if (ENTRY_LEVEL.test(blob)) {
-    delta -= 15;
-    reasons.push("entry-level vs perfil senior");
-  }
-
-  if (/\bjr\b|junior|trainee|becari|pasant/.test(title)) {
-    delta -= 20;
-    reasons.push("rol junior (sobre-calificada)");
-  } else if (/middle|intermediate|semi[\s-]?senior|\bssr\b/.test(title) && !/\bsr\b|senior/.test(title)) {
-    delta -= 6;
-    reasons.push("rol semi-senior");
-  }
-
-  if (/sdet|software development engineer in test/.test(title)) {
-    delta -= 6;
-    reasons.push("rol SDET, coding intensivo a validar");
-  }
-
-  const lines = text.split(/[\n.;]/).map((l) => l.trim()).filter((l) => l.length > 8);
-  const optionalExperience = lines.some(
-    (line) =>
-      NICE_HINTS.test(line) &&
-      /experien|qa|quality|testing|ux/i.test(line) &&
-      !/selenium|playwright|cypress|python|javascript|typescript|automation|automatiz/i.test(line),
-  );
-  if (optionalExperience) {
-    delta -= 8;
-    reasons.push("experiencia opcional (rol junior)");
-  }
-
-  return { delta, reasons };
-}
-
 export function analyzeJobRegex(job: JobListing): RegexAnalysis {
   const text = `${job.title}\n${cleanDescription(job.description)}`;
-  const requirements = extractRequirements(text);
+  let requirements = extractRequirements(job, text);
   const flags = specialFlags(job);
 
   if (requirements.length === 0) {
-    requirements.push(
+    requirements = [
       { label: "manual testing", weight: 2 },
       { label: "automation", weight: 1 },
       { label: "agile", weight: 1 },
-    );
+    ];
   }
 
   let covered = 0;
@@ -288,28 +459,27 @@ export function analyzeJobRegex(job: JobListing): RegexAnalysis {
 
   for (const req of requirements) {
     total += req.weight;
-    if (meetsRequirement(req.label)) {
+    if (meetsRequirement(req)) {
       covered += req.weight;
-      if (!req.label.startsWith("experience_") && req.label !== "remote_ok" && req.label !== "senior_level") {
-        matchedSkills.push(req.label);
-      }
+      matchedSkills.push(skillDisplayText(req));
     } else {
-      gaps.push(req.label.replace(/_/g, " "));
+      gaps.push(gapDisplayText(req));
     }
   }
 
-  const context = detectContextGaps(job, text);
-  gaps.push(...context.gaps);
+  const context = extractContextRequirements(job, text);
+  const fitReasons = fitFlags(job, text);
 
-  const coveragePercent = total > 0 ? Math.round((covered / total) * 100) : 0;
-  const fit = fitModifier(job, text);
-  let matchPercent = Math.max(0, Math.min(100, coveragePercent + fit.delta));
+  let matchPercent = total > 0 ? Math.round((covered / total) * 100) : 0;
+  if (gaps.length > 0) {
+    matchPercent = Math.min(matchPercent, 99);
+  }
 
-  if (gaps.includes("english fluent") && !flags.some((f) => f.startsWith("english_process"))) {
+  if (gaps.some((g) => /english|ingl[eé]s/i.test(g)) && !flags.some((f) => f.startsWith("english_process"))) {
     matchPercent = Math.min(matchPercent, 55);
   }
   if (flags.some((f) => f.startsWith("industry_review"))) matchPercent = Math.min(matchPercent, 60);
-  if (flags.some((f) => f.startsWith("data_domain")) && !meetsRequirement("data quality")) {
+  if (flags.some((f) => f.startsWith("data_domain")) && !meetsRequirement({ label: "data quality", weight: 2 })) {
     matchPercent = Math.min(matchPercent, 50);
   }
   for (const cap of context.caps) {
@@ -320,13 +490,13 @@ export function analyzeJobRegex(job: JobListing): RegexAnalysis {
   const uniqueGaps = [...new Set(gaps)];
   const cvSuggestions = uniqueGaps.slice(0, 3).map((g) => {
     if (g.includes("performance")) return "Destacar experiencia con pruebas de carga/JMeter o no funcionales.";
-    if (g.includes("english")) return "Mencionar inglés técnico fluido: documentación, tickets y dailies.";
+    if (/english|ingl[eé]s/i.test(g)) return "Mencionar inglés técnico fluido: documentación, tickets y dailies.";
     if (g.includes("istqb")) return "Aclarar certificación ISTQB (si la tenés) o experiencia equivalente.";
     if (g.includes("data quality")) return "Sumar evidencia de validación de datos / data quality si aplica.";
     return `Agregar evidencia concreta de ${g} en el CV.`;
   });
 
-  const fitNote = fit.reasons.length ? ` Ajuste de fit: ${fit.reasons.join(", ")}.` : "";
+  const fitNote = fitReasons.length ? ` Ajuste de fit: ${fitReasons.join(", ")}.` : "";
   const summary =
     matchPercent >= 70
       ? `Encaje sólido (${matchPercent}%) por regex, foco ${uniqueMatched.slice(0, 3).join(", ") || "QA funcional"}.${fitNote}`

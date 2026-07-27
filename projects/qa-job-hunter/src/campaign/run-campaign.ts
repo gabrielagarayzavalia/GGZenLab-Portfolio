@@ -33,6 +33,7 @@ import { stdin as input, stdout as output } from "process";
 import { exportQueueToExcel, importQueueFromExcel, openTrackerExcel } from "../apply/post-run.js";
 import { HUNTER_ROOT, resolveAppliedListRoot, runAppliedListScript } from "./applied-list.js";
 import { runPipelineWithTrackerDualWrite } from "./pipeline-with-tracker.js";
+import { syncReconcileToTracker } from "../tracker/reconcile-sync.js";
 import {
   isDesktopExcelEnabled,
   isExcelOpenAtEndEnabled,
@@ -281,6 +282,7 @@ async function main(): Promise<void> {
       } catch {
         console.log("   (excel:refresh omitido o falló — reconcile ya corrió)");
       }
+      await syncReconcileToTracker();
       const exported = exportQueueToExcel();
       if (exported && isExcelOpenAtEndEnabled()) {
         openTrackerExcel();

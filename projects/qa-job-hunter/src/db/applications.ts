@@ -5,6 +5,7 @@ import type {
   TrackerEstado,
 } from "../types/tracker-application.js";
 import type { AnalysisSnapshot } from "../types/dashboard-match.js";
+import type { AutomationApplicationFields } from "../tracker/automation-merge.js";
 import { normalizeFeedbackFields } from "../types/dashboard-match.js";
 import { applyTrackerPatch, type TrackerWriteSource } from "../tracker/estado-policy.js";
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
@@ -15,7 +16,7 @@ import {
 } from "../tracker/pipeline-match.js";
 import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
 import type { QueueRow } from "../apply/apply-queue.js";
-import { planAutomationUpsert, planEasyApplyUpsert } from "../tracker/automation-merge.js";
+import { planAutomationUpsert, planEasyApplyUpsert, planReconcileUpsert } from "../tracker/automation-merge.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
 import { isProtectedEstado } from "../tracker/protected-estado.js";
 import { getDb } from "./client.js";
@@ -452,6 +453,11 @@ export interface EasyApplyUpsertResult {
   action: "insert" | "update" | "skip";
 }
 
+export interface ReconcileUpsertResult {
+  updated: number;
+  skipped: number;
+}
+
 /**
  * Dual-write Easy Apply cola → Mongo (B-38-6).
  * Usa planEasyApplyUpsert: Enviada/notas desde cola; skip estados bloqueados por usuaria.
@@ -491,4 +497,43 @@ export async function upsertEasyApplyQueueRow(row: QueueRow): Promise<EasyApplyU
     { $set: { ...plan.update, updatedAt: now } }
   );
   return { action: result.modifiedCount > 0 ? "update" : "skip" };
+}
+
+/**
+ * Dual-write reconcile Excel → Mongo (B-23-02).
+ * Actualiza estado/notas de applications matcheadas por jobId o linkedinUrlNorm.
+ */
+export async function upsertReconcileRows(
+  rows: AutomationApplicationFields[]
+): Promise<ReconcileUpsertResult> {
+  const db = getDb();
+  const col = db.collection<ApplicationDoc>("applications");
+  let updated = 0;
+  let skipped = 0;
+  const now = new Date();
+
+  for (const input of rows) {
+    const fields = buildDocFields(
+      { ...input, estado: input.estado ?? "Pendiente", updatedBy: "reconcile" },
+      now
+    );
+    const filter = applicationFilter(fields);
+
+    const existing = await col.findOne(filter);
+    const plan = planReconcileUpsert(existing, input, "reconcile");
+
+    if (plan.action === "skip") {
+      skipped++;
+      continue;
+    }
+
+    const result = await col.updateOne(
+      { _id: existing!._id },
+      { $set: { ...plan.update, updatedAt: now } }
+    );
+    if (result.modifiedCount > 0) updated++;
+    else skipped++;
+  }
+
+  return { updated, skipped };
 }

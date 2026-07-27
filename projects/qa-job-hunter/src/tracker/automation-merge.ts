@@ -179,3 +179,54 @@ export function planEasyApplyUpsert(
 
   return { action: "update", update };
 }
+
+/**
+ * Plan upsert reconcile → Mongo (B-23-02).
+ * Solo actualiza applications existentes; skip estados protegidos en Mongo.
+ */
+export function planReconcileUpsert(
+  existing: AutomationExistingDoc | null,
+  input: AutomationApplicationFields,
+  updatedBy = "reconcile"
+): AutomationMergePlan {
+  const { patch } = applyTrackerPatch(input, "automation");
+  const merged: AutomationApplicationFields = { ...input, ...patch };
+
+  if (!existing) {
+    return { action: "skip" };
+  }
+
+  if (isProtectedEstado(existing.estado)) {
+    return { action: "skip" };
+  }
+
+  const update: Partial<AutomationApplicationFields> & { updatedBy: string } = {
+    updatedBy,
+  };
+
+  if (merged.estado) {
+    update.estado = merged.estado;
+  }
+  if (merged.proximoPaso?.trim()) {
+    update.proximoPaso = merged.proximoPaso;
+  }
+  if (merged.fechaAplicacion?.trim()) {
+    update.fechaAplicacion = merged.fechaAplicacion;
+  }
+  if (merged.notas?.trim()) {
+    const base = existing.notas?.trim() ?? "";
+    const line = merged.notas.trim();
+    update.notas = !base ? line : base.includes(line) ? base : `${base}\n${line}`;
+  }
+
+  const estadoSame = !update.estado || update.estado === existing.estado;
+  const proxSame = !update.proximoPaso || update.proximoPaso === existing.proximoPaso;
+  const fechaSame =
+    !update.fechaAplicacion || update.fechaAplicacion === existing.fechaAplicacion;
+  const notasSame = !update.notas || update.notas === existing.notas;
+  if (estadoSame && proxSame && fechaSame && notasSame) {
+    return { action: "skip" };
+  }
+
+  return { action: "update", update };
+}

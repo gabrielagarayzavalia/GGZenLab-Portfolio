@@ -96,6 +96,8 @@ const MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
 };
 
 function send(
@@ -675,6 +677,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       const status = message.includes("no encontrado") ? 404 : 400;
       sendJson(res, status, { error: message });
     }
+    return;
+  }
+
+  if (pathname === "/favicon.ico") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "favicon.svg"));
     return;
   }
 

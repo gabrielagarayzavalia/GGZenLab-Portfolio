@@ -13,6 +13,10 @@ import {
   patchForRejectMatch,
   patchForUndoReject,
 } from "./application-writes.js";
+import {
+  syncRejectionFromApplication,
+  syncUndoRejectionFromJobId,
+} from "../feedback-sync.js";
 
 type SendJson = (res: ServerResponse, status: number, data: unknown) => void;
 
@@ -77,6 +81,7 @@ export async function handleDashboardWrites(
         sendJson(res, 404, { error: "Application no encontrada" });
         return true;
       }
+      syncRejectionFromApplication(result.application, body.reason);
       sendJson(res, 200, { application: result.application, warnings: result.warnings });
     } catch {
       sendJson(res, 400, { error: "JSON inválido" });
@@ -98,6 +103,7 @@ export async function handleDashboardWrites(
       sendJson(res, 404, { error: "Application no encontrada" });
       return true;
     }
+    syncUndoRejectionFromJobId(jobId);
     sendJson(res, 200, { application: result.application, warnings: result.warnings });
     return true;
   }

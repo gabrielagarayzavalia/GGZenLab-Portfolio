@@ -8,7 +8,7 @@ import fs from "fs";
 import { OUTPUT_PATH } from "./config.js";
 import {
   isRejectedJobId,
-  loadFeedback,
+  loadMergedFeedback,
   matchesPriorRejection,
 } from "./feedback.js";
 import { chat, getLLMProvider, getProviderLabel, isOllamaAvailable } from "./llm-client.js";
@@ -45,7 +45,7 @@ async function analyzeJobs(): Promise<void> {
   }
 
   const jobs: JobListing[] = JSON.parse(fs.readFileSync(rawPath, "utf-8"));
-  const feedback = loadFeedback();
+  const feedback = await loadMergedFeedback();
   console.log(`\n🧠 Analizando ${jobs.length} empleos con ${getProviderLabel()}...`);
   if (feedback.rejections.length > 0) {
     console.log(`   📚 Aprendizaje activo: ${feedback.rejections.length} match(es) incorrecto(s) previo(s)\n`);
@@ -78,7 +78,7 @@ async function analyzeJobs(): Promise<void> {
       const analysis =
         provider === "regex"
           ? analyzeJobRegex(job)
-          : parseMatchResponse(await chat(buildMatchPrompt(job)));
+          : parseMatchResponse(await chat(buildMatchPrompt(job, feedback)));
 
       if (analysis.matchPercent >= MIN_MATCH) {
         matchedJobs.push({ ...job, ...analysis });

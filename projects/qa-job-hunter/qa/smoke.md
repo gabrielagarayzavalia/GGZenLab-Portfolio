@@ -2,6 +2,20 @@
 
 Casos rápidos para validar que el dashboard y el tracker responden. No reemplazan regression/E2E.
 
+## PR #315 — B-38-16 sync match-feedback ↔ matchRejected
+
+| ID | Caso | Comando / acción | Esperado |
+|----|------|------------------|----------|
+| SMK-315-01 | Unit feedback sync (dual-write + merge + analyze block) | `npm run test:tracker` | 48/48 pass (incl. `tests/feedback/match-feedback-sync.test.ts` ×6) |
+| SMK-315-02 | Unit match-jobs sin regresión | `npm run test:match-jobs` | 11/11 pass |
+| SMK-315-03 | HTTP reject-match Mongo (reject + undo) | `npx tsx scripts/qa/smoke-b38-15-writes.ts` | POST/DELETE 200, `matchRejected` true → false |
+| SMK-315-04 | HTTP dual-write JSON | Tras reject: entrada en `output/match-feedback.json`; tras undo: eliminada | **requiere dashboard reiniciado con rama `feature/b38-16-match-feedback-sync`** — si corre código viejo, Mongo OK pero JSON no se actualiza |
+
+### Notas B-38-16
+
+- Migración JSON → Mongo planificada en `docs/match-feedback-migration.md` (#300).
+- Verificación manual completa: pasos 1–6 en ese doc.
+
 ## PR #353 — fix cancel /run race
 
 | ID | Caso | Comando / acción | Esperado |

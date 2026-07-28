@@ -2,6 +2,10 @@
 //  types.ts — Tipos compartidos entre todos los módulos
 // ============================================================
 
+import type { JdSections } from "./jd/parse-sections.js";
+
+export type { JdSections };
+
 export interface JobListing {
   id: string;
   title: string;
@@ -11,6 +15,8 @@ export interface JobListing {
   datePosted: string;
   url: string;
   description: string;
+  /** Secciones JD parseadas (#370) — opcional en API/dashboard. */
+  jdSections?: JdSections;
   searchTerm: string;     // Qué búsqueda lo encontró
   /** Origen multi-fuente (B-13 / B-31). Opcional en scrape LinkedIn legacy. */
   source?: string;

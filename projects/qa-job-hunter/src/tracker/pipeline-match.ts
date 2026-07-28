@@ -1,3 +1,4 @@
+import { hasParsedJdSections, parseJdSections } from "../jd/parse-sections.js";
 import type { UpsertApplicationInput } from "../db/applications.js";
 import type { AnalysisSnapshot } from "../types/dashboard-match.js";
 
@@ -74,14 +75,20 @@ export function analysisSnapshotFromPipelineMatch(
   if (match.matchPercent < DASHBOARD_MIN_MATCH) return undefined;
 
   const hasSkills = Boolean(match.matchedSkills?.length);
-  const hasDescription = Boolean(scraped?.description?.trim());
+  const description = scraped?.description?.trim();
+  const hasDescription = Boolean(description);
   if (!hasSkills && !hasDescription) return undefined;
+
+  const jdSections = description ? parseJdSections(description) : undefined;
+  const parsedJd =
+    jdSections && hasParsedJdSections(jdSections) ? jdSections : undefined;
 
   return {
     location: scraped?.location,
     modality: scraped?.modality,
     datePosted: scraped?.datePosted,
     description: scraped?.description,
+    ...(parsedJd ? { jdSections: parsedJd } : {}),
     searchTerm: scraped?.scrapedTitle ?? match.title,
     source: "pipeline",
     matchedSkills: match.matchedSkills?.length ? [...match.matchedSkills] : undefined,

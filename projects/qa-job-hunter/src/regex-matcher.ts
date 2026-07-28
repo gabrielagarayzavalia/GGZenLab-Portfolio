@@ -5,6 +5,7 @@
 // ============================================================
 
 import type { JobListing } from "./types.js";
+import { parseJdSections } from "./jd/parse-sections.js";
 
 export interface RegexAnalysis {
   matchPercent: number;
@@ -215,22 +216,31 @@ function extractSkillRequirements(text: string): JobRequirement[] {
 }
 
 function extractBulletRequirements(text: string): JobRequirement[] {
-  const sectionMatch = text.match(REQUIREMENT_SECTION);
-  const sectionStart = sectionMatch ? text.indexOf(sectionMatch[0]) + sectionMatch[0].length : 0;
-  const sectionText = sectionMatch ? text.slice(sectionStart) : text;
-  const lines = sectionText.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 8);
-  const bulletLines = lines.filter((l) => /^[-•*–]\s/.test(l) || /^\d+[.)]\s/.test(l));
+  const parsed = parseJdSections(text);
+  let bulletLines: string[];
+
+  if (parsed.requirements.length > 0) {
+    bulletLines = parsed.requirements;
+  } else {
+    const sectionMatch = text.match(REQUIREMENT_SECTION);
+    const sectionStart = sectionMatch ? text.indexOf(sectionMatch[0]) + sectionMatch[0].length : 0;
+    const sectionText = sectionMatch ? text.slice(sectionStart) : text;
+    const lines = sectionText.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 8);
+    bulletLines = lines
+      .filter((l) => /^[-•*–]\s/.test(l) || /^\d+[.)]\s/.test(l))
+      .map((l) => l.replace(/^[-•*–]\s*/, "").replace(/^\d+[.)]\s*/, "").trim());
+  }
+
   const reqs: JobRequirement[] = [];
 
-  for (const line of bulletLines) {
-    const sourceLine = line.replace(/^[-•*–]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
+  for (const sourceLine of bulletLines) {
     if (sourceLine.length < 10) continue;
     const coveredByPattern = SKILL_PATTERNS.some((def) => def.patterns.some((p) => p.test(sourceLine)));
     if (coveredByPattern) continue;
 
     let weight = 2;
-    if (NICE_HINTS.test(line) || NICE_HINTS.test(sourceLine)) weight = 1;
-    else if (MUST_HAVE_HINTS.test(line) || MUST_HAVE_HINTS.test(sourceLine)) weight = 2;
+    if (NICE_HINTS.test(sourceLine)) weight = 1;
+    else if (MUST_HAVE_HINTS.test(sourceLine)) weight = 2;
 
     reqs.push({
       label: `bullet:${sourceLine.slice(0, 80).toLowerCase()}`,

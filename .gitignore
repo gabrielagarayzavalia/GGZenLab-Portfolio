@@ -10,6 +10,7 @@ build/
 # IDE
 .idea/
 .vscode/
+.cursor/settings.json
 *.swp
 *.swo
 .DS_Store
@@ -44,6 +45,9 @@ project.lock.json
 # Nested repo (remote propio qa-job-applied-list)
 projects/qa-job-applied-list/
 
+# Job Hunter — borradores locales del agente y capturas de pantalla
+projects/qa-job-hunter/local/
+projects/qa-job-hunter/Captura de pantalla*.png
 
 # Screenshots placeholder keep dir
 !projects/**/report/screenshots/.gitkeep

@@ -11,6 +11,7 @@ let showApplied = false;
 let showNotApplied = false;
 let showNotSelected = false;
 let showUnmarked = true;
+let showClosed = false;
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
 /** @type {Set<string>} */
@@ -29,6 +30,7 @@ const els = {
   showNotApplied: document.getElementById("show-not-applied"),
   showNotSelected: document.getElementById("show-not-selected"),
   showUnmarked: document.getElementById("show-unmarked"),
+  showClosed: document.getElementById("show-closed"),
   detailEmpty: document.getElementById("detail-empty"),
   detailContent: document.getElementById("detail-content"),
   listEmpty: document.getElementById("list-empty"),
@@ -96,6 +98,10 @@ function renderDetailMeta(job) {
   return `<div class="detail__meta">${spans.join("")}</div>`;
 }
 
+function isLinkedInClosed(job) {
+  return job?.jobClosed === true;
+}
+
 function isRejected(jobId) {
   return rejectedIds.has(jobId);
 }
@@ -105,6 +111,8 @@ function getApplicationStatus(jobId) {
 }
 
 function isVisibleInList(jobId) {
+  const job = jobs.find((j) => j.id === jobId);
+  if (job && isLinkedInClosed(job)) return showClosed;
   if (isRejected(jobId)) return showRejected;
   const status = getApplicationStatus(jobId);
   if (status === "applied") return showApplied;
@@ -192,15 +200,20 @@ function renderList() {
 
   for (const job of list) {
     const rejected = isRejected(job.id);
+    const closed = isLinkedInClosed(job);
     const li = document.createElement("li");
     li.className =
-      "job-item" + (job.id === selectedId ? " active" : "") + (rejected ? " rejected" : "");
+      "job-item" +
+      (job.id === selectedId ? " active" : "") +
+      (rejected ? " rejected" : "") +
+      (closed ? " closed" : "");
     li.dataset.id = job.id;
     li.tabIndex = 0;
     const pctClass = matchClass(job.matchPercent);
     const colorVar =
       job.matchPercent >= 85 ? "match-high" : job.matchPercent >= 75 ? "match-mid" : "match-low";
     const rejectedBadge = rejected ? `<span class="badge-rejected">Match incorrecto</span>` : "";
+    const closedBadge = closed ? `<span class="badge-closed">Aviso cerrado</span>` : "";
     const appStatus = getApplicationStatus(job.id);
     const appBadge =
       appStatus === "applied"
@@ -225,6 +238,7 @@ function renderList() {
         <p class="job-item__company">${escapeHtml(job.company)}</p>
         ${listMeta ? `<p class="job-item__meta">${listMeta}</p>` : ""}
         ${rejectedBadge}
+        ${closedBadge}
         ${appBadge}
       </div>`;
 
@@ -254,6 +268,7 @@ function renderDetail(job) {
   els.detailContent.hidden = false;
 
   const rejected = isRejected(job.id);
+  const closed = isLinkedInClosed(job);
   const meta = rejectionMeta.get(job.id);
 
   const gapsBlock =
@@ -289,6 +304,9 @@ function renderDetail(job) {
 
   const descriptionBlock = renderDescriptionBlock(job);
   const appStatus = getApplicationStatus(job.id);
+  const closedBadge = closed
+    ? `<p class="detail__closed-badge"><span class="badge-closed">Aviso cerrado</span> LinkedIn ya no acepta postulaciones.</p>`
+    : "";
   const linkedInLink = job.url
     ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
     : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
@@ -300,6 +318,7 @@ function renderDetail(job) {
           <h1 class="detail__title">${escapeHtml(job.title)}</h1>
           <p class="detail__company">${escapeHtml(job.company)}</p>
           ${renderDetailMeta(job)}
+          ${closedBadge}
           ${linkedInLink}
         </div>
         <aside class="detail__header-aside" aria-label="Acciones">
@@ -322,6 +341,7 @@ function renderDetail(job) {
           </div>
           <div class="feedback-section feedback-section--compact${rejected ? " feedback-section--rejected" : ""}">
             ${feedbackToggle}
+            <p class="feedback-hint feedback-hint--inline">Match incorrecto: usá el filtro de lista o el botón aquí (no es un checkbox de postulación).</p>
           </div>
         </aside>
       </div>
@@ -416,6 +436,7 @@ function serverFilterFromUI() {
   if (showApplied) active.push("applied");
   if (showNotApplied) active.push("not_applied");
   if (showNotSelected) active.push("not_selected");
+  if (showClosed) active.push("closed");
   if (showUnmarked) active.push("unmarked");
   return active.length === 1 ? active[0] : null;
 }
@@ -439,6 +460,7 @@ function syncFilterFlagsFromUI(changed) {
     els.showNotApplied.checked = false;
     els.showNotSelected.checked = false;
     els.showRejected.checked = false;
+    els.showClosed.checked = false;
   } else if (changed !== els.showUnmarked && changed.checked) {
     els.showUnmarked.checked = false;
   }
@@ -448,8 +470,9 @@ function syncFilterFlagsFromUI(changed) {
   showNotApplied = els.showNotApplied.checked;
   showNotSelected = els.showNotSelected.checked;
   showUnmarked = els.showUnmarked.checked;
+  showClosed = els.showClosed.checked;
 
-  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked) {
+  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked && !showClosed) {
     showUnmarked = true;
     els.showUnmarked.checked = true;
   }
@@ -652,6 +675,7 @@ async function init() {
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
+  els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
 
   async function onFilterChange(changed) {
     syncFilterFlagsFromUI(changed);

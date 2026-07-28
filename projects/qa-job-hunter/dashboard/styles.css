@@ -71,6 +71,9 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .badge-applied { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--match-high); background: rgba(34, 197, 94, 0.15); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; margin-right: 0.25rem; }
 .badge-not-applied { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); background: rgba(139, 156, 179, 0.15); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; }
 .badge-not-selected { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #fbbf24; background: rgba(251, 191, 36, 0.12); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; margin-right: 0.25rem; }
+.badge-closed { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #f87171; background: rgba(248, 113, 113, 0.15); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; margin-right: 0.25rem; }
+.job-item.closed { opacity: 0.65; }
+.job-item.closed .job-item__title { text-decoration: line-through; }
 .application-section {
   margin: 0; padding: 0.65rem 0.85rem; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -98,7 +101,9 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .feedback-section--compact { margin-top: 0.5rem; }
 .feedback-section--compact .feedback-disclosure__toggle { padding: 0.45rem 0.55rem; font-size: 0.78rem; }
 .feedback-disclosure__panel--wide { margin-top: 0.65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.detail__closed-badge { margin: 0.35rem 0 0.5rem; font-size: 0.82rem; color: var(--text-muted); }
 .feedback-hint { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-muted); }
+.feedback-hint--inline { margin: 0.35rem 0.55rem 0.5rem; font-size: 0.72rem; color: var(--text-muted); }
 .feedback-section--rejected { border-color: rgba(239, 68, 68, 0.35); }
 .feedback-disclosure__toggle {
   display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.55rem 0.75rem;

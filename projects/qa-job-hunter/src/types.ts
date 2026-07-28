@@ -31,6 +31,8 @@ export interface JobMatch extends JobListing {
   summary: string;
   /** Mongo `applications._id` — writes dashboard (#314). */
   applicationId?: string;
+  /** LinkedIn: aviso cerrado (scrape `jobClosed`). Distinto de estado tracker Cerrado. */
+  jobClosed?: boolean;
 }
 
 export interface AnalysisResult {

@@ -67,6 +67,35 @@ test("GET /api/dashboard/match-jobs rejects invalid filter", async (t) => {
   const body = (await res.json()) as { error?: string; allowed?: string[] };
   assert.match(body.error ?? "", /inválido/i);
   assert.ok(body.allowed?.includes("applied"));
+  assert.ok(body.allowed?.includes("closed"));
+});
+
+test("GET /api/dashboard/match-jobs accepts closed filter", async (t) => {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/dashboard/match-jobs?filter=closed`, {
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    t.skip("Dashboard not running at " + BASE);
+    return;
+  }
+
+  if (res.status === 404) {
+    t.skip("GET /api/dashboard/match-jobs not found — restart dashboard with latest code");
+    return;
+  }
+  if (res.status === 503) {
+    t.skip("MongoDB not available — run docker compose up -d && npm run tracker:seed");
+    return;
+  }
+
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { meta?: { filter?: string }; matchedJobs?: { jobClosed?: boolean }[] };
+  assert.equal(body.meta?.filter, "closed");
+  for (const job of body.matchedJobs ?? []) {
+    assert.equal(job.jobClosed, true);
+  }
 });
 
 test("GET /api/results delegates to match-jobs with Deprecation header", async (t) => {

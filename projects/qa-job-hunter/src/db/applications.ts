@@ -53,6 +53,8 @@ export interface ApplicationDoc {
   matchRejectedReason?: string;
   matchRejectedAt?: string;
   inLatestAnalysis?: boolean;
+  jobClosed?: boolean;
+  acceptingApplications?: boolean;
   createdAt: Date;
   updatedAt: Date;
   updatedBy?: string;
@@ -98,6 +100,8 @@ function toApi(doc: ApplicationDoc): TrackerApplication {
     cvType: doc.cvType,
     applyType: doc.applyType,
     analysis: doc.analysis,
+    jobClosed: doc.jobClosed,
+    acceptingApplications: doc.acceptingApplications,
     ...feedback,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
@@ -119,6 +123,10 @@ function appendB38Fields(
   }
   if (input.matchRejectedAt !== undefined) target.matchRejectedAt = input.matchRejectedAt;
   if (input.inLatestAnalysis !== undefined) target.inLatestAnalysis = input.inLatestAnalysis;
+  if (input.jobClosed !== undefined) target.jobClosed = input.jobClosed;
+  if (input.acceptingApplications !== undefined) {
+    target.acceptingApplications = input.acceptingApplications;
+  }
 }
 
 function buildDocFields(

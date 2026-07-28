@@ -124,6 +124,30 @@ test("pipelineMatchToApplicationInput con scrape incluye description", () => {
   assert.equal(input.analysis?.location, "Remote");
 });
 
+test("pipelineMatchToApplicationInput propaga jobClosed desde scrape", () => {
+  const input = pipelineMatchToApplicationInput(
+    {
+      ...baseMatch,
+      matchPercent: 88,
+      matchedSkills: ["Selenium"],
+      summary: "Fit sólido",
+    },
+    {
+      jobId: "1234567890",
+      url: baseMatch.url,
+      title: "QA",
+      company: "Acme",
+      description: "About the job We need a QA engineer.",
+      jobClosed: true,
+      acceptingApplications: false,
+    }
+  );
+  assert.equal(input.jobClosed, true);
+  assert.equal(input.acceptingApplications, false);
+  assert.equal(input.analysis?.jobClosed, true);
+  assert.equal(input.analysis?.acceptingApplications, false);
+});
+
 test("pipelineMatchToApplicationInput parsea jdSections desde scrape (#370)", () => {
   const description = `Intro
 

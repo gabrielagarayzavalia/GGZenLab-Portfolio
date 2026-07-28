@@ -31,9 +31,6 @@ export function isTrackerDualWriteEnabled(): boolean {
   return raw !== "0" && raw !== "false" && raw !== "no";
 }
 
-/** @deprecated Usar isTrackerDualWriteEnabled */
-export const isPipelineDualWriteEnabled = isTrackerDualWriteEnabled;
-
 export function resolveMatchedJsonPath(appliedListRoot = resolveAppliedListRoot()): string {
   const matched = path.join(appliedListRoot, MATCHED_FILE);
   if (fs.existsSync(matched)) return matched;
@@ -90,9 +87,6 @@ export async function syncPipelineToTracker(
     await disconnect();
   }
 }
-
-/** @deprecated Usar syncPipelineToTracker */
-export const syncPipelineMatchesToTracker = syncPipelineToTracker;
 
 import { fileURLToPath } from "url";
 

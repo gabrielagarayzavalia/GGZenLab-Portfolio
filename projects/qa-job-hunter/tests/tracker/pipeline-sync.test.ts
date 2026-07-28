@@ -148,6 +148,37 @@ test("pipelineMatchToApplicationInput propaga jobClosed desde scrape", () => {
   assert.equal(input.analysis?.acceptingApplications, false);
 });
 
+test("pipelineMatchToApplicationInput parsea jdSections desde scrape (#370)", () => {
+  const description = `Intro
+
+What We're Looking For
+• 4+ years Manual QA
+• Advanced English
+
+Nice To Have
+• Cursor
+
+What We Offer
+• 100% remote`;
+
+  const input = pipelineMatchToApplicationInput(
+    { ...baseMatch, matchPercent: 88, matchedSkills: ["QA"] },
+    {
+      jobId: baseMatch.jobId,
+      url: baseMatch.url,
+      title: baseMatch.title,
+      company: baseMatch.company,
+      description,
+    }
+  );
+
+  assert.ok(input.analysis?.jdSections);
+  assert.equal(input.analysis?.jdSections?.requirements.length, 2);
+  assert.ok(input.analysis?.jdSections?.requirements.some((b) => /Manual QA/i.test(b)));
+  assert.equal(input.analysis?.jdSections?.niceToHave.length, 1);
+  assert.equal(input.analysis?.jdSections?.whatWeOffer.length, 1);
+});
+
 
 
 test("notasFromSummary trunca líneas largas", () => {

@@ -1,0 +1,496 @@
+{
+  "info": {
+    "_postman_id": "jh-dashboard-v1-green-path",
+    "name": "Job Hunter Dashboard — Green Path v1",
+    "description": "Smoke/regression API manual para qa-job-hunter dashboard (puerto 3847).\nAlineado a SMK-V1-* y REG-V1-* en qa/v1/.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3847" },
+    { "key": "sampleJobId", "value": "" },
+    { "key": "sampleApplicationId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "SMK-V1-01 GET /api/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-01 status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('ok true', () => pm.expect(json.ok).to.eql(true));",
+                  "pm.test('tracker feature', () => pm.expect(json.features.tracker).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Match Jobs",
+      "item": [
+        {
+          "name": "SMK-V1-02 GET /api/dashboard/match-jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-02 status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('envelope shape', () => {",
+                  "    pm.expect(json.jobs).to.be.an('array');",
+                  "    pm.expect(json.matchedJobs).to.be.an('array');",
+                  "    pm.expect(json.meta.source).to.eql('mongo');",
+                  "  });",
+                  "  if (json.jobs.length > 0 && json.jobs[0].id) {",
+                  "    pm.collectionVariables.set('sampleJobId', String(json.jobs[0].id));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-03 GET match-jobs filter invalid",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=invalid"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-03 status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('allowed filters', () => pm.expect(json.allowed).to.include('applied'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-04 GET /api/results (deprecated shim)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/results"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-04 status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Deprecation header', () => pm.expect(pm.response.headers.get('Deprecation')).to.eql('true'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-04 GET match-jobs filter applied",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=applied"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('filter applied 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "SMK-V1-05 GET /api/jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs?sort=matchPercent&order=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs"],
+              "query": [
+                { "key": "sort", "value": "matchPercent" },
+                { "key": "order", "value": "desc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-05 status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('jobs array', () => pm.expect(pm.response.json().jobs).to.be.an('array'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tracker",
+      "item": [
+        {
+          "name": "SMK-V1-18 GET /api/tracker/applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tracker/applications?sort=matchPercent&order=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tracker", "applications"],
+              "query": [
+                { "key": "sort", "value": "matchPercent" },
+                { "key": "order", "value": "desc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-18 status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('applications array', () => pm.expect(json.applications).to.be.an('array'));",
+                  "  if (json.applications.length > 0) {",
+                  "    pm.collectionVariables.set('sampleApplicationId', json.applications[0].id);",
+                  "    if (!pm.collectionVariables.get('sampleJobId') && json.applications[0].jobId) {",
+                  "      pm.collectionVariables.set('sampleJobId', json.applications[0].jobId);",
+                  "    }",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-19 GET /api/tracker/export/xlsx",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tracker/export/xlsx"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-19 status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('xlsx content-type', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('spreadsheet');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard Writes",
+      "item": [
+        {
+          "name": "SMK-V1-10 POST application-status applied",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tracker-User", "value": "1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"status\": \"applied\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) {",
+                  "  pm.test.skip('Set sampleJobId from match-jobs first');",
+                  "}",
+                  "pm.test('SMK-V1-10 status 200 or 404', () => {",
+                  "  pm.expect([200, 404, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('estado Enviada', () => {",
+                  "    pm.expect(pm.response.json().application.estado).to.eql('Enviada');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-11 POST reject-match",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tracker-User", "value": "1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"reason\": \"SMK-V1-11 smoke test\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/reject-match"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) {",
+                  "  pm.test.skip('Set sampleJobId first');",
+                  "}",
+                  "pm.test('SMK-V1-11 status 200 or 404', () => {",
+                  "  pm.expect([200, 404, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('matchRejected true', () => {",
+                  "    pm.expect(pm.response.json().application.matchRejected).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-12 DELETE undo reject-match",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Tracker-User", "value": "1" }
+            ],
+            "url": "{{baseUrl}}/api/dashboard/reject-match/{{sampleJobId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) {",
+                  "  pm.test.skip('Set sampleJobId first');",
+                  "}",
+                  "pm.test('SMK-V1-12 status 200 or 404', () => {",
+                  "  pm.expect([200, 404, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-20 POST application-status sin header (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"00000\",\n  \"status\": \"applied\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-20 status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Run Apply",
+      "item": [
+        {
+          "name": "SMK-V1-15 GET /api/run/apply/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/run/apply/status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-15 status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-16 POST /api/run/apply dry_run",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"dry_run\",\n  \"applyMax\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/run/apply"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-16 status 202 or 409', () => {",
+                  "  pm.expect([202, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SMK-V1-17 POST /api/run/apply/cancel",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/run/apply/cancel"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-17 status 200 or 409', () => {",
+                  "  pm.expect([200, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "item": [
+        {
+          "name": "SMK-V1-13 GET /api/config/questions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/config/questions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SMK-V1-13 status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('questions array', () => pm.expect(pm.response.json().questions).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-06 GET /api/feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/feedback"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-06 status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

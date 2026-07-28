@@ -185,6 +185,7 @@ export function applicationToJobMatch(
         analysis.description ??
         jobFallback?.description ??
         stubDescription(app, rejected),
+      jdSections: analysis.jdSections ?? jobFallback?.jdSections,
       searchTerm: analysis.searchTerm ?? jobFallback?.searchTerm ?? "—",
       source: analysis.source ?? jobFallback?.source,
       externalId: analysis.externalId ?? jobFallback?.externalId,

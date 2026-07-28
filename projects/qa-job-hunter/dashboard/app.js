@@ -302,7 +302,7 @@ function renderDetail(job) {
           </div>
         </div>`;
 
-  const descriptionBlock = renderDescriptionBlock(job.description);
+  const descriptionBlock = renderDescriptionBlock(job);
   const appStatus = getApplicationStatus(job.id);
   const closedBadge = closed
     ? `<p class="detail__closed-badge"><span class="badge-closed">Aviso cerrado</span> LinkedIn ya no acepta postulaciones.</p>`
@@ -557,19 +557,47 @@ function descriptionToBullets(text) {
   return out;
 }
 
-function renderDescriptionBlock(description) {
-  if (DESCRIPTION_VIEW === "full") {
-    return `<section class="detail__section"><h3>Descripción del puesto</h3><div class="detail__description">${escapeHtml(description)}</div></section>`;
+function renderDescriptionBlock(job) {
+  const sections = job.jdSections;
+  if (sections?.requirements?.length) {
+    const niceBlock = sections.niceToHave?.length
+      ? `<details class="jd-section jd-section--collapsible">
+          <summary>Nice to Have</summary>
+          <ul class="detail__list detail__bullets">${listItems(sections.niceToHave)}</ul>
+        </details>`
+      : "";
+    const offerBlock = sections.whatWeOffer?.length
+      ? `<details class="jd-section jd-section--collapsible">
+          <summary>What We Offer</summary>
+          <ul class="detail__list detail__bullets">${listItems(sections.whatWeOffer)}</ul>
+        </details>`
+      : "";
+
+    return `<section class="detail__section">
+      <h3>Requisitos</h3>
+      <p class="detail__section-note">What We're Looking For — bullets del aviso.</p>
+      <ul class="detail__list detail__bullets">${listItems(sections.requirements)}</ul>
+      ${niceBlock}
+      ${offerBlock}
+      <details class="description-full">
+        <summary>Ver descripción completa</summary>
+        <div class="detail__description">${escapeHtml(job.description)}</div>
+      </details>
+    </section>`;
   }
 
-  const bullets = descriptionToBullets(description);
+  if (DESCRIPTION_VIEW === "full") {
+    return `<section class="detail__section"><h3>Descripción del puesto</h3><div class="detail__description">${escapeHtml(job.description)}</div></section>`;
+  }
+
+  const bullets = descriptionToBullets(job.description);
   return `<section class="detail__section">
     <h3>Descripción del puesto</h3>
     <p class="detail__section-note">Resumen en bullets — opción de texto completo abajo (futuro: resumen con IA).</p>
     <ul class="detail__list detail__bullets">${listItems(bullets)}</ul>
     <details class="description-full">
       <summary>Ver descripción completa</summary>
-      <div class="detail__description">${escapeHtml(description)}</div>
+      <div class="detail__description">${escapeHtml(job.description)}</div>
     </details>
   </section>`;
 }

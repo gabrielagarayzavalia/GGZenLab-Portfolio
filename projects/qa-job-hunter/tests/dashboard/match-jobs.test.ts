@@ -125,6 +125,26 @@ test("isVisibleMatchApplication oculta Duplicado/Descartado y aplica umbral 70",
   assert.equal(isVisibleMatchApplication(app({ estado: "Descartado" })), false);
 });
 
+test("applicationToJobMatch propaga jdSections desde analysis (#370)", () => {
+  const job = applicationToJobMatch(
+    app({
+      analysis: {
+        description: "JD",
+        jdSections: {
+          requirements: ["4+ years Manual QA"],
+          niceToHave: ["Cursor"],
+          whatWeOffer: ["Remote"],
+        },
+        matchedSkills: ["QA"],
+        summary: "Fit",
+      },
+    })
+  );
+
+  assert.equal(job.jdSections?.requirements[0], "4+ years Manual QA");
+  assert.equal(job.jdSections?.niceToHave[0], "Cursor");
+});
+
 test("applicationToJobMatch usa analysis snapshot", () => {
   const job = applicationToJobMatch(
     app({

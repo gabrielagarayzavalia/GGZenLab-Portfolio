@@ -1,0 +1,88 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const DASHBOARD_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../dashboard"
+);
+
+function readHtml(name: string): string {
+  return fs.readFileSync(path.join(DASHBOARD_DIR, name), "utf-8");
+}
+
+function assertNavLink(html: string, testid: string, href: string): void {
+  const re = new RegExp(
+    `data-testid="${testid}"[^>]*href="${href.replace(/\//g, "\\/")}"|href="${href.replace(/\//g, "\\/")}"[^>]*data-testid="${testid}"`
+  );
+  assert.match(html, re, `expected nav link ${testid} → ${href}`);
+}
+
+const NAV_PAGES: Array<{ file: string; links: Array<[string, string]> }> = [
+  {
+    file: "index.html",
+    links: [
+      ["nav-link-dashboard", "/"],
+      ["nav-link-tracker", "/tracker"],
+      ["nav-link-run", "/run"],
+      ["nav-link-config", "/config"],
+    ],
+  },
+  {
+    file: "config.html",
+    links: [
+      ["nav-link-dashboard", "/"],
+      ["nav-link-config", "/config"],
+    ],
+  },
+  {
+    file: "run.html",
+    links: [
+      ["nav-link-dashboard", "/"],
+      ["nav-link-run", "/run"],
+      ["nav-link-config", "/config"],
+    ],
+  },
+  {
+    file: "tracker.html",
+    links: [
+      ["nav-link-dashboard", "/"],
+      ["nav-link-tracker", "/tracker"],
+      ["nav-link-mlite", "/m-lite.html"],
+      ["nav-link-run", "/run"],
+      ["nav-link-config", "/config"],
+    ],
+  },
+];
+
+for (const { file, links } of NAV_PAGES) {
+  test(`${file} expone data-testid en nav`, () => {
+    const html = readHtml(file);
+    for (const [testid, href] of links) {
+      assertNavLink(html, testid, href);
+    }
+  });
+}
+
+test("run.html expone data-testid de controles Easy Apply", () => {
+  const html = readHtml("run.html");
+  const runTestids = [
+    "run-mode-dry",
+    "run-mode-productive",
+    "run-apply-max",
+    "run-job-id",
+    "run-apply-btn",
+    "run-cancel-btn",
+    "run-status",
+    "run-state-text",
+    "run-log",
+  ];
+  for (const testid of runTestids) {
+    assert.match(html, new RegExp(`data-testid="${testid}"`), `missing ${testid}`);
+  }
+  assert.match(html, /id="run-apply-max"[^>]*data-testid="run-apply-max"|data-testid="run-apply-max"[^>]*id="run-apply-max"/);
+  assert.match(html, /value="dry_run"[^>]*data-testid="run-mode-dry"|data-testid="run-mode-dry"[^>]*value="dry_run"/);
+  assert.match(html, /value="productive"[^>]*data-testid="run-mode-productive"|data-testid="run-mode-productive"[^>]*value="productive"/);
+});

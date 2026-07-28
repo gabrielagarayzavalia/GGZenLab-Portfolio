@@ -6,7 +6,17 @@
  * `JobMatch` / jobs-result.json, sin duplicar el store jobs en runtime dashboard.
  */
 
+import { hasParsedJdSections, parseJdSections, type JdSections } from "../jd/parse-sections.js";
 import type { JobMatch } from "../types.js";
+
+export type { JdSections };
+
+function jdSectionsFromDescription(description?: string): JdSections | undefined {
+  const text = description?.trim();
+  if (!text) return undefined;
+  const sections = parseJdSections(text);
+  return hasParsedJdSections(sections) ? sections : undefined;
+}
 
 /** Snapshot de análisis LLM/scrape embebido en `TrackerApplication.analysis`. */
 export interface AnalysisSnapshot {
@@ -14,6 +24,8 @@ export interface AnalysisSnapshot {
   modality?: string;
   datePosted?: string;
   description?: string;
+  /** Secciones JD parseadas (#370) — requirements / niceToHave / whatWeOffer. */
+  jdSections?: JdSections;
   searchTerm?: string;
   source?: string;
   externalId?: string;
@@ -64,6 +76,7 @@ export function analysisSnapshotFromJobMatch(
     modality: job.modality,
     datePosted: job.datePosted,
     description: job.description,
+    jdSections: job.jdSections ?? jdSectionsFromDescription(job.description),
     searchTerm: job.searchTerm,
     source: job.source,
     externalId: job.externalId,

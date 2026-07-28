@@ -21,6 +21,8 @@ export interface AutomationApplicationFields {
   estado?: TrackerEstado;
   analysis?: AnalysisSnapshot;
   inLatestAnalysis?: boolean;
+  jobClosed?: boolean;
+  acceptingApplications?: boolean;
 }
 
 export interface AutomationExistingDoc {
@@ -31,6 +33,9 @@ export interface AutomationExistingDoc {
   cvType?: string;
   applyType?: string;
   fechaAplicacion?: string;
+  analysis?: AnalysisSnapshot;
+  jobClosed?: boolean;
+  acceptingApplications?: boolean;
 }
 
 /** Estados que Easy Apply no debe tocar (usuaria / finales no-EA). Enviada y Pendiente sí. */
@@ -54,6 +59,50 @@ export type AutomationMergePlan =
   | { action: "update"; update: Partial<AutomationApplicationFields> & { updatedBy: string } }
   | { action: "skip" };
 
+/** Solo metadata de scrape (#373): no toca estado/notas de filas protegidas. */
+function planScrapeMetadataOnlyUpdate(
+  existing: AutomationExistingDoc,
+  merged: AutomationApplicationFields,
+  updatedBy: string
+): AutomationMergePlan | null {
+  const update: Partial<AutomationApplicationFields> & { updatedBy: string } = { updatedBy };
+  let changed = false;
+
+  if (merged.jobClosed !== undefined && merged.jobClosed !== existing.jobClosed) {
+    update.jobClosed = merged.jobClosed;
+    changed = true;
+  }
+  if (
+    merged.acceptingApplications !== undefined &&
+    merged.acceptingApplications !== existing.acceptingApplications
+  ) {
+    update.acceptingApplications = merged.acceptingApplications;
+    changed = true;
+  }
+
+  const incoming = merged.analysis;
+  if (incoming) {
+    const nextJobClosed = incoming.jobClosed;
+    const nextAccepting = incoming.acceptingApplications;
+    const analysisChanged =
+      (nextJobClosed !== undefined && nextJobClosed !== existing.analysis?.jobClosed) ||
+      (nextAccepting !== undefined && nextAccepting !== existing.analysis?.acceptingApplications);
+
+    if (analysisChanged) {
+      update.analysis = {
+        ...existing.analysis,
+        ...(nextJobClosed !== undefined ? { jobClosed: nextJobClosed } : {}),
+        ...(nextAccepting !== undefined ? { acceptingApplications: nextAccepting } : {}),
+        ...(existing.analysis ? {} : { source: incoming.source ?? "pipeline", analyzedAt: incoming.analyzedAt }),
+      };
+      changed = true;
+    }
+  }
+
+  if (!changed) return null;
+  return { action: "update", update };
+}
+
 /**
  * Plan de upsert automation → Mongo (B-38-5).
  * Espeja excel/upsert: skip si protegido; update sin bajar estado; insert Pendiente.
@@ -74,7 +123,7 @@ export function planAutomationUpsert(
   }
 
   if (isProtectedEstado(existing.estado)) {
-    return { action: "skip" };
+    return planScrapeMetadataOnlyUpdate(existing, merged, updatedBy) ?? { action: "skip" };
   }
 
   const update: Partial<AutomationApplicationFields> & { updatedBy: string } = {
@@ -105,6 +154,12 @@ export function planAutomationUpsert(
   }
   if (merged.inLatestAnalysis !== undefined) {
     update.inLatestAnalysis = merged.inLatestAnalysis;
+  }
+  if (merged.jobClosed !== undefined) {
+    update.jobClosed = merged.jobClosed;
+  }
+  if (merged.acceptingApplications !== undefined) {
+    update.acceptingApplications = merged.acceptingApplications;
   }
 
   return { action: "update", update };

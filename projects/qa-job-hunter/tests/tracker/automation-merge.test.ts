@@ -23,12 +23,40 @@ test("planAutomationUpsert insert sin existing", () => {
   }
 });
 
-test("planAutomationUpsert skip estado protegido", () => {
+test("planAutomationUpsert skip estado protegido sin metadata scrape", () => {
   const plan = planAutomationUpsert({ estado: "Enviada" }, baseFields);
   assert.equal(plan.action, "skip");
 });
 
-test("planAutomationUpsert skip todos los estados protegidos Excel", () => {
+test("planAutomationUpsert actualiza jobClosed en estado protegido (#373)", () => {
+  const plan = planAutomationUpsert(
+    {
+      estado: "Cerrado",
+      analysis: { source: "pipeline", analyzedAt: "2026-01-01", jobClosed: false },
+    },
+    {
+      ...baseFields,
+      jobClosed: true,
+      acceptingApplications: false,
+      analysis: {
+        source: "pipeline",
+        analyzedAt: "2026-07-28",
+        jobClosed: true,
+        acceptingApplications: false,
+      },
+    }
+  );
+  assert.equal(plan.action, "update");
+  if (plan.action === "update") {
+    assert.equal(plan.update.jobClosed, true);
+    assert.equal(plan.update.acceptingApplications, false);
+    assert.equal(plan.update.analysis?.jobClosed, true);
+    assert.equal(plan.update.estado, undefined);
+    assert.equal(plan.update.puesto, undefined);
+  }
+});
+
+test("planAutomationUpsert skip todos los estados protegidos Excel sin scrape nuevo", () => {
   for (const estado of [
     "Enviada",
     "Cerrado",

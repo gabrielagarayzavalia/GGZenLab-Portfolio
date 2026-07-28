@@ -1,0 +1,15 @@
+# Use this workspace to collaborate
+workspace:
+  id: 7cef6dd3-82cd-4b81-8414-493c490598c5
+
+localResources:
+  collections:
+    - ../projects/api-testing/postman/ABM-CRUD.postman_collection.json
+    - ../projects/qa-job-hunter/qa/v1/postman/job-hunter-smoke-v1.postman_collection.json
+    - ../projects/qa-job-hunter/qa/v1/postman/job-hunter-regression-v1.postman_collection.json
+  environments:
+    - ../projects/api-testing/postman/postman/environments/SUT Node.environment.yaml
+    - ../projects/api-testing/postman/postman/environments/testEnvironment.environment.yaml
+    - ../projects/qa-job-hunter/qa/v1/postman/job-hunter-local.postman_environment.json
+  specs:
+    - ../openapi/abm-crud.yaml

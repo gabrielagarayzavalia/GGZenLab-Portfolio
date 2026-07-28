@@ -1,14 +1,23 @@
 {
   "info": {
-    "_postman_id": "jh-dashboard-v1-green-path",
-    "name": "Job Hunter Dashboard — Green Path v1 (DEPRECATED)",
-    "description": "DEPRECADO — usar job-hunter-smoke-v1 y job-hunter-regression-v1.\nRegenerar con: node qa/v1/postman/split-collections.mjs",
+    "_postman_id": "jh-smoke-v1",
+    "name": "Job Hunter — Smoke v1 (SMK-V1)",
+    "description": "Smoke API manual — casos SMK-V1-* en qa/v1/smoke-green-path-v1.md. Puerto 3847.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3847" },
-    { "key": "sampleJobId", "value": "" },
-    { "key": "sampleApplicationId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3847"
+    },
+    {
+      "key": "sampleJobId",
+      "value": ""
+    },
+    {
+      "key": "sampleApplicationId",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -117,27 +126,6 @@
               }
             }
           ]
-        },
-        {
-          "name": "REG-V1-04 GET match-jobs filter applied",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=applied"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('filter applied 200 or 503', () => {",
-                  "  pm.expect([200, 503]).to.include(pm.response.code);",
-                  "});"
-                ]
-              }
-            }
-          ]
         }
       ]
     },
@@ -151,11 +139,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/jobs?sort=matchPercent&order=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "jobs"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs"
+              ],
               "query": [
-                { "key": "sort", "value": "matchPercent" },
-                { "key": "order", "value": "desc" }
+                {
+                  "key": "sort",
+                  "value": "matchPercent"
+                },
+                {
+                  "key": "order",
+                  "value": "desc"
+                }
               ]
             }
           },
@@ -188,11 +187,23 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/tracker/applications?sort=matchPercent&order=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "tracker", "applications"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tracker",
+                "applications"
+              ],
               "query": [
-                { "key": "sort", "value": "matchPercent" },
-                { "key": "order", "value": "desc" }
+                {
+                  "key": "sort",
+                  "value": "matchPercent"
+                },
+                {
+                  "key": "order",
+                  "value": "desc"
+                }
               ]
             }
           },
@@ -256,8 +267,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Tracker-User", "value": "1" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -292,8 +309,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Tracker-User", "value": "1" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -328,7 +351,10 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "X-Tracker-User", "value": "1" }
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
             ],
             "url": "{{baseUrl}}/api/dashboard/reject-match/{{sampleJobId}}"
           },
@@ -344,31 +370,6 @@
                   "pm.test('SMK-V1-12 status 200 or 404', () => {",
                   "  pm.expect([200, 404, 503]).to.include(pm.response.code);",
                   "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "REG-V1-20 POST application-status sin header (403)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"jobId\": \"00000\",\n  \"status\": \"applied\"\n}"
-            },
-            "url": "{{baseUrl}}/api/dashboard/application-status"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('REG-V1-20 status 403', () => pm.response.to.have.status(403));"
                 ]
               }
             }
@@ -403,7 +404,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -466,25 +470,6 @@
                 "exec": [
                   "pm.test('SMK-V1-13 status 200', () => pm.response.to.have.status(200));",
                   "pm.test('questions array', () => pm.expect(pm.response.json().questions).to.be.an('array'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "REG-V1-06 GET /api/feedback",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/feedback"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('REG-V1-06 status 200', () => pm.response.to.have.status(200));"
                 ]
               }
             }

@@ -15,9 +15,9 @@
     </div>
     <div class="top-bar__right">
       <nav class="site-nav" aria-label="Principal">
-        <a class="site-nav__link" href="/">Dashboard</a>
-        <a class="site-nav__link" href="/run" aria-current="page">Ejecutar</a>
-        <a class="site-nav__link" href="/config">Configuración</a>
+        <a class="site-nav__link" href="/" data-testid="nav-link-dashboard">Dashboard</a>
+        <a class="site-nav__link" href="/run" aria-current="page" data-testid="nav-link-run">Ejecutar</a>
+        <a class="site-nav__link" href="/config" data-testid="nav-link-config">Configuración</a>
       </nav>
     </div>
   </header>
@@ -31,17 +31,17 @@
 
     <section class="run-panel" aria-labelledby="run-apply-title">
       <h2 id="run-apply-title">Easy Apply</h2>
-      <p class="config-status" id="run-status" hidden></p>
+      <p class="config-status" id="run-status" data-testid="run-status" hidden></p>
 
       <fieldset class="run-mode" aria-label="Modo de ejecución">
         <legend class="run-mode__legend">Modo</legend>
         <label class="run-mode__option">
-          <input type="radio" name="run-mode" value="dry_run" checked />
+          <input type="radio" name="run-mode" value="dry_run" checked data-testid="run-mode-dry" />
           <span>Dry-run</span>
           <small>Hasta Submit, sin enviar</small>
         </label>
         <label class="run-mode__option">
-          <input type="radio" name="run-mode" value="productive" />
+          <input type="radio" name="run-mode" value="productive" data-testid="run-mode-productive" />
           <span>Productivo</span>
           <small>Submit + Excel enviada</small>
         </label>
@@ -50,16 +50,16 @@
       <div class="run-fields">
         <label class="config-field">
           <span>Máx. jobs (opcional)</span>
-          <input id="run-apply-max" type="number" min="1" max="50" placeholder="Dry-run: 10 por defecto" />
+          <input id="run-apply-max" type="number" min="1" max="50" placeholder="Dry-run: 10 por defecto" data-testid="run-apply-max" />
         </label>
         <label class="config-field">
           <span>Job ID (opcional)</span>
-          <input id="run-job-id" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 4440479550" />
+          <input id="run-job-id" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 4440479550" data-testid="run-job-id" />
         </label>
       </div>
 
-      <button type="button" class="config-btn run-btn" id="run-apply-btn">▶ Easy Apply</button>
-      <button type="button" class="config-btn run-btn run-btn--danger hidden" id="run-cancel-btn">
+      <button type="button" class="config-btn run-btn" id="run-apply-btn" data-testid="run-apply-btn">▶ Easy Apply</button>
+      <button type="button" class="config-btn run-btn run-btn--danger hidden" id="run-cancel-btn" data-testid="run-cancel-btn">
         ⏹ Detener corrida
       </button>
       <p class="run-hint">
@@ -69,8 +69,8 @@
 
     <section class="run-panel" aria-labelledby="run-log-title">
       <h2 id="run-log-title">Estado</h2>
-      <p class="run-state" id="run-state-text">idle</p>
-      <pre class="run-log" id="run-log" aria-live="polite">Sin corrida aún.</pre>
+      <p class="run-state" id="run-state-text" data-testid="run-state-text">idle</p>
+      <pre class="run-log" id="run-log" aria-live="polite" data-testid="run-log">Sin corrida aún.</pre>
     </section>
   </main>
 

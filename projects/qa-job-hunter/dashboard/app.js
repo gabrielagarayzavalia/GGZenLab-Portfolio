@@ -1,3 +1,8 @@
+/** Headers writes tracker (US-JH-B38-15 #314). */
+const TRACKER_USER_HEADERS = {
+  "Content-Type": "application/json",
+  "X-Tracker-User": "1",
+};
 let jobs = [];
 let selectedId = null;
 let sortOrder = "desc";
@@ -6,6 +11,7 @@ let showApplied = false;
 let showNotApplied = false;
 let showNotSelected = false;
 let showUnmarked = true;
+let showClosed = false;
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
 /** @type {Set<string>} */
@@ -24,16 +30,76 @@ const els = {
   showNotApplied: document.getElementById("show-not-applied"),
   showNotSelected: document.getElementById("show-not-selected"),
   showUnmarked: document.getElementById("show-unmarked"),
+  showClosed: document.getElementById("show-closed"),
   detailEmpty: document.getElementById("detail-empty"),
   detailContent: document.getElementById("detail-content"),
   listEmpty: document.getElementById("list-empty"),
   listError: document.getElementById("list-error"),
 };
 
+let appFlashTimer = null;
+
+/** @param {"error"|"warning"|"success"} kind */
+function showAppFlash(message, kind = "error") {
+  const el = document.getElementById("app-flash");
+  if (!el || !message) return;
+  clearTimeout(appFlashTimer);
+  el.className = `app-flash app-flash--${kind}`;
+  el.hidden = false;
+  el.classList.remove("hidden");
+  el.textContent = message;
+  appFlashTimer = setTimeout(() => clearAppFlash(), kind === "error" ? 12_000 : 6_000);
+}
+
+function clearAppFlash() {
+  const el = document.getElementById("app-flash");
+  if (!el) return;
+  el.textContent = "";
+  el.hidden = true;
+  el.classList.add("hidden");
+}
+
+function showApiWarnings(warnings) {
+  if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
+}
+
 function matchClass(pct) {
   if (pct >= 85) return "match-badge__pct--high";
   if (pct >= 75) return "match-badge__pct--mid";
   return "match-badge__pct--low";
+}
+
+/** Valores scrape/API sin dato real — no mostrar en meta (confunden). */
+const META_PLACEHOLDERS = new Set(["no especificado", "desconocida", "—", "-", "n/a", "na"]);
+
+function isMeaningfulMeta(value) {
+  if (value == null) return false;
+  const t = String(value).trim();
+  if (!t) return false;
+  return !META_PLACEHOLDERS.has(t.toLowerCase());
+}
+
+function formatListMeta(job) {
+  return [job.modality, job.datePosted]
+    .filter(isMeaningfulMeta)
+    .map(escapeHtml)
+    .join(" · ");
+}
+
+function renderDetailMeta(job) {
+  const spans = [];
+  if (isMeaningfulMeta(job.location)) spans.push(`<span>${escapeHtml(job.location)}</span>`);
+  if (isMeaningfulMeta(job.modality)) spans.push(`<span>${escapeHtml(job.modality)}</span>`);
+  if (isMeaningfulMeta(job.datePosted)) spans.push(`<span>${escapeHtml(job.datePosted)}</span>`);
+  if (isMeaningfulMeta(job.searchTerm)) {
+    spans.push(`<span>Búsqueda: ${escapeHtml(job.searchTerm)}</span>`);
+  }
+  if (!spans.length) return "";
+  return `<div class="detail__meta">${spans.join("")}</div>`;
+}
+
+function isLinkedInClosed(job) {
+  return job?.jobClosed === true;
 }
 
 function isRejected(jobId) {
@@ -45,6 +111,8 @@ function getApplicationStatus(jobId) {
 }
 
 function isVisibleInList(jobId) {
+  const job = jobs.find((j) => j.id === jobId);
+  if (job && isLinkedInClosed(job)) return showClosed;
   if (isRejected(jobId)) return showRejected;
   const status = getApplicationStatus(jobId);
   if (status === "applied") return showApplied;
@@ -111,9 +179,12 @@ function renderList() {
   const list = visibleJobs();
   els.jobList.innerHTML = "";
 
+  if (!els.listError.hidden) return;
+
   if (jobs.length === 0) {
     els.listEmpty.classList.remove("hidden");
     els.listEmpty.hidden = false;
+    els.listEmpty.querySelector("p").textContent = "No hay empleos con 70%+ de match.";
     return;
   }
 
@@ -129,15 +200,20 @@ function renderList() {
 
   for (const job of list) {
     const rejected = isRejected(job.id);
+    const closed = isLinkedInClosed(job);
     const li = document.createElement("li");
     li.className =
-      "job-item" + (job.id === selectedId ? " active" : "") + (rejected ? " rejected" : "");
+      "job-item" +
+      (job.id === selectedId ? " active" : "") +
+      (rejected ? " rejected" : "") +
+      (closed ? " closed" : "");
     li.dataset.id = job.id;
     li.tabIndex = 0;
     const pctClass = matchClass(job.matchPercent);
     const colorVar =
       job.matchPercent >= 85 ? "match-high" : job.matchPercent >= 75 ? "match-mid" : "match-low";
     const rejectedBadge = rejected ? `<span class="badge-rejected">Match incorrecto</span>` : "";
+    const closedBadge = closed ? `<span class="badge-closed">Aviso cerrado</span>` : "";
     const appStatus = getApplicationStatus(job.id);
     const appBadge =
       appStatus === "applied"
@@ -147,6 +223,8 @@ function renderList() {
           : appStatus === "not_selected"
             ? `<span class="badge-not-selected">No seleccionada/o</span>`
             : "";
+
+    const listMeta = formatListMeta(job);
 
     li.innerHTML = `
       <div class="match-badge">
@@ -158,8 +236,9 @@ function renderList() {
       <div>
         <p class="job-item__title">${escapeHtml(job.title)}</p>
         <p class="job-item__company">${escapeHtml(job.company)}</p>
-        <p class="job-item__meta">${escapeHtml(job.modality)} · ${escapeHtml(job.datePosted)}</p>
+        ${listMeta ? `<p class="job-item__meta">${listMeta}</p>` : ""}
         ${rejectedBadge}
+        ${closedBadge}
         ${appBadge}
       </div>`;
 
@@ -189,6 +268,7 @@ function renderDetail(job) {
   els.detailContent.hidden = false;
 
   const rejected = isRejected(job.id);
+  const closed = isLinkedInClosed(job);
   const meta = rejectionMeta.get(job.id);
 
   const gapsBlock =
@@ -222,8 +302,11 @@ function renderDetail(job) {
           </div>
         </div>`;
 
-  const descriptionBlock = renderDescriptionBlock(job.description);
+  const descriptionBlock = renderDescriptionBlock(job);
   const appStatus = getApplicationStatus(job.id);
+  const closedBadge = closed
+    ? `<p class="detail__closed-badge"><span class="badge-closed">Aviso cerrado</span> LinkedIn ya no acepta postulaciones.</p>`
+    : "";
   const linkedInLink = job.url
     ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
     : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
@@ -234,12 +317,8 @@ function renderDetail(job) {
         <div class="detail__header-main">
           <h1 class="detail__title">${escapeHtml(job.title)}</h1>
           <p class="detail__company">${escapeHtml(job.company)}</p>
-          <div class="detail__meta">
-            <span>${escapeHtml(job.location)}</span>
-            <span>${escapeHtml(job.modality)}</span>
-            <span>${escapeHtml(job.datePosted)}</span>
-            <span>Búsqueda: ${escapeHtml(job.searchTerm)}</span>
-          </div>
+          ${renderDetailMeta(job)}
+          ${closedBadge}
           ${linkedInLink}
         </div>
         <aside class="detail__header-aside" aria-label="Acciones">
@@ -262,6 +341,7 @@ function renderDetail(job) {
           </div>
           <div class="feedback-section feedback-section--compact${rejected ? " feedback-section--rejected" : ""}">
             ${feedbackToggle}
+            <p class="feedback-hint feedback-hint--inline">Match incorrecto: usá el filtro de lista o el botón aquí (no es un checkbox de postulación).</p>
           </div>
         </aside>
       </div>
@@ -309,19 +389,25 @@ function wireApplicationChecks(job) {
 }
 
 async function saveApplicationStatus(job, status) {
+  const applicationId = job.applicationId;
+  if (!applicationId) {
+    showAppFlash("Sin applicationId en tracker — no se puede guardar el estado.");
+    return;
+  }
   try {
-    const res = await fetch("/api/application-status", {
+    const res = await fetch("/api/dashboard/application-status", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: TRACKER_USER_HEADERS,
       body: JSON.stringify({
+        applicationId,
         jobId: job.id,
-        title: job.title,
-        company: job.company,
         status,
       }),
     });
-    if (!res.ok) throw new Error("No se pudo guardar el estado");
-    applyApplicationStatus(await res.json());
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
+    showApiWarnings(data.warnings);
+    await loadMatchJobs();
     if (status && !isVisibleInList(job.id)) {
       focusNextVisibleJob(job.id);
     } else {
@@ -330,8 +416,9 @@ async function saveApplicationStatus(job, status) {
       renderDetail(job);
     }
   } catch (e) {
-    alert(String(e.message ?? e));
-    renderDetail(job);
+    showAppFlash(String(e.message ?? e));
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    renderDetail(refreshed);
   }
 }
 
@@ -339,67 +426,85 @@ function applyApplicationStatus(store) {
   applicationStatus = new Map(store.entries.map((e) => [e.jobId, e.status]));
 }
 
-function stubJobFromRejection(rejection) {
-  const reason = rejection.reason?.trim();
-  return {
-    id: rejection.jobId,
-    title: rejection.title,
-    company: rejection.company,
-    location: "—",
-    modality: "—",
-    datePosted: "—",
-    url: "",
-    description: reason
-      ? `Empleo de una corrida anterior. Motivo del rechazo: ${reason}`
-      : "Empleo de una corrida anterior marcado como match incorrecto.",
-    searchTerm: rejection.searchTerm ?? "—",
-    matchPercent: rejection.matchPercent ?? 0,
-    matchedSkills: [],
-    gaps: [],
-    cvSuggestions: [],
-    summary: "Ya no está en el último análisis; visible por feedback guardado.",
-  };
+/**
+ * Filtros: un solo checkbox activo → ?filter= en el server; varios → lista completa
+ * y visibilidad con isVisibleInList() en cliente.
+ */
+function serverFilterFromUI() {
+  const active = [];
+  if (showRejected) active.push("rejected");
+  if (showApplied) active.push("applied");
+  if (showNotApplied) active.push("not_applied");
+  if (showNotSelected) active.push("not_selected");
+  if (showClosed) active.push("closed");
+  if (showUnmarked) active.push("unmarked");
+  return active.length === 1 ? active[0] : null;
 }
 
-function stubJobFromApplicationEntry(entry, rejectionById) {
-  const rejection = rejectionById.get(entry.jobId);
-  return {
-    id: entry.jobId,
-    title: entry.title,
-    company: entry.company,
-    location: "—",
-    modality: "—",
-    datePosted: "—",
-    url: "",
-    description: "Empleo de una corrida anterior con estado de postulación guardado.",
-    searchTerm: rejection?.searchTerm ?? "—",
-    matchPercent: rejection?.matchPercent ?? 0,
-    matchedSkills: [],
-    gaps: [],
-    cvSuggestions: [],
-    summary: "Ya no está en el último análisis; visible por el estado de postulación guardado.",
-  };
+function showListError(message) {
+  els.listError.textContent = message;
+  els.listError.classList.remove("hidden");
+  els.listError.hidden = false;
+  els.listEmpty.classList.add("hidden");
+  els.listEmpty.hidden = true;
 }
 
-/** Incluye empleos históricos con feedback o postulación aunque no estén en el último análisis. */
-function mergeJobsWithStoredState(matchedJobs, feedback, applicationStatusStore) {
-  const byId = new Map(matchedJobs.map((j) => [j.id, j]));
-  const rejections = feedback?.rejections ?? [];
-  const rejectionById = new Map(rejections.map((r) => [r.jobId, r]));
+function clearListError() {
+  els.listError.classList.add("hidden");
+  els.listError.hidden = true;
+}
 
-  for (const rejection of rejections) {
-    if (!byId.has(rejection.jobId)) {
-      byId.set(rejection.jobId, stubJobFromRejection(rejection));
-    }
+function syncFilterFlagsFromUI(changed) {
+  if (changed === els.showUnmarked && els.showUnmarked.checked) {
+    els.showApplied.checked = false;
+    els.showNotApplied.checked = false;
+    els.showNotSelected.checked = false;
+    els.showRejected.checked = false;
+    els.showClosed.checked = false;
+  } else if (changed !== els.showUnmarked && changed.checked) {
+    els.showUnmarked.checked = false;
   }
 
-  for (const entry of applicationStatusStore?.entries ?? []) {
-    if (!byId.has(entry.jobId)) {
-      byId.set(entry.jobId, stubJobFromApplicationEntry(entry, rejectionById));
-    }
-  }
+  showRejected = els.showRejected.checked;
+  showApplied = els.showApplied.checked;
+  showNotApplied = els.showNotApplied.checked;
+  showNotSelected = els.showNotSelected.checked;
+  showUnmarked = els.showUnmarked.checked;
+  showClosed = els.showClosed.checked;
 
-  return [...byId.values()];
+  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked && !showClosed) {
+    showUnmarked = true;
+    els.showUnmarked.checked = true;
+  }
+}
+
+async function loadMatchJobs(filter) {
+  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
+  const url = serverFilter
+    ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
+    : "/api/dashboard/match-jobs";
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    if (res.status === 404) {
+      throw new Error(
+        "API /api/dashboard/match-jobs no encontrada (404). Reiniciá el dashboard: npm run dashboard"
+      );
+    }
+    const hint = err.hint ? ` — ${err.hint}` : "";
+    throw new Error((err.error ?? `HTTP ${res.status}`) + hint);
+  }
+  const result = await res.json();
+  window.__scrapedAt = result.scrapedAt;
+  window.__totalAnalyzed = result.totalAnalyzed;
+  if (result.feedback) {
+    applyFeedback({ rejections: result.feedback.rejections, updatedAt: "" });
+  }
+  if (result.applicationStatus) {
+    applyApplicationStatus(result.applicationStatus);
+  }
+  jobs = result.matchedJobs ?? result.jobs ?? [];
+  return result;
 }
 
 function countJobsByStatus(status) {
@@ -452,19 +557,47 @@ function descriptionToBullets(text) {
   return out;
 }
 
-function renderDescriptionBlock(description) {
-  if (DESCRIPTION_VIEW === "full") {
-    return `<section class="detail__section"><h3>Descripción del puesto</h3><div class="detail__description">${escapeHtml(description)}</div></section>`;
+function renderDescriptionBlock(job) {
+  const sections = job.jdSections;
+  if (sections?.requirements?.length) {
+    const niceBlock = sections.niceToHave?.length
+      ? `<details class="jd-section jd-section--collapsible">
+          <summary>Nice to Have</summary>
+          <ul class="detail__list detail__bullets">${listItems(sections.niceToHave)}</ul>
+        </details>`
+      : "";
+    const offerBlock = sections.whatWeOffer?.length
+      ? `<details class="jd-section jd-section--collapsible">
+          <summary>What We Offer</summary>
+          <ul class="detail__list detail__bullets">${listItems(sections.whatWeOffer)}</ul>
+        </details>`
+      : "";
+
+    return `<section class="detail__section">
+      <h3>Requisitos</h3>
+      <p class="detail__section-note">What We're Looking For — bullets del aviso.</p>
+      <ul class="detail__list detail__bullets">${listItems(sections.requirements)}</ul>
+      ${niceBlock}
+      ${offerBlock}
+      <details class="description-full">
+        <summary>Ver descripción completa</summary>
+        <div class="detail__description">${escapeHtml(job.description)}</div>
+      </details>
+    </section>`;
   }
 
-  const bullets = descriptionToBullets(description);
+  if (DESCRIPTION_VIEW === "full") {
+    return `<section class="detail__section"><h3>Descripción del puesto</h3><div class="detail__description">${escapeHtml(job.description)}</div></section>`;
+  }
+
+  const bullets = descriptionToBullets(job.description);
   return `<section class="detail__section">
     <h3>Descripción del puesto</h3>
     <p class="detail__section-note">Resumen en bullets — opción de texto completo abajo (futuro: resumen con IA).</p>
     <ul class="detail__list detail__bullets">${listItems(bullets)}</ul>
     <details class="description-full">
       <summary>Ver descripción completa</summary>
-      <div class="detail__description">${escapeHtml(description)}</div>
+      <div class="detail__description">${escapeHtml(job.description)}</div>
     </details>
   </section>`;
 }
@@ -472,36 +605,40 @@ function renderDescriptionBlock(description) {
 async function rejectMatch(job) {
   const reason = document.getElementById("feedback-reason")?.value?.trim() || undefined;
   try {
-    const res = await fetch("/api/feedback/reject", {
+    const res = await fetch("/api/dashboard/reject-match", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: TRACKER_USER_HEADERS,
       body: JSON.stringify({
         jobId: job.id,
-        title: job.title,
-        company: job.company,
-        searchTerm: job.searchTerm,
-        matchPercent: job.matchPercent,
         reason,
       }),
     });
-    if (!res.ok) throw new Error("No se pudo guardar el feedback");
-    applyFeedback(await res.json());
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
+    showApiWarnings(data.warnings);
+    await loadMatchJobs();
     focusNextVisibleJob(job.id);
   } catch (e) {
-    alert(String(e.message ?? e));
+    showAppFlash(String(e.message ?? e));
   }
 }
 
 async function undoReject(job) {
   try {
-    const res = await fetch(`/api/feedback/reject/${encodeURIComponent(job.id)}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("No se pudo deshacer");
-    applyFeedback(await res.json());
+    const res = await fetch(`/api/dashboard/reject-match/${encodeURIComponent(job.id)}`, {
+      method: "DELETE",
+      headers: TRACKER_USER_HEADERS,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
+    showApiWarnings(data.warnings);
+    await loadMatchJobs();
     renderList();
     renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
-    renderDetail(job);
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    renderDetail(refreshed);
   } catch (e) {
-    alert(String(e.message ?? e));
+    showAppFlash(String(e.message ?? e));
   }
 }
 
@@ -538,54 +675,29 @@ async function init() {
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
+  els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
 
-  function onFilterChange(changed) {
-    if (changed === els.showUnmarked && els.showUnmarked.checked) {
-      els.showApplied.checked = false;
-      els.showNotApplied.checked = false;
-      els.showNotSelected.checked = false;
-      els.showRejected.checked = false;
-    } else if (changed !== els.showUnmarked && changed.checked) {
-      els.showUnmarked.checked = false;
-    }
+  async function onFilterChange(changed) {
+    syncFilterFlagsFromUI(changed);
 
-    showRejected = els.showRejected.checked;
-    showApplied = els.showApplied.checked;
-    showNotApplied = els.showNotApplied.checked;
-    showNotSelected = els.showNotSelected.checked;
-    showUnmarked = els.showUnmarked.checked;
-    const list = visibleJobs();
-    if (selectedId && !list.some((j) => j.id === selectedId)) {
-      focusNextVisibleJob(selectedId);
-    } else {
-      renderList();
-      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+    try {
+      clearListError();
+      const result = await loadMatchJobs();
+      const list = visibleJobs();
+      if (selectedId && !list.some((j) => j.id === selectedId)) {
+        focusNextVisibleJob(selectedId);
+      } else {
+        renderList();
+        renderHeader(result);
+      }
+    } catch (e) {
+      showListError(String(e.message ?? e));
     }
   }
 
   try {
-    const res = await fetch("/api/results");
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error ?? `HTTP ${res.status}`);
-    }
-
-    const result = await res.json();
-    window.__scrapedAt = result.scrapedAt;
-    window.__totalAnalyzed = result.totalAnalyzed;
-
-    if (result.feedback) {
-      applyFeedback({ rejections: result.feedback.rejections, updatedAt: "" });
-    }
-    if (result.applicationStatus) {
-      applyApplicationStatus(result.applicationStatus);
-    }
-
-    jobs = mergeJobsWithStoredState(
-      result.matchedJobs ?? [],
-      result.feedback,
-      result.applicationStatus
-    );
+    const result = await loadMatchJobs(null);
+    clearListError();
 
     renderHeader(result);
 
@@ -598,9 +710,7 @@ async function init() {
     const first = visibleJobs()[0] ?? jobs[0];
     selectJob(first.id);
   } catch (e) {
-    els.listError.textContent = String(e.message ?? e);
-    els.listError.classList.remove("hidden");
-    els.listError.hidden = false;
+    showListError(String(e.message ?? e));
   }
 }
 

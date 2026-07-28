@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { resolveSessionPath } from "../src/apply/paths.js";
+import { resolvePlaywrightHeadless } from "../src/run/playwright-headless.js";
 import {
   loadAppliedListKnownJobIds,
   mergeJobsIntoAppliedList,
@@ -450,7 +451,7 @@ async function main() {
   const defaultMaxItems = mergeAppliedList ? DEFAULT_MAX_ITEMS_CAMPAIGN : DEFAULT_MAX_ITEMS_SPIKE;
   const maxItems = Number(parseArg("--max-items") ?? String(defaultMaxItems));
   const dryRun = explicitDryRun || (!mergeSpikeOutput && !mergeAppliedList);
-  const headless = !hasFlag("--headed");
+  const headless = resolvePlaywrightHeadless();
 
   if (hasFlag("--test-fixtures")) {
     const fixtures = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf-8")) as {

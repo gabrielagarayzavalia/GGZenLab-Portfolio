@@ -14,6 +14,8 @@
 //
 import path from "path";
 import { chromium, type Browser, type Locator, type Page } from "playwright";
+import { registerPlaywrightShutdown } from "./run/playwright-shutdown.js";
+import { resolvePlaywrightHeadless } from "./run/playwright-headless.js";
 import {
   COVER_LETTER_DEFAULT,
   resolveApplicationSummary,
@@ -75,6 +77,7 @@ import {
 } from "./apply/apply-queue.js";
 import { ensureDirs, resolveSessionPath, SCREENSHOTS_DIR } from "./apply/paths.js";
 import { exportQueueToExcel } from "./apply/post-run.js";
+import { flushApplyQueueSync } from "./tracker/apply-sync.js";
 import {
   TIMING,
   ModalPagePerfError,
@@ -941,10 +944,11 @@ async function main() {
 
   const sessionPath = resolveSessionPath();
   let browser: Browser | null = await chromium.launch({
-    headless: false,
+    headless: resolvePlaywrightHeadless(),
     slowMo: 150,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });
+  registerPlaywrightShutdown(browser);
   const context = await browser.newContext(maximizedContextOptions(sessionPath));
   const page = await prepareApplyBrowserPage(context);
   await maximizeWindow(page);
@@ -1082,6 +1086,7 @@ async function main() {
   saveRunUnknownQuestionsReport();
   logRunUnknownQuestions();
   exportQueueToExcel();
+  await flushApplyQueueSync();
   console.log(`Excel: ${APPLY_QUEUE_PATH} (+ Notas; estado pendiente si hubo unanswered)`);
 }
 

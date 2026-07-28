@@ -1,11 +1,12 @@
 /**
- * Botonera /run — Easy Apply con flag dry-run | productivo (#125 spike).
+ * Botonera /run — Easy Apply + cancel (#125, #324).
  */
 
 const statusEl = document.getElementById("run-status");
 const stateText = document.getElementById("run-state-text");
 const logEl = document.getElementById("run-log");
 const applyBtn = document.getElementById("run-apply-btn");
+const cancelBtn = document.getElementById("run-cancel-btn");
 const applyMaxEl = document.getElementById("run-apply-max");
 const jobIdEl = document.getElementById("run-job-id");
 
@@ -33,9 +34,14 @@ function renderState(data) {
   ].filter(Boolean);
   stateText.textContent = parts.join(" ");
   logEl.textContent = data.logTail || "Sin salida aún.";
+  const running = data.status === "running";
   if (applyBtn) {
-    applyBtn.disabled = data.status === "running";
-    applyBtn.textContent = data.status === "running" ? "⏳ Easy Apply…" : "▶ Easy Apply";
+    applyBtn.disabled = running;
+    applyBtn.textContent = running ? "⏳ Easy Apply…" : "▶ Easy Apply";
+  }
+  if (cancelBtn) {
+    cancelBtn.classList.toggle("hidden", !running);
+    cancelBtn.disabled = !running;
   }
 }
 
@@ -79,6 +85,27 @@ applyBtn?.addEventListener("click", async () => {
     if (!pollTimer) pollTimer = setInterval(() => void fetchStatus().catch(() => {}), 2500);
   } catch (err) {
     setStatus(err.message || "No se pudo iniciar", true);
+  }
+});
+
+cancelBtn?.addEventListener("click", async () => {
+  const ok = confirm(
+    "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?"
+  );
+  if (!ok) return;
+  setStatus("Deteniendo…");
+  try {
+    const res = await fetch("/api/run/apply/cancel", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    setStatus("Corrida detenida. Revisá que no queden Chrome huérfanos en Administrador de tareas.");
+    renderState(data);
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  } catch (err) {
+    setStatus(err.message || "No se pudo detener", true);
   }
 });
 

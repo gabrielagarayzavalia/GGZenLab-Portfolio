@@ -1,4 +1,4 @@
-// Cierre de corrida productiva: export Excel y abrir tracker (sin mailto / sin abrir Gmail).
+import { isExcelOpenAtEndEnabled, TRACKER_WEB_URL } from "../tracker/excel-legacy.js";
 
 import { execFileSync, spawn } from "child_process";
 import fs from "fs";
@@ -115,12 +115,12 @@ export function openTrackerExcel(): void {
  */
 export function finishProductiveRun(): void {
   exportQueueToExcel();
-  const openExcel = process.env.OPEN_EXCEL === "1" || process.env.OPEN_EXCEL === "true";
-  if (openExcel) {
+  if (isExcelOpenAtEndEnabled()) {
     openTrackerExcel();
     console.log("\n✅ Cierre: Excel exportado y abierto. No se abre Gmail/mailto.");
   } else {
-    console.log("\n✅ Cierre: cola exportada a Excel (sin abrir; OPEN_EXCEL=1 para abrir).");
+    console.log(`\n✅ Cierre: cola exportada a Excel (sin abrir). Tracker: ${TRACKER_WEB_URL}`);
+    console.log("   OPEN_EXCEL=1 para abrir Excel al cierre.");
   }
   console.log(
     "   Revisá columna Notas (preguntas nuevas) → decime cómo contestarlas en el chat."

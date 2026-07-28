@@ -4,6 +4,8 @@
 // desde grabación es B17-3. Ver docs/easy-apply-flow.md.
 
 import { chromium } from "playwright";
+import { registerPlaywrightShutdown } from "./run/playwright-shutdown.js";
+import { resolvePlaywrightHeadless } from "./run/playwright-headless.js";
 import fs from "fs";
 import path from "path";
 import {
@@ -65,6 +67,13 @@ import {
   waitForJobPageReady,
 } from "./apply/page-ready.js";
 import { exportQueueToExcel, finishProductiveRun } from "./apply/post-run.js";
+import { flushApplyQueueSync } from "./tracker/apply-sync.js";
+import {
+  TIMING,
+  betweenJobsDelayMs,
+  sleep,
+  waitForEasyApplyStepSettle,
+} from "./apply/timing.js";
 import {
   TIMING,
   betweenJobsDelayMs,
@@ -925,10 +934,11 @@ async function main() {
 
   const sessionPath = resolveSessionPath();
   const browser = await chromium.launch({
-    headless: false,
+    headless: resolvePlaywrightHeadless(),
     slowMo: 250,
     args: [...MAXIMIZED_LAUNCH_ARGS],
   });
+  registerPlaywrightShutdown(browser);
   const context = await browser.newContext(maximizedContextOptions(sessionPath));
   const page = await prepareApplyBrowserPage(context);
   await maximizeWindow(page);
@@ -986,6 +996,8 @@ async function main() {
       { openIde: false }
     );
   }
+
+  await flushApplyQueueSync();
 }
 
 main().catch((err) => {

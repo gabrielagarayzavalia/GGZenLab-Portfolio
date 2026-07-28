@@ -56,12 +56,20 @@ import {
   patchCv,
 } from "./config/cvs-store.js";
 import { connect } from "./db/client.js";
+import { ensureIndexes } from "./db/indexes.js";
 import { listJobs } from "./db/jobs.js";
 import {
+  composeMatchJobs,
+  type DashboardMatchFilter,
+} from "./dashboard/match-jobs.js";
+import {
+  cancelApplyRun,
   refreshApplyRunState,
   startApplyRun,
   type ApplyRunMode,
 } from "./run/apply-runner.js";
+import { handleTrackerApi } from "./tracker/handle-api.js";
+import { handleDashboardWrites } from "./dashboard/handle-dashboard-writes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -69,11 +77,28 @@ const DASHBOARD_DIR = path.join(ROOT, "dashboard");
 const RESULTS_PATH = path.join(ROOT, "output", "jobs-result.json");
 const PORT = Number(process.env.DASHBOARD_PORT ?? 3847);
 
+const DASHBOARD_MATCH_FILTERS = new Set<DashboardMatchFilter>([
+  "unmarked",
+  "applied",
+  "not_applied",
+  "not_selected",
+  "rejected",
+  "closed",
+]);
+
+function parseDashboardMatchFilter(value: string | null): DashboardMatchFilter | undefined {
+  if (!value?.trim()) return undefined;
+  const filter = value.trim() as DashboardMatchFilter;
+  return DASHBOARD_MATCH_FILTERS.has(filter) ? filter : undefined;
+}
+
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
 };
 
 function send(
@@ -89,8 +114,39 @@ function send(
   res.end(body);
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown): void {
-  send(res, status, JSON.stringify(data), "application/json");
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  data: unknown,
+  extraHeaders?: Record<string, string>
+): void {
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    ...extraHeaders,
+  });
+  res.end(JSON.stringify(data));
+}
+
+const DEPRECATED_RESULTS_HEADERS: Record<string, string> = {
+  Deprecation: "true",
+  Link: '</api/dashboard/match-jobs>; rel="successor-version"',
+};
+
+async function handleComposeMatchJobs(
+  res: ServerResponse,
+  options: { filter?: DashboardMatchFilter } = {},
+  extraHeaders?: Record<string, string>
+): Promise<void> {
+  try {
+    await connect();
+    await ensureIndexes();
+    const payload = await composeMatchJobs(options);
+    sendJson(res, 200, payload, extraHeaders);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "MongoDB unavailable";
+    sendJson(res, 503, { error: message, hint: "docker compose up -d && npm run tracker:seed" });
+  }
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -121,7 +177,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, X-Tracker-User",
     });
     res.end();
     return;
@@ -138,6 +194,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         configEmpleo: true,
         configCvs: true,
         runApply: true,
+        tracker: true,
       },
     });
     return;
@@ -170,6 +227,25 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  if (pathname === "/api/run/apply/cancel" && method === "POST") {
+    try {
+      sendJson(res, 200, cancelApplyRun());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cancelar";
+      const status = message.includes("No hay") ? 409 : 400;
+      sendJson(res, status, { error: message });
+    }
+    return;
+  }
+
+  if (await handleDashboardWrites(req, res, pathname, method, readBody, sendJson)) {
+    return;
+  }
+
+  if (await handleTrackerApi(req, res, pathname, method, url, readBody, sendJson)) {
+    return;
+  }
+
   if (pathname === "/api/jobs" && method === "GET") {
     try {
       await connect();
@@ -184,27 +260,26 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  if (pathname === "/api/results" && method === "GET") {
-    if (!fs.existsSync(RESULTS_PATH)) {
-      sendJson(res, 404, { error: "No se encontró output/jobs-result.json" });
+  if (pathname === "/api/dashboard/match-jobs" && method === "GET") {
+    const filterParam = url.searchParams.get("filter");
+    const filter = parseDashboardMatchFilter(filterParam);
+    if (filterParam?.trim() && !filter) {
+      sendJson(res, 400, {
+        error: "filter inválido",
+        allowed: [...DASHBOARD_MATCH_FILTERS],
+      });
       return;
     }
-    const result = JSON.parse(fs.readFileSync(RESULTS_PATH, "utf-8"));
-    const feedback = loadFeedback();
-    const applicationStatus = loadApplicationStatus();
-    const rejectedIds = new Set(feedback.rejections.map((r) => r.jobId));
-    sendJson(res, 200, {
-      ...result,
-      feedback: {
-        rejectionCount: feedback.rejections.length,
-        rejectedJobIds: [...rejectedIds],
-        rejections: feedback.rejections,
-      },
-      applicationStatus: {
-        updatedAt: applicationStatus.updatedAt,
-        entries: applicationStatus.entries,
-      },
-    });
+
+    await handleComposeMatchJobs(res, { filter });
+    return;
+  }
+
+  if (pathname === "/api/results" && method === "GET") {
+    console.warn(
+      "[deprecation] GET /api/results delega a match-jobs — migrar a GET /api/dashboard/match-jobs (#316)"
+    );
+    await handleComposeMatchJobs(res, {}, DEPRECATED_RESULTS_HEADERS);
     return;
   }
 
@@ -606,6 +681,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  if (pathname === "/favicon.ico") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "favicon.svg"));
+    return;
+  }
+
   if (pathname === "/" || pathname === "/index.html") {
     serveStatic(res, path.join(DASHBOARD_DIR, "index.html"));
     return;
@@ -621,9 +701,24 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  // Assets del dashboard
+  if (pathname === "/tracker" || pathname === "/tracker.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "tracker.html"));
+    return;
+  }
+
+  if (pathname === "/m-lite" || pathname === "/m-lite.html") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "m-lite.html"));
+    return;
+  }
+
+  if (pathname === "/poc" || pathname === "/poc/") {
+    serveStatic(res, path.join(DASHBOARD_DIR, "poc", "index.html"));
+    return;
+  }
+
+  // Assets del dashboard (incluye subcarpeta poc/ — spike B38)
   const assetName = pathname.replace(/^\//, "");
-  if (/^[a-zA-Z0-9._-]+$/.test(assetName)) {
+  if (/^[a-zA-Z0-9._/-]+$/.test(assetName) && !assetName.includes("..")) {
     const assetPath = path.resolve(DASHBOARD_DIR, assetName);
     if (assetPath.startsWith(DASHBOARD_DIR) && fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
       serveStatic(res, assetPath);

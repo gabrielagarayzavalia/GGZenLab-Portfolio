@@ -11,6 +11,7 @@ import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 import { SESSION_PATH, SEARCH_TERMS, FILTERS, OUTPUT_PATH, TITLE_KEYWORDS } from "./config.js";
+import { resolvePlaywrightHeadless } from "./run/playwright-headless.js";
 import { listActivePuestoTitles } from "./config/puestos-store.js";
 import { listActiveEmpleoProfiles } from "./config/empleo-store.js";
 import { SCRAPE, sleep } from "./apply/timing.js";
@@ -88,7 +89,7 @@ async function scrapeLinkedInJobs(): Promise<void> {
   console.log(`📋 Términos: ${searchTerms.join(", ")}\n`);
 
   const browser = await chromium.launch({
-    headless: false, // Visible para detectar problemas
+    headless: resolvePlaywrightHeadless(),
     slowMo: 300,
     args: [
       "--disable-extensions",

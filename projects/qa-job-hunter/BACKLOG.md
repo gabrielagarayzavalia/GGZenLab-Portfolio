@@ -39,15 +39,53 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 - **Consumo:** preguntas **answered** en Config → `fill-config-bank.ts` en cada paso EA (select/text/radio).
 - Código: `unknown-field-strategy.ts`, `questions-store.ts`, `fill-config-bank.ts`, runners `easy-apply` / `easy-apply-dry-run`.
 
+## Tracker web-first (B-38) — Sprint 2 · High
+
+**Story spike:** [#264 US-JH-B38-0](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264) · Epic [#125 EPIC-JH-UI](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/125)  
+**Roadmap:** [`docs/tracker-web-first-roadmap.md`](docs/tracker-web-first-roadmap.md) · Spike técnico: [`docs/spike-tracker-web.md`](docs/spike-tracker-web.md)  
+**Línea:** `release/v2` · Rama spike: `spike/b38-tracker-web`
+
+| Fase | ID | GitHub | Notas |
+|------|-----|--------|-------|
+| Spike | B-38-0 | [#264](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/264) + tasks #265–#273 (cerrados) | GO · spike cerrado |
+| MVP desktop | B-38-1 | [#294](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/294) | PR [#293](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/293) |
+| Mobile lite | B-38-2 | [#295](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/295) | tasks [#302](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/302)–[#304](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/304) |
+| Excel legacy (flag) | B-38-3 | [#296](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/296) | oculto default; `OPEN_DESKTOP_EXCEL=1` |
+| Dual-write pipeline | B-38-5 | [#297](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/297) | post #294 |
+| Dual-write EA | B-38-6 | [#298](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/298) | reemplazar sync.py |
+| Import/export xlsx | B-38-7 | [#299](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/299) | server-side |
+| Deprecar legacy | B-38-8 | [#300](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/300) | `/api/results` |
+| Botonera /tracker | B-38-9 | [#301](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/301) | vs Excel mid-campaña |
+| Spike dashboard ↔ tracker | B-38-11 | [#305](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/305) | cerrado GO · PR [#310](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/310) |
+| API match-jobs dashboard | B-38-12 | [#311](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/311) | post #297, #312 |
+| Schema analysis + matchRejected | B-38-13 | [#312](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/312) | — |
+| Wire dashboard lista | B-38-14 | [#313](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/313) | post #311 |
+| Writes dashboard → tracker | B-38-15 | [#314](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/314) | post #312 |
+| Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
+| Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
+
+## Botonera web workflow (B-40)
+
+| Fase | Backlog ID | Issue | Notas |
+|------|------------|-------|-------|
+| Spike workflow completo | B-40-0 | [#318](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/318) | no solo EA · tasks #319–#322 |
+
+**Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
+
+**Orden:** B-38 spike **antes** de implementar B-08 / B-14 como listas o stores aparte — tracking y home futura viven en el tracker web.
+
+---
+
 ## Backlog — execution order
 
 | Order | ID | Priority | Scope |
 |-------|-----|----------|--------|
-| 2 | **B-06** | High | MongoDB local + persistence + lab QA database |
+| 1 | **B-38-0** | **High (sprint-2)** | Spike tracker web-first → ver sección arriba |
+| 2 | **B-06** | High | MongoDB local + persistence (**reorientar** a `applications` post B-38) |
 | 3 | **B-13** | **High — priority** | Multi-source jobs (GetOnBoard, Indeed, …) |
 | 4 | B-07 | High | Scheduled agent 3×/day → Mongo (multi-source) |
-| 5 | B-08 | Medium | Application tracking + pipeline dates + dashboard UI |
-| 5b | B-14 | Medium–High | Web site: home + `/run` + `/dashboard` subpages |
+| 5 | B-08 | Medium | Application tracking — **columnas tracker web**, no store aparte (post B-38 spike) |
+| 5b | B-14 | Medium–High | Web site — **home futura puede ser `/tracker`** (post B-38 spike) |
 | 5c | **B-17** | Medium | Página de estadísticas de búsqueda laboral |
 | 6 | B-15 | Medium | CV upload + tailored CV/cover letter (Ollama / Claude / share) |
 | 7 | B-09 | Medium | Generic multi-vertical app (profiles beyond QA) |

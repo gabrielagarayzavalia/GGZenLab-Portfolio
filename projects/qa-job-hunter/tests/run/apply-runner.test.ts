@@ -8,7 +8,7 @@ import { loadApplyRunState, refreshApplyRunState } from "../../src/run/apply-run
 
 test("loadApplyRunState sin archivo → idle", () => {
   const s = loadApplyRunState();
-  assert.ok(["idle", "done", "error", "running"].includes(s.status));
+  assert.ok(["idle", "done", "error", "running", "cancelled"].includes(s.status));
 });
 
 test("refreshApplyRunState devuelve logTail string", () => {

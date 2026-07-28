@@ -23,7 +23,7 @@ Dos collections separadas para no mezclar smoke y regression.
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `baseUrl` | `http://localhost:3847` | URL del dashboard |
-| `sampleJobId` | _(vacío)_ | Auto-set en SMK-V1-02 o SETUP regression |
+| `sampleJobId` | _(vacío)_ | Auto-set en SMK-V1-02 (también en **environment**) |
 | `sampleApplicationId` | _(vacío)_ | Auto-set en SMK-V1-18 |
 
 ## Prerrequisitos
@@ -75,6 +75,8 @@ Content-Type: application/json
 ```
 
 Sin header → `403`.
+
+**Si SMK-V1-10 da `400`:** el environment `sampleJobId` está vacío. Corré **SMK-V1-02** con environment **Job Hunter — Local** seleccionado, o pegá un jobId a mano en el environment.
 
 ## Newman (futuro CI)
 

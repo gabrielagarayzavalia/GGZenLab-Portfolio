@@ -25,6 +25,10 @@ export interface AnalysisSnapshot {
   analyzedAt?: string;
   /** ObjectId string de `analysis_runs` cuando existe. */
   runId?: string;
+  /** LinkedIn: aviso cerrado (No longer accepting applications). */
+  jobClosed?: boolean;
+  /** LinkedIn: false cuando el aviso ya no acepta postulaciones. */
+  acceptingApplications?: boolean;
 }
 
 /** Campos de feedback dashboard (filtro “Match incorrecto”, última corrida analyze). */

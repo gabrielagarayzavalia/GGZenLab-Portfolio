@@ -50,6 +50,10 @@ export interface TrackerApplication extends TrackerFeedbackFields {
   /** Snapshot análisis (detalle dashboard sin jobs-result). B-38-13. */
   analysis?: AnalysisSnapshot;
 
+  /** LinkedIn scrape: aviso cerrado (#373). Distinto de `estado: Cerrado` (usuaria). */
+  jobClosed?: boolean;
+  acceptingApplications?: boolean;
+
   createdAt: string;
   updatedAt: string;
   /** Origen del último write: pipeline | easy-apply | reconcile | user | import */

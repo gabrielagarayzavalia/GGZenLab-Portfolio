@@ -9,6 +9,7 @@ import {
   composeMatchJobsFromApplications,
   deriveApplicationStatus,
   dashboardJobId,
+  isLinkedInJobClosed,
   isVisibleMatchApplication,
   matchesDashboardFilter,
   resolveJobFallback,
@@ -83,6 +84,29 @@ test("matchesDashboardFilter respeta categorías dashboard", () => {
   assert.equal(matchesDashboardFilter(rejected, "applied"), false);
 });
 
+test("isLinkedInJobClosed detecta scrape y analysis", () => {
+  assert.equal(isLinkedInJobClosed(app({ jobClosed: true })), true);
+  assert.equal(isLinkedInJobClosed(app({ analysis: { jobClosed: true } })), true);
+  assert.equal(isLinkedInJobClosed(app({ acceptingApplications: false })), true);
+  assert.equal(isLinkedInJobClosed(app({ analysis: { acceptingApplications: false } })), true);
+  assert.equal(isLinkedInJobClosed(app()), false);
+});
+
+test("matchesDashboardFilter closed solo avisos LinkedIn cerrados", () => {
+  const linkedInClosed = app({ jobClosed: true, estado: "Pendiente" });
+  const userClosed = app({ estado: "Cerrado" });
+
+  assert.equal(matchesDashboardFilter(linkedInClosed, "closed"), true);
+  assert.equal(matchesDashboardFilter(userClosed, "closed"), false);
+  assert.equal(matchesDashboardFilter(userClosed, "not_selected"), true);
+});
+
+test("isVisibleMatchApplication oculta avisos cerrados LinkedIn por defecto", () => {
+  const closed = app({ jobClosed: true, matchPercent: 85, inLatestAnalysis: true });
+  assert.equal(isVisibleMatchApplication(closed), false);
+  assert.equal(isVisibleMatchApplication(closed, { showLinkedInClosed: true }), true);
+});
+
 test("isVisibleMatchApplication oculta Duplicado/Descartado y aplica umbral 70", () => {
   assert.equal(isVisibleMatchApplication(app({ matchPercent: 85, inLatestAnalysis: true })), true);
   assert.equal(
@@ -123,6 +147,16 @@ test("applicationToJobMatch usa analysis snapshot", () => {
   assert.equal(job.description, "JD snapshot");
   assert.deepEqual(job.matchedSkills, ["TS"]);
   assert.equal(job.summary, "Buen fit");
+});
+
+test("applicationToJobMatch expone jobClosed en JobMatch", () => {
+  const job = applicationToJobMatch(
+    app({
+      jobClosed: true,
+      analysis: { description: "JD", summary: "Ok" },
+    })
+  );
+  assert.equal(job.jobClosed, true);
 });
 
 test("applicationToJobMatch fallback jobs Mongo si falta analysis", () => {
@@ -247,4 +281,38 @@ test("composeMatchJobsFromApplications filtra por query filter", () => {
   assert.equal(appliedOnly.matchedJobs.length, 1);
   assert.equal(appliedOnly.matchedJobs[0].id, "2");
   assert.equal(appliedOnly.meta?.filter, "applied");
+});
+
+test("composeMatchJobsFromApplications oculta cerrados LinkedIn y filter=closed", () => {
+  const apps = [
+    app({ jobId: "open", inLatestAnalysis: true, matchPercent: 88 }),
+    app({
+      id: "closed-1",
+      jobId: "closed-job",
+      jobClosed: true,
+      matchPercent: 92,
+      inLatestAnalysis: true,
+    }),
+    app({ id: "2", jobId: "2", estado: "Cerrado", matchPercent: 80 }),
+  ];
+
+  const defaultView = composeMatchJobsFromApplications(
+    apps,
+    new Map(),
+    new Map(),
+    { scrapedAt: "2026-07-25T09:00:00.000Z", totalAnalyzed: 3 }
+  );
+  assert.equal(defaultView.matchedJobs.length, 2);
+  assert.ok(!defaultView.matchedJobs.some((j) => j.id === "closed-job"));
+
+  const closedOnly = composeMatchJobsFromApplications(
+    apps,
+    new Map(),
+    new Map(),
+    { scrapedAt: "2026-07-25T09:00:00.000Z", totalAnalyzed: 3 },
+    { filter: "closed" }
+  );
+  assert.equal(closedOnly.matchedJobs.length, 1);
+  assert.equal(closedOnly.matchedJobs[0].id, "closed-job");
+  assert.equal(closedOnly.matchedJobs[0].jobClosed, true);
 });

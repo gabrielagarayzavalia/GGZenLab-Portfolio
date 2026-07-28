@@ -19,7 +19,19 @@ export type DashboardMatchFilter =
   | "applied"
   | "not_applied"
   | "not_selected"
-  | "rejected";
+  | "rejected"
+  | "closed";
+
+/**
+ * Paridad filtros lista ↔ detalle (dashboard/app.js):
+ * | Lista              | Detalle              | Fuente                          |
+ * | Sin clasificar     | —                    | Pendiente / null                |
+ * | Aplicados          | Aplicado             | Enviada, A-realizado, Borrador  |
+ * | No aplicados       | No aplicado          | Stand-by                        |
+ * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
+ * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
+ * | Cerrado            | badge Aviso cerrado  | jobClosed LinkedIn (read-only)  |
+ */
 
 const HIDDEN_ESTADOS: TrackerEstado[] = ["Duplicado", "Descartado"];
 
@@ -68,6 +80,20 @@ export function deriveApplicationStatus(app: TrackerApplication): ApplicationSta
   return null;
 }
 
+/** LinkedIn aviso cerrado — distinto de `estado: Cerrado` (marcado por usuaria). */
+export function isLinkedInJobClosed(app: TrackerApplication): boolean {
+  if (app.jobClosed === true) return true;
+  if (app.analysis?.jobClosed === true) return true;
+  if (app.acceptingApplications === false) return true;
+  if (app.analysis?.acceptingApplications === false) return true;
+  return false;
+}
+
+export interface VisibleMatchApplicationOptions {
+  /** Incluir avisos cerrados en LinkedIn (filtro `closed`). */
+  showLinkedInClosed?: boolean;
+}
+
 export function dashboardJobId(app: TrackerApplication): string {
   return app.jobId?.trim() || app.id;
 }
@@ -90,13 +116,19 @@ export function matchesDashboardFilter(
       return status === "not_selected" && !feedback.matchRejected;
     case "unmarked":
       return status === null && !feedback.matchRejected;
+    case "closed":
+      return isLinkedInJobClosed(app);
     default:
       return true;
   }
 }
 
-export function isVisibleMatchApplication(app: TrackerApplication): boolean {
+export function isVisibleMatchApplication(
+  app: TrackerApplication,
+  options: VisibleMatchApplicationOptions = {}
+): boolean {
   if (HIDDEN_ESTADOS.includes(app.estado)) return false;
+  if (isLinkedInJobClosed(app) && !options.showLinkedInClosed) return false;
 
   const feedback = normalizeFeedbackFields(app);
   const status = deriveApplicationStatus(app);
@@ -137,6 +169,7 @@ export function applicationToJobMatch(
   const feedback = normalizeFeedbackFields(app);
   const analysis = app.analysis;
   const rejected = feedback.matchRejected;
+  const jobClosed = isLinkedInJobClosed(app);
 
   if (analysis) {
     return {
@@ -160,6 +193,7 @@ export function applicationToJobMatch(
       gaps: analysis.gaps ?? jobFallback?.gaps ?? [],
       cvSuggestions: analysis.cvSuggestions ?? jobFallback?.cvSuggestions ?? [],
       summary: analysis.summary ?? jobFallback?.summary ?? stubSummary(app, rejected),
+      jobClosed: jobClosed || undefined,
     };
   }
 
@@ -174,6 +208,7 @@ export function applicationToJobMatch(
       url: app.linkedinUrl || jobFallback.url,
       description: jobFallback.description || stubDescription(app, rejected),
       summary: jobFallback.summary || stubSummary(app, rejected),
+      jobClosed: jobClosed || jobFallback.jobClosed || undefined,
     };
   }
 
@@ -193,6 +228,7 @@ export function applicationToJobMatch(
     gaps: [],
     cvSuggestions: [],
     summary: stubSummary(app, rejected),
+    jobClosed: jobClosed || undefined,
   };
 }
 
@@ -274,7 +310,10 @@ export function composeMatchJobsFromApplications(
   options: ComposeMatchJobsOptions = {},
   jobsByLinkedInId: Map<string, JobMatch> = new Map()
 ): MatchJobsResponse {
-  const visible = apps.filter(isVisibleMatchApplication);
+  const showLinkedInClosed = options.filter === "closed";
+  const visible = apps.filter((app) =>
+    isVisibleMatchApplication(app, { showLinkedInClosed })
+  );
   const filtered = options.filter
     ? visible.filter((app) => matchesDashboardFilter(app, options.filter!))
     : visible;

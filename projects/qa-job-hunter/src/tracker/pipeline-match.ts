@@ -32,6 +32,8 @@ export interface PipelineScrapedJob {
   datePosted?: string;
   description?: string;
   scrapedAt?: string;
+  jobClosed?: boolean;
+  acceptingApplications?: boolean;
 }
 
 /** Umbral pipeline/Excel (applied-list sync-excel). */
@@ -89,6 +91,8 @@ export function analysisSnapshotFromPipelineMatch(
     cvSuggestions: match.cvSuggestions?.length ? [...match.cvSuggestions] : undefined,
     summary: match.summary || undefined,
     analyzedAt: analyzedAt ?? scraped?.scrapedAt ?? new Date().toISOString(),
+    jobClosed: scraped?.jobClosed,
+    acceptingApplications: scraped?.acceptingApplications,
   };
 }
 
@@ -113,6 +117,10 @@ export function pipelineMatchToApplicationInput(
     applyType: m.applyType,
     ...(notas ? { notas } : {}),
     ...(analysis ? { analysis } : {}),
+    ...(scraped?.jobClosed !== undefined ? { jobClosed: scraped.jobClosed } : {}),
+    ...(scraped?.acceptingApplications !== undefined
+      ? { acceptingApplications: scraped.acceptingApplications }
+      : {}),
     inLatestAnalysis: Boolean(analysis),
     updatedBy: "pipeline",
   };

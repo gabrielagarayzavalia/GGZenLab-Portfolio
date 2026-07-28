@@ -83,6 +83,7 @@ const DASHBOARD_MATCH_FILTERS = new Set<DashboardMatchFilter>([
   "not_applied",
   "not_selected",
   "rejected",
+  "closed",
 ]);
 
 function parseDashboardMatchFilter(value: string | null): DashboardMatchFilter | undefined {

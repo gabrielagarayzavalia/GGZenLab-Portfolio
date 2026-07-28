@@ -309,7 +309,10 @@ const extraReg = [
         request: {
           method: 'POST',
           header: [{ key: 'Content-Type', value: 'application/json' }],
-          body: { mode: 'raw', raw: '{\n  "jobId": "{{sampleJobId}}"\n}' },
+          body: {
+            mode: 'raw',
+            raw: '{\n  "jobId": "{{sampleJobId}}",\n  "title": "REG-V1-25 regression title",\n  "company": "Test Co",\n  "searchTerm": "QA",\n  "matchPercent": 75,\n  "reason": "REG-V1-25 legacy feedback reject"\n}',
+          },
           url: '{{baseUrl}}/api/feedback/reject',
         },
         event: [
@@ -319,7 +322,10 @@ const extraReg = [
               type: 'text/javascript',
               exec: [
                 "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
-                "pm.test('REG-V1-25 status 200 or 404', () => pm.expect([200,404]).to.include(pm.response.code));",
+                "pm.test('REG-V1-25 status 200', () => pm.response.to.have.status(200));",
+                "if (pm.response.code === 200) {",
+                "  pm.test('rejections array', () => pm.expect(pm.response.json().rejections).to.be.an('array'));",
+                "}",
               ],
             },
           },

@@ -78,6 +78,9 @@ test("run.html expone data-testid de controles Easy Apply", () => {
     "run-status",
     "run-state-text",
     "run-log",
+    "run-confirm-dialog",
+    "run-confirm-dismiss",
+    "run-confirm-accept",
   ];
   for (const testid of runTestids) {
     assert.match(html, new RegExp(`data-testid="${testid}"`), `missing ${testid}`);

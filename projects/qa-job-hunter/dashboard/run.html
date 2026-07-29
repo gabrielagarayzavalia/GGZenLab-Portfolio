@@ -74,6 +74,36 @@
     </section>
   </main>
 
+  <dialog
+    id="run-confirm-dialog"
+    class="config-dialog run-confirm-dialog"
+    aria-labelledby="run-confirm-title"
+    data-testid="run-confirm-dialog"
+  >
+    <div class="config-dialog__form">
+      <h2 class="config-dialog__title" id="run-confirm-title">Confirmar</h2>
+      <p class="config-dialog__hint" id="run-confirm-message"></p>
+      <div class="config-dialog__actions">
+        <button
+          type="button"
+          class="config-btn config-btn--ghost"
+          id="run-confirm-dismiss"
+          data-testid="run-confirm-dismiss"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="config-btn"
+          id="run-confirm-accept"
+          data-testid="run-confirm-accept"
+        >
+          Aceptar
+        </button>
+      </div>
+    </div>
+  </dialog>
+
   <script src="/run.js" type="module"></script>
 </body>
 </html>

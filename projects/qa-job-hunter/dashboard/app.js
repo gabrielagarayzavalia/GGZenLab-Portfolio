@@ -14,6 +14,8 @@ let showUnmarked = true;
 let showClosed = false;
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
+const MATCH_INCORRECT_HINT =
+  "Match incorrecto: usá el filtro de lista o el botón aquí (no es un checkbox de postulación).";
 /** @type {Set<string>} */
 let rejectedIds = new Set();
 /** @type {Map<string, { reason?: string; rejectedAt: string }>} */
@@ -293,15 +295,12 @@ function renderDetail(job) {
       ? `<section class="detail__section"><h3>Gaps</h3><ul class="detail__list">${listItems(job.gaps)}</ul></section>`
       : "";
 
-  const feedbackToggle = rejected
-    ? `<button type="button" class="feedback-disclosure__toggle" id="feedback-toggle" aria-expanded="false" aria-controls="feedback-panel">
+  const feedbackToggleLabel = rejected ? "Match incorrecto" : "¿Match incorrecto?";
+  const feedbackToggle = `<button type="button" class="feedback-disclosure__toggle" id="feedback-toggle" aria-expanded="false" aria-controls="feedback-panel">
           <span class="feedback-disclosure__chevron" aria-hidden="true">▶</span>
-          Match incorrecto
-        </button>`
-    : `<button type="button" class="feedback-disclosure__toggle" id="feedback-toggle" aria-expanded="false" aria-controls="feedback-panel">
-          <span class="feedback-disclosure__chevron" aria-hidden="true">▶</span>
-          ¿Match incorrecto?
+          ${feedbackToggleLabel}
         </button>`;
+  const feedbackHintTrigger = `<button type="button" class="feedback-hint-trigger" title="${escapeAttr(MATCH_INCORRECT_HINT)}" aria-label="${escapeAttr(MATCH_INCORRECT_HINT)}" data-testid="match-incorrect-hint">?</button>`;
 
   const feedbackPanel = rejected
     ? `<div class="feedback-disclosure__panel feedback-disclosure__panel--wide hidden" id="feedback-panel">
@@ -357,8 +356,10 @@ function renderDetail(job) {
             </div>
           </div>
           <div class="feedback-section feedback-section--compact${rejected ? " feedback-section--rejected" : ""}">
-            ${feedbackToggle}
-            <p class="feedback-hint feedback-hint--inline">Match incorrecto: usá el filtro de lista o el botón aquí (no es un checkbox de postulación).</p>
+            <div class="feedback-disclosure__header">
+              ${feedbackToggle}
+              ${feedbackHintTrigger}
+            </div>
           </div>
         </aside>
       </div>

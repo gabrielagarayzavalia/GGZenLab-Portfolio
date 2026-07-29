@@ -9,8 +9,60 @@ const applyBtn = document.getElementById("run-apply-btn");
 const cancelBtn = document.getElementById("run-cancel-btn");
 const applyMaxEl = document.getElementById("run-apply-max");
 const jobIdEl = document.getElementById("run-job-id");
+const confirmDialog = document.getElementById("run-confirm-dialog");
+const confirmTitleEl = document.getElementById("run-confirm-title");
+const confirmMessageEl = document.getElementById("run-confirm-message");
+const confirmAcceptBtn = document.getElementById("run-confirm-accept");
+const confirmDismissBtn = document.getElementById("run-confirm-dismiss");
 
 let pollTimer = null;
+
+/**
+ * Modal in-app (sin window.confirm). Resuelve true si el usuario acepta.
+ * @param {string} message
+ * @param {{ testId?: string, title?: string }} [options]
+ * @returns {Promise<boolean>}
+ */
+function showRunConfirm(message, options = {}) {
+  const { testId = "run-confirm-dialog", title = "Confirmar" } = options;
+  if (
+    !confirmDialog ||
+    !confirmTitleEl ||
+    !confirmMessageEl ||
+    !confirmAcceptBtn ||
+    !confirmDismissBtn
+  ) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise((resolve) => {
+    confirmTitleEl.textContent = title;
+    confirmMessageEl.textContent = message;
+    confirmDialog.setAttribute("data-testid", testId);
+
+    const finish = (accepted) => {
+      confirmAcceptBtn.removeEventListener("click", onAccept);
+      confirmDismissBtn.removeEventListener("click", onDismiss);
+      confirmDialog.removeEventListener("cancel", onCancel);
+      if (confirmDialog.open) confirmDialog.close();
+      resolve(accepted);
+    };
+
+    const onAccept = () => finish(true);
+    const onDismiss = () => finish(false);
+    const onCancel = (event) => {
+      event.preventDefault();
+      finish(false);
+    };
+
+    confirmAcceptBtn.addEventListener("click", onAccept);
+    confirmDismissBtn.addEventListener("click", onDismiss);
+    confirmDialog.addEventListener("cancel", onCancel);
+
+    confirmDialog.showModal();
+    confirmDismissBtn.focus();
+  });
+}
 
 function setStatus(msg, isError = false) {
   if (!statusEl) return;
@@ -61,8 +113,9 @@ async function fetchStatus() {
 
 applyBtn?.addEventListener("click", async () => {
   if (selectedMode() === "productive") {
-    const ok = confirm(
-      "Modo PRODUCTIVO: va a enviar postulaciones reales en LinkedIn. ¿Continuar?"
+    const ok = await showRunConfirm(
+      "Modo PRODUCTIVO: va a enviar postulaciones reales en LinkedIn. ¿Continuar?",
+      { testId: "run-confirm-productive", title: "Modo productivo" }
     );
     if (!ok) return;
   }
@@ -89,8 +142,9 @@ applyBtn?.addEventListener("click", async () => {
 });
 
 cancelBtn?.addEventListener("click", async () => {
-  const ok = confirm(
-    "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?"
+  const ok = await showRunConfirm(
+    "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?",
+    { testId: "run-confirm-cancel", title: "Detener corrida" }
   );
   if (!ok) return;
   setStatus("Deteniendo…");

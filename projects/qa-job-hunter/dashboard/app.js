@@ -48,6 +48,11 @@ function showAppFlash(message, kind = "error") {
   el.hidden = false;
   el.classList.remove("hidden");
   el.textContent = message;
+  if (kind === "success") {
+    el.setAttribute("data-testid", "dash-flash-success");
+  } else {
+    el.removeAttribute("data-testid");
+  }
   appFlashTimer = setTimeout(() => clearAppFlash(), kind === "error" ? 12_000 : 6_000);
 }
 
@@ -61,6 +66,18 @@ function clearAppFlash() {
 
 function showApiWarnings(warnings) {
   if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
+}
+
+function applicationStatusSavedMessage(status, estadoFromApi) {
+  if (estadoFromApi) return `Estado guardado: ${estadoFromApi}`;
+  const byStatus = {
+    applied: "Enviada",
+    not_applied: "Stand-by",
+    not_selected: "Cerrado",
+  };
+  if (status === null) return "Estado guardado: Pendiente";
+  const label = byStatus[status];
+  return label ? `Estado guardado: ${label}` : "Estado guardado";
 }
 
 function matchClass(pct) {
@@ -406,7 +423,14 @@ async function saveApplicationStatus(job, status) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
-    showApiWarnings(data.warnings);
+    if (data.warnings?.length) {
+      showApiWarnings(data.warnings);
+    } else {
+      showAppFlash(
+        applicationStatusSavedMessage(status, data.application?.estado),
+        "success"
+      );
+    }
     await loadMatchJobs();
     if (status && !isVisibleInList(job.id)) {
       focusNextVisibleJob(job.id);

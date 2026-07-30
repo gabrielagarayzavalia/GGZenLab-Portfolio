@@ -39,6 +39,20 @@
             <option value="asc">Menor match primero</option>
           </select>
         </label>
+        <div class="list-dropdown-filters" aria-label="Filtrar por empresa y puesto">
+          <label class="sort-control">
+            <span>Empresa</span>
+            <select id="filter-company" data-testid="dash-filter-company" aria-label="Filtrar por empresa">
+              <option value="">Todas</option>
+            </select>
+          </label>
+          <label class="sort-control">
+            <span>Puesto</span>
+            <select id="filter-title" data-testid="dash-filter-title" aria-label="Filtrar por puesto">
+              <option value="">Todos</option>
+            </select>
+          </label>
+        </div>
         <div class="list-filters" aria-label="Filtrar lista">
           <label class="filter-control">
             <input type="checkbox" id="show-unmarked" checked />

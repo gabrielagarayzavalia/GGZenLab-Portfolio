@@ -12,6 +12,8 @@ let showNotApplied = false;
 let showNotSelected = false;
 let showUnmarked = true;
 let showClosed = false;
+let filterCompany = "";
+let filterTitle = "";
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
 const MATCH_INCORRECT_HINT =
@@ -27,6 +29,8 @@ const els = {
   headerStats: document.getElementById("header-stats"),
   jobList: document.getElementById("job-list"),
   sortSelect: document.getElementById("sort-select"),
+  filterCompany: document.getElementById("filter-company"),
+  filterTitle: document.getElementById("filter-title"),
   showRejected: document.getElementById("show-rejected"),
   showApplied: document.getElementById("show-applied"),
   showNotApplied: document.getElementById("show-not-applied"),
@@ -140,8 +144,36 @@ function isVisibleInList(jobId) {
   return showUnmarked;
 }
 
+function distinctSorted(values) {
+  return [...new Set(values.filter((v) => v != null && String(v).trim()))].sort((a, b) =>
+    a.localeCompare(b, "es", { sensitivity: "base" })
+  );
+}
+
+function populateDropdownFilters() {
+  const companies = distinctSorted(jobs.map((j) => j.company));
+  const titles = distinctSorted(jobs.map((j) => j.title));
+
+  const prevCompany = filterCompany;
+  const prevTitle = filterTitle;
+
+  els.filterCompany.innerHTML = `<option value="">Todas</option>${companies
+    .map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`)
+    .join("")}`;
+  els.filterTitle.innerHTML = `<option value="">Todos</option>${titles
+    .map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`)
+    .join("")}`;
+
+  filterCompany = companies.includes(prevCompany) ? prevCompany : "";
+  filterTitle = titles.includes(prevTitle) ? prevTitle : "";
+  els.filterCompany.value = filterCompany;
+  els.filterTitle.value = filterTitle;
+}
+
 function visibleJobs() {
   let list = jobs.filter((j) => isVisibleInList(j.id));
+  if (filterCompany) list = list.filter((j) => j.company === filterCompany);
+  if (filterTitle) list = list.filter((j) => j.title === filterTitle);
   return list.sort((a, b) =>
     sortOrder === "desc" ? b.matchPercent - a.matchPercent : a.matchPercent - b.matchPercent
   );
@@ -151,6 +183,9 @@ function listEmptyMessage() {
   if (jobs.length === 0) return "No hay empleos con 70%+ de match.";
   const pending = jobs.filter((j) => getApplicationStatus(j.id) === null && !isRejected(j.id)).length;
   if (pending > 0 && !showUnmarked) return "Marcá «Sin Clasificar» para ver empleos pendientes.";
+  if (filterCompany || filterTitle) {
+    return "Ningún empleo coincide con los filtros de empresa o puesto.";
+  }
   return "Ningún empleo coincide con los filtros. Marcá alguna categoría arriba.";
 }
 
@@ -529,6 +564,7 @@ async function loadMatchJobs(filter) {
     applyApplicationStatus(result.applicationStatus);
   }
   jobs = result.matchedJobs ?? result.jobs ?? [];
+  populateDropdownFilters();
   return result;
 }
 
@@ -694,6 +730,25 @@ async function init() {
     sortOrder = els.sortSelect.value;
     renderList();
   });
+
+  function onDropdownFilterChange() {
+    filterCompany = els.filterCompany.value;
+    filterTitle = els.filterTitle.value;
+    const list = visibleJobs();
+    if (selectedId && !list.some((j) => j.id === selectedId)) {
+      focusNextVisibleJob(selectedId);
+    } else {
+      renderList();
+      renderHeader({
+        scrapedAt: window.__scrapedAt,
+        totalAnalyzed: window.__totalAnalyzed,
+        matchedJobs: jobs,
+      });
+    }
+  }
+
+  els.filterCompany.addEventListener("change", onDropdownFilterChange);
+  els.filterTitle.addEventListener("change", onDropdownFilterChange);
 
   els.showRejected.addEventListener("change", () => onFilterChange(els.showRejected));
   els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));

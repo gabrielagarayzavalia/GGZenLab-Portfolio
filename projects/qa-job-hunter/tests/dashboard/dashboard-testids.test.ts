@@ -66,6 +66,13 @@ for (const { file, links } of NAV_PAGES) {
   });
 }
 
+test("index.html expone data-testid de filtros empresa y puesto", () => {
+  const html = readHtml("index.html");
+  for (const testid of ["dash-filter-company", "dash-filter-title"]) {
+    assert.match(html, new RegExp(`data-testid="${testid}"`), `missing ${testid}`);
+  }
+});
+
 test("run.html expone data-testid de controles Easy Apply", () => {
   const html = readHtml("run.html");
   const runTestids = [

@@ -150,22 +150,20 @@ function distinctSorted(values) {
   );
 }
 
+function buildFilterSelectOptions(values, placeholder, selected) {
+  const options = values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`);
+  if (selected && !values.includes(selected)) {
+    options.push(`<option value="${escapeAttr(selected)}">${escapeHtml(selected)}</option>`);
+  }
+  return `<option value="">${placeholder}</option>${options.join("")}`;
+}
+
 function populateDropdownFilters() {
   const companies = distinctSorted(jobs.map((j) => j.company));
   const titles = distinctSorted(jobs.map((j) => j.title));
 
-  const prevCompany = filterCompany;
-  const prevTitle = filterTitle;
-
-  els.filterCompany.innerHTML = `<option value="">Todas</option>${companies
-    .map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`)
-    .join("")}`;
-  els.filterTitle.innerHTML = `<option value="">Todos</option>${titles
-    .map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`)
-    .join("")}`;
-
-  filterCompany = companies.includes(prevCompany) ? prevCompany : "";
-  filterTitle = titles.includes(prevTitle) ? prevTitle : "";
+  els.filterCompany.innerHTML = buildFilterSelectOptions(companies, "Todas", filterCompany);
+  els.filterTitle.innerHTML = buildFilterSelectOptions(titles, "Todos", filterTitle);
   els.filterCompany.value = filterCompany;
   els.filterTitle.value = filterTitle;
 }
@@ -184,9 +182,30 @@ function listEmptyMessage() {
   const pending = jobs.filter((j) => getApplicationStatus(j.id) === null && !isRejected(j.id)).length;
   if (pending > 0 && !showUnmarked) return "Marcá «Sin Clasificar» para ver empleos pendientes.";
   if (filterCompany || filterTitle) {
-    return "Ningún empleo coincide con los filtros de empresa o puesto.";
+    return "No se encontraron empleos para el criterio seleccionado";
   }
   return "Ningún empleo coincide con los filtros. Marcá alguna categoría arriba.";
+}
+
+function showListEmpty(message, filteredByDropdown) {
+  els.listEmpty.classList.remove("hidden");
+  els.listEmpty.hidden = false;
+  els.listEmpty.querySelector("p").textContent = message;
+  const hint = els.listEmpty.querySelector(".hint");
+  if (hint) hint.hidden = filteredByDropdown;
+  if (filteredByDropdown) {
+    els.listEmpty.setAttribute("data-testid", "list-empty-filtered");
+  } else {
+    els.listEmpty.removeAttribute("data-testid");
+  }
+}
+
+function hideListEmpty() {
+  els.listEmpty.classList.add("hidden");
+  els.listEmpty.hidden = true;
+  els.listEmpty.removeAttribute("data-testid");
+  const hint = els.listEmpty.querySelector(".hint");
+  if (hint) hint.hidden = false;
 }
 
 function focusNextVisibleJob(afterId) {
@@ -236,21 +255,17 @@ function renderList() {
   if (!els.listError.hidden) return;
 
   if (jobs.length === 0) {
-    els.listEmpty.classList.remove("hidden");
-    els.listEmpty.hidden = false;
-    els.listEmpty.querySelector("p").textContent = "No hay empleos con 70%+ de match.";
+    showListEmpty("No hay empleos con 70%+ de match.", false);
     return;
   }
 
   if (list.length === 0) {
-    els.listEmpty.classList.remove("hidden");
-    els.listEmpty.hidden = false;
-    els.listEmpty.querySelector("p").textContent = listEmptyMessage();
+    const filteredByDropdown = Boolean(filterCompany || filterTitle);
+    showListEmpty(listEmptyMessage(), filteredByDropdown);
     return;
   }
 
-  els.listEmpty.classList.add("hidden");
-  els.listEmpty.hidden = true;
+  hideListEmpty();
 
   for (const job of list) {
     const rejected = isRejected(job.id);

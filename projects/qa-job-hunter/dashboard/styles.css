@@ -90,6 +90,11 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   margin: 0 0 0.5rem; font-size: 0.75rem; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600;
 }
+.application-section__note {
+  margin: 0 0 0.45rem; font-size: 0.78rem; color: var(--text-muted); line-height: 1.35;
+}
+.application-section--linkedin-closed .application-check { opacity: 0.55; cursor: not-allowed; }
+.application-section--linkedin-closed .application-check input { cursor: not-allowed; }
 .application-checks { display: flex; flex-wrap: wrap; gap: 1rem; }
 .application-check {
   display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem;

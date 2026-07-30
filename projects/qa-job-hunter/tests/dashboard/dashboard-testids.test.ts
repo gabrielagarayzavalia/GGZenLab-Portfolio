@@ -73,6 +73,16 @@ test("index.html expone data-testid de filtros empresa y puesto", () => {
   }
 });
 
+test("app.js expone empty state filtrado por dropdown", () => {
+  const appJs = fs.readFileSync(path.join(DASHBOARD_DIR, "app.js"), "utf-8");
+  assert.match(appJs, /data-testid", "list-empty-filtered"/);
+  assert.match(
+    appJs,
+    /No se encontraron empleos para el criterio seleccionado/
+  );
+  assert.match(appJs, /buildFilterSelectOptions/);
+});
+
 test("run.html expone data-testid de controles Easy Apply", () => {
   const html = readHtml("run.html");
   const runTestids = [

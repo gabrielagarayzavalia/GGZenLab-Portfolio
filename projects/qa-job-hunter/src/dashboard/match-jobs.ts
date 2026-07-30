@@ -11,7 +11,8 @@ import { getLatestAnalysisRun } from "../db/runs.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import type { JobMatch } from "../types.js";
-import { normalizeFeedbackFields } from "../types/dashboard-match.js";
+import { jdSectionsFromDescription, normalizeFeedbackFields } from "../types/dashboard-match.js";
+import type { JdSections } from "../jd/parse-sections.js";
 import type { TrackerApplication, TrackerEstado } from "../types/tracker-application.js";
 
 export type DashboardMatchFilter =
@@ -151,6 +152,20 @@ function stubSummary(app: TrackerApplication, rejected: boolean): string {
   return "Sin análisis detallado disponible.";
 }
 
+function resolveJobMatchJdSections(
+  primary?: JdSections,
+  primaryDescription?: string,
+  fallback?: JdSections,
+  fallbackDescription?: string
+): JdSections | undefined {
+  return (
+    primary ??
+    fallback ??
+    jdSectionsFromDescription(primaryDescription) ??
+    jdSectionsFromDescription(fallbackDescription)
+  );
+}
+
 function stubDescription(app: TrackerApplication, rejected: boolean): string {
   const reason = app.matchRejectedReason?.trim();
   if (rejected) {
@@ -185,7 +200,12 @@ export function applicationToJobMatch(
         analysis.description ??
         jobFallback?.description ??
         stubDescription(app, rejected),
-      jdSections: analysis.jdSections ?? jobFallback?.jdSections,
+      jdSections: resolveJobMatchJdSections(
+        analysis.jdSections,
+        analysis.description ?? jobFallback?.description,
+        jobFallback?.jdSections,
+        jobFallback?.description
+      ),
       searchTerm: analysis.searchTerm ?? jobFallback?.searchTerm ?? "—",
       source: analysis.source ?? jobFallback?.source,
       externalId: analysis.externalId ?? jobFallback?.externalId,
@@ -208,6 +228,8 @@ export function applicationToJobMatch(
       matchPercent: app.matchPercent,
       url: app.linkedinUrl || jobFallback.url,
       description: jobFallback.description || stubDescription(app, rejected),
+      jdSections:
+        jobFallback.jdSections ?? jdSectionsFromDescription(jobFallback.description),
       summary: jobFallback.summary || stubSummary(app, rejected),
       jobClosed: jobClosed || jobFallback.jobClosed || undefined,
     };

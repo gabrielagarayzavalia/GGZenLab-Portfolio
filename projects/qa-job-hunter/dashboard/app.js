@@ -505,7 +505,7 @@ function wireApplicationChecks(job) {
         for (const other of postulationBoxes) {
           if (other.el !== el) other.el.checked = false;
         }
-        chkAssessment?.checked = false;
+        if (chkAssessment) chkAssessment.checked = false;
         saveApplicationStatus(job, status);
       } else {
         saveApplicationStatus(job, null);

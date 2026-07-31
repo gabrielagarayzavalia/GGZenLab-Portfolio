@@ -235,9 +235,52 @@ export function planEasyApplyUpsert(
   return { action: "update", update };
 }
 
+const RECONCILE_TERMINAL_ESTADOS = new Set(["cerrado", "descartado", "duplicado"]);
+const RECONCILE_ASSESSMENT_ESTADOS = new Set(["a-pendiente", "a-realizado"]);
+
+function isReconcileTerminalEstado(estado: string | undefined): boolean {
+  return RECONCILE_TERMINAL_ESTADOS.has((estado ?? "").trim().toLowerCase());
+}
+
+function isReconcileAssessmentEstado(estado: string | undefined): boolean {
+  return RECONCILE_ASSESSMENT_ESTADOS.has((estado ?? "").trim().toLowerCase());
+}
+
+/**
+ * Promociones permitidas desde Gmail reconcile (#414).
+ * Enviada → A-pendiente/A-realizado; A-pendiente → A-realizado; Pendiente → Enviada/assessment.
+ */
+export function canReconcilePromoteEstado(
+  existingEstado: string | undefined,
+  incomingEstado: TrackerEstado
+): boolean {
+  const existing = (existingEstado ?? "").trim().toLowerCase();
+  const incoming = incomingEstado.trim().toLowerCase();
+  if (!existing || existing === incoming) return false;
+  if (isReconcileTerminalEstado(existing)) return false;
+
+  if (isReconcileAssessmentEstado(incoming)) {
+    if (
+      existing === "pendiente" ||
+      existing === "enviada" ||
+      existing === "stand-by" ||
+      existing === "standby" ||
+      existing === "borrador abierto"
+    ) {
+      return true;
+    }
+    return existing === "a-pendiente" && incoming === "a-realizado";
+  }
+
+  if (incoming === "enviada" && existing === "pendiente") return true;
+  if (incoming === "stand-by" && existing === "pendiente") return true;
+
+  return !isProtectedEstado(existing);
+}
+
 /**
  * Plan upsert reconcile → Mongo (B-23-02).
- * Solo actualiza applications existentes; skip estados protegidos en Mongo.
+ * Actualiza applications existentes; insert solo A-pendiente/A-realizado con jobId (#414).
  */
 export function planReconcileUpsert(
   existing: AutomationExistingDoc | null,
@@ -248,10 +291,19 @@ export function planReconcileUpsert(
   const merged: AutomationApplicationFields = { ...input, ...patch };
 
   if (!existing) {
+    if (
+      isReconcileAssessmentEstado(merged.estado) &&
+      (merged.jobId?.trim() || merged.linkedinUrlNorm)
+    ) {
+      return {
+        action: "insert",
+        fields: { ...merged, estado: merged.estado! },
+      };
+    }
     return { action: "skip" };
   }
 
-  if (isProtectedEstado(existing.estado)) {
+  if (isReconcileTerminalEstado(existing.estado)) {
     return { action: "skip" };
   }
 
@@ -260,6 +312,12 @@ export function planReconcileUpsert(
   };
 
   if (merged.estado) {
+    if (
+      merged.estado !== existing.estado &&
+      !canReconcilePromoteEstado(existing.estado, merged.estado)
+    ) {
+      return { action: "skip" };
+    }
     update.estado = merged.estado;
   }
   if (merged.proximoPaso?.trim()) {

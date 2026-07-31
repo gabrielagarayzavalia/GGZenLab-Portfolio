@@ -21,7 +21,8 @@ export type DashboardMatchFilter =
   | "not_applied"
   | "not_selected"
   | "rejected"
-  | "closed";
+  | "closed"
+  | "duplicated";
 
 /**
  * Paridad filtros lista ↔ detalle (dashboard/app.js):
@@ -32,13 +33,13 @@ export type DashboardMatchFilter =
  * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
  * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
  * | Cerrado            | badge Cerrado        | jobClosed LinkedIn (read-only)  |
+ * | Duplicado          | badge estado tracker | estado Duplicado (opt-in)       |
  */
-
-const HIDDEN_ESTADOS: TrackerEstado[] = ["Duplicado", "Descartado"];
 
 const APPLIED_ESTADOS: TrackerEstado[] = ["Enviada", "A-realizado", "Borrador abierto"];
 const NOT_SELECTED_ESTADOS: TrackerEstado[] = ["Cerrado"];
 const NOT_APPLIED_ESTADOS: TrackerEstado[] = ["Stand-by"];
+const ASSESSMENT_PENDING_ESTADOS: TrackerEstado[] = ["A-pendiente"];
 
 export interface MatchJobsResponse {
   scrapedAt: string;
@@ -76,6 +77,7 @@ export type LegacyResultsResponse = MatchJobsResponse;
 /** Mapeo spike § B38-11-02 — lectura tracker → filtros legacy dashboard. */
 export function deriveApplicationStatus(app: TrackerApplication): ApplicationStatus | null {
   if (APPLIED_ESTADOS.includes(app.estado)) return "applied";
+  if (ASSESSMENT_PENDING_ESTADOS.includes(app.estado)) return "assessment_pending";
   if (NOT_SELECTED_ESTADOS.includes(app.estado)) return "not_selected";
   if (NOT_APPLIED_ESTADOS.includes(app.estado) && !app.matchRejected) return "not_applied";
   return null;
@@ -93,6 +95,8 @@ export function isLinkedInJobClosed(app: TrackerApplication): boolean {
 export interface VisibleMatchApplicationOptions {
   /** Incluir avisos cerrados en LinkedIn (filtro `closed`). */
   showLinkedInClosed?: boolean;
+  /** Incluir filas Duplicado (filtro opt-in `duplicated`). */
+  showDuplicated?: boolean;
 }
 
 export function dashboardJobId(app: TrackerApplication): string {
@@ -116,7 +120,9 @@ export function matchesDashboardFilter(
     case "not_selected":
       return status === "not_selected" && !feedback.matchRejected;
     case "unmarked":
-      return status === null && !feedback.matchRejected;
+      return (status === null || status === "assessment_pending") && !feedback.matchRejected;
+    case "duplicated":
+      return app.estado === "Duplicado";
     case "closed":
       return isLinkedInJobClosed(app);
     default:
@@ -128,7 +134,8 @@ export function isVisibleMatchApplication(
   app: TrackerApplication,
   options: VisibleMatchApplicationOptions = {}
 ): boolean {
-  if (HIDDEN_ESTADOS.includes(app.estado)) return false;
+  if (app.estado === "Duplicado" && !options.showDuplicated) return false;
+  if (app.estado === "Descartado") return false;
   if (isLinkedInJobClosed(app) && !options.showLinkedInClosed) return false;
 
   const feedback = normalizeFeedbackFields(app);
@@ -186,10 +193,13 @@ export function applicationToJobMatch(
   const rejected = feedback.matchRejected;
   const jobClosed = isLinkedInJobClosed(app);
 
+  const trackerFields = { estado: app.estado, canal: app.canal };
+
   if (analysis) {
     return {
       id,
       applicationId: app.id,
+      ...trackerFields,
       title: app.puesto,
       company: app.empresa,
       location: analysis.location ?? jobFallback?.location ?? "—",
@@ -223,6 +233,7 @@ export function applicationToJobMatch(
       ...jobFallback,
       id,
       applicationId: app.id,
+      ...trackerFields,
       title: app.puesto || jobFallback.title,
       company: app.empresa || jobFallback.company,
       matchPercent: app.matchPercent,
@@ -238,6 +249,7 @@ export function applicationToJobMatch(
   return {
     id,
     applicationId: app.id,
+    ...trackerFields,
     title: app.puesto,
     company: app.empresa,
     location: "—",
@@ -334,8 +346,9 @@ export function composeMatchJobsFromApplications(
   jobsByLinkedInId: Map<string, JobMatch> = new Map()
 ): MatchJobsResponse {
   const showLinkedInClosed = options.filter === "closed";
+  const showDuplicated = options.filter === "duplicated";
   const visible = apps.filter((app) =>
-    isVisibleMatchApplication(app, { showLinkedInClosed })
+    isVisibleMatchApplication(app, { showLinkedInClosed, showDuplicated })
   );
   const filtered = options.filter
     ? visible.filter((app) => matchesDashboardFilter(app, options.filter!))

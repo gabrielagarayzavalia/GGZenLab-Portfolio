@@ -9,7 +9,12 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const APPLICATION_STATUS_PATH = path.join(ROOT, "output", "application-status.json");
 
-export type ApplicationStatus = "applied" | "not_applied" | "not_selected";
+export type ApplicationStatus =
+  | "applied"
+  | "not_applied"
+  | "not_selected"
+  /** Assessment en curso (tracker `A-pendiente`) — sin checkbox #373. */
+  | "assessment_pending";
 
 export interface ApplicationStatusEntry {
   jobId: string;

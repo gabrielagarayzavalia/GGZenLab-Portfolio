@@ -50,6 +50,55 @@ Al guardar un estado en detalle, `app.js` activa el filtro de lista correspondie
 - Desmarcar (volver a pendiente) → activa «Sin clasificar»; si solo había un bucket de postulación o «Match incorrecto» exclusivo, lo apaga.
 - **Match incorrecto** → activa filtro «Match incorrecto» (disclosure, no checkbox de postulación).
 
+## Estados tracker completos en lista (#410)
+
+### Badge `estado` + checkboxes #373
+
+Conviven en lista y detalle:
+
+- **Badge tracker** (`estado-tracker`): texto canónico del Excel (`Enviada`, `A-pendiente`, `Borrador abierto`, etc.) con color aproximado PO.
+- **Checkboxes detalle** (#373): buckets Aplicado / No aplicado / No seleccionada/o — sin cambios.
+- **Badges checkbox lista** (`badge-applied`, etc.): opcionales; siguen visibles junto al badge tracker.
+
+### Paleta CSS (aproximación PO)
+
+| Estado | Clase | Estilo |
+|--------|-------|--------|
+| Pendiente | `estado-tracker--pendiente` | neutro |
+| Stand-by | `estado-tracker--standby` | azul claro |
+| Enviada | `estado-tracker--enviada` | verde |
+| Borrador abierto | `estado-tracker--borrador` | ámbar |
+| A-pendiente | `estado-tracker--a-pendiente` | naranja claro |
+| A-realizado | `estado-tracker--a-realizado` | violeta claro |
+| Cerrado (tracker) | `estado-tracker--cerrado` | gris + tachado |
+| Duplicado | `estado-tracker--duplicado` | azul grisáceo |
+| Descartado | oculto (sin filtro) | — |
+
+### Distinción Cerrado LinkedIn vs tracker
+
+- `badge-closed` (rojo): `jobClosed` LinkedIn — no llegaste a aplicar.
+- `estado-tracker--cerrado` (gris tachado): `estado: Cerrado` tracker — «No seleccionada/o».
+
+### Filtro Duplicado (opt-in)
+
+- Oculto por defecto en compositor (`isVisibleMatchApplication`).
+- Checkbox lista «Duplicado» + `?filter=duplicated` en API.
+- `Descartado` sigue oculto sin filtro.
+
+### A-pendiente
+
+- `deriveApplicationStatus` → `assessment_pending` (no null, no «Sin clasificar»).
+- Visible en lista default con umbral 70%+; badge muestra `A-pendiente`.
+- Bucket filtro lista «Sin clasificar» incluye `assessment_pending` para fetch server-side.
+
+### Meta lista
+
+- Bajo empresa: badge `estado` + línea `canal` (reemplaza modality · datePosted).
+
+### API `JobMatch`
+
+- Campos `estado` y `canal` propagados en `applicationToJobMatch` (subsume parte de #330).
+
 ## Tests
 
 - `tests/dashboard/match-jobs.test.ts` — matriz `deriveApplicationStatus` ↔ `matchesDashboardFilter`

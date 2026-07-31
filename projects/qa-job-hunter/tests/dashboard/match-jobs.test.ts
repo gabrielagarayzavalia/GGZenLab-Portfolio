@@ -61,6 +61,7 @@ test("deriveApplicationStatus mapea estados tracker", () => {
   assert.equal(deriveApplicationStatus(app({ estado: "Enviada" })), "applied");
   assert.equal(deriveApplicationStatus(app({ estado: "A-realizado" })), "applied");
   assert.equal(deriveApplicationStatus(app({ estado: "Borrador abierto" })), "applied");
+  assert.equal(deriveApplicationStatus(app({ estado: "A-pendiente" })), "assessment_pending");
   assert.equal(deriveApplicationStatus(app({ estado: "Cerrado" })), "not_selected");
   assert.equal(deriveApplicationStatus(app({ estado: "Stand-by" })), "not_applied");
   assert.equal(
@@ -110,6 +111,7 @@ const UI_BUCKETS: DashboardMatchFilter[] = [
   "not_selected",
   "rejected",
   "closed",
+  "duplicated",
 ];
 
 /** Paridad #373: cada estado tracker cae en un solo bucket UI (salvo rejected y LinkedIn closed). */
@@ -119,6 +121,7 @@ test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", ()
     { fixture: app({ estado: "Enviada" }), primary: "applied" },
     { fixture: app({ estado: "A-realizado" }), primary: "applied" },
     { fixture: app({ estado: "Borrador abierto" }), primary: "applied" },
+    { fixture: app({ estado: "A-pendiente" }), primary: "unmarked" },
     { fixture: app({ estado: "Stand-by" }), primary: "not_applied" },
     { fixture: app({ estado: "Cerrado" }), primary: "not_selected" },
     { fixture: app({ matchRejected: true, estado: "Stand-by" }), primary: "rejected" },
@@ -135,12 +138,14 @@ test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", ()
 
       if (filter === "rejected") {
         expected = fixture.matchRejected === true;
+      } else if (filter === "duplicated") {
+        expected = fixture.estado === "Duplicado";
       } else if (filter === "closed") {
         expected = linkedInClosed;
       } else if (fixture.matchRejected) {
         expected = false;
       } else if (filter === "unmarked") {
-        expected = derived === null;
+        expected = derived === null || derived === "assessment_pending";
       } else {
         expected = derived === filter;
       }
@@ -182,7 +187,7 @@ test("isVisibleMatchApplication oculta avisos cerrados LinkedIn por defecto", ()
   assert.equal(isVisibleMatchApplication(closed, { showLinkedInClosed: true }), true);
 });
 
-test("isVisibleMatchApplication oculta Duplicado/Descartado y aplica umbral 70", () => {
+test("isVisibleMatchApplication oculta Duplicado salvo showDuplicated y Descartado siempre", () => {
   assert.equal(isVisibleMatchApplication(app({ matchPercent: 85, inLatestAnalysis: true })), true);
   assert.equal(
     isVisibleMatchApplication(app({ matchPercent: 65, inLatestAnalysis: true })),
@@ -196,8 +201,63 @@ test("isVisibleMatchApplication oculta Duplicado/Descartado y aplica umbral 70",
     isVisibleMatchApplication(app({ matchPercent: 50, matchRejected: true })),
     true
   );
-  assert.equal(isVisibleMatchApplication(app({ estado: "Duplicado" })), false);
+  assert.equal(isVisibleMatchApplication(app({ estado: "Duplicado", matchPercent: 90 })), false);
+  assert.equal(
+    isVisibleMatchApplication(app({ estado: "Duplicado", matchPercent: 90 }), {
+      showDuplicated: true,
+    }),
+    true
+  );
   assert.equal(isVisibleMatchApplication(app({ estado: "Descartado" })), false);
+});
+
+test("A-pendiente visible con umbral y no cae en Sin clasificar puro", () => {
+  const assessment = app({ estado: "A-pendiente", matchPercent: 85, inLatestAnalysis: true });
+  assert.equal(deriveApplicationStatus(assessment), "assessment_pending");
+  assert.equal(isVisibleMatchApplication(assessment), true);
+  assert.equal(matchesDashboardFilter(assessment, "unmarked"), true);
+  assert.equal(matchesDashboardFilter(assessment, "applied"), false);
+});
+
+test("matchesDashboardFilter duplicated solo filas Duplicado", () => {
+  const dup = app({ estado: "Duplicado", matchPercent: 90 });
+  const sent = app({ estado: "Enviada" });
+  assert.equal(matchesDashboardFilter(dup, "duplicated"), true);
+  assert.equal(matchesDashboardFilter(sent, "duplicated"), false);
+});
+
+test("applicationToJobMatch propaga estado y canal (#410)", () => {
+  const job = applicationToJobMatch(
+    app({ estado: "A-pendiente", canal: "Externo", analysis: { description: "JD", summary: "Ok" } })
+  );
+  assert.equal(job.estado, "A-pendiente");
+  assert.equal(job.canal, "Externo");
+});
+
+test("composeMatchJobsFromApplications filter=duplicated", () => {
+  const apps = [
+    app({ estado: "Pendiente" }),
+    app({ id: "dup", jobId: "dup-job", estado: "Duplicado", matchPercent: 90 }),
+  ];
+
+  const defaultView = composeMatchJobsFromApplications(
+    apps,
+    new Map(),
+    new Map(),
+    { scrapedAt: "2026-07-25T09:00:00.000Z", totalAnalyzed: 2 }
+  );
+  assert.equal(defaultView.matchedJobs.length, 1);
+  assert.ok(!defaultView.matchedJobs.some((j) => j.id === "dup-job"));
+
+  const dupOnly = composeMatchJobsFromApplications(
+    apps,
+    new Map(),
+    new Map(),
+    { scrapedAt: "2026-07-25T09:00:00.000Z", totalAnalyzed: 2 },
+    { filter: "duplicated" }
+  );
+  assert.equal(dupOnly.matchedJobs.length, 1);
+  assert.equal(dupOnly.matchedJobs[0].estado, "Duplicado");
 });
 
 test("applicationToJobMatch propaga jdSections desde analysis (#370)", () => {

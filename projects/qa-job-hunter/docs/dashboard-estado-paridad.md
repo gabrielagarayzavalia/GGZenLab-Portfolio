@@ -10,6 +10,7 @@ Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/36
 | Aplicados | Aplicado | `Enviada`, `A-realizado`, `Borrador abierto` |
 | No aplicados | No aplicado | `Stand-by` |
 | No seleccionada/o | No seleccionada/o | `Cerrado` (marcado por la usuaria) |
+| Assessment pendiente | Assessment pendiente | `A-pendiente` (solo después de aplicar) |
 | Match incorrecto | disclosure «¿Match incorrecto?» | `matchRejected` (no es checkbox de postulación) |
 | Cerrado | badge **Cerrado** (solo lectura) | `jobClosed` / `acceptingApplications: false` en LinkedIn |
 
@@ -25,6 +26,7 @@ En UI el badge corto es **Cerrado** (LinkedIn). En tracker Excel/Mongo, `estado:
 | Capa | Archivo | Funciones clave |
 |------|---------|-----------------|
 | Lectura / filtros server | `src/dashboard/match-jobs.ts` | `deriveApplicationStatus`, `matchesDashboardFilter`, `isLinkedInJobClosed` |
+| Señal Gmail assessment | `src/tracker/gmail-assessment-label.ts` | `hasGmailAssessmentPendingSignal`, `gmailAssessmentPendingProximoPaso` |
 | Writes tracker | `src/dashboard/application-writes.ts` | `patchForApplicationStatus`, `patchForRejectMatch` ([#348](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/348)) |
 | UI dashboard | `dashboard/app.js` | `saveApplicationStatus`, `enableFilterForApplicationStatus`, `enableFilterForRejected` |
 
@@ -35,7 +37,8 @@ En UI el badge corto es **Cerrado** (LinkedIn). En tracker Excel/Mongo, `estado:
 | Aplicado | `estado: Enviada` + `fechaAplicacion` |
 | No aplicado | `estado: Stand-by` + nota |
 | No seleccionada/o | `estado: Cerrado` + próximo paso |
-| Desmarcar checkbox | `estado: Pendiente` (si venía de un estado escrito por dashboard) |
+| Assessment pendiente | `estado: A-pendiente` + `proximoPaso: Gmail Empleo/Entrevistas-Assessments/Pendientes` + nota |
+| Desmarcar checkbox postulación | `estado: Pendiente` (o `Enviada` si desmarcás assessment con fecha de aplicación) |
 | Match incorrecto | `matchRejected: true`, `estado: Stand-by` |
 | Deshacer reject | `matchRejected: false`, `estado: Pendiente` |
 
@@ -47,6 +50,8 @@ Al guardar un estado en detalle, `app.js` activa el filtro de lista correspondie
 
 - Marcar **Aplicado** con solo «Sin clasificar» activo → activa «Aplicados» y desactiva el modo exclusivo «Sin clasificar».
 - Marcar **No aplicado** / **No seleccionada/o** → misma lógica para su bucket.
+- Marcar **Assessment pendiente** → activa filtro lista «Assessment pendiente» (`?filter=assessment`).
+- Desmarcar assessment con fecha de aplicación → activa «Aplicados»; sin fecha → «Sin clasificar».
 - Desmarcar (volver a pendiente) → activa «Sin clasificar»; si solo había un bucket de postulación o «Match incorrecto» exclusivo, lo apaga.
 - **Match incorrecto** → activa filtro «Match incorrecto» (disclosure, no checkbox de postulación).
 
@@ -57,7 +62,7 @@ Al guardar un estado en detalle, `app.js` activa el filtro de lista correspondie
 Conviven en lista y detalle:
 
 - **Badge tracker** (`estado-tracker`): texto canónico del Excel (`Enviada`, `A-pendiente`, `Borrador abierto`, etc.) con color aproximado PO.
-- **Checkboxes detalle** (#373): buckets Aplicado / No aplicado / No seleccionada/o — sin cambios.
+- **Checkboxes detalle** (#373 + #420): buckets Aplicado / No aplicado / No seleccionada/o / Assessment pendiente — mutuamente excluyentes entre sí.
 - **Badges checkbox lista** (`badge-applied`, etc.): opcionales; siguen visibles junto al badge tracker.
 
 ### Paleta CSS (aproximación PO)
@@ -85,11 +90,14 @@ Conviven en lista y detalle:
 - Checkbox lista «Duplicado» + `?filter=duplicated` en API.
 - `Descartado` sigue oculto sin filtro.
 
-### A-pendiente
+### A-pendiente (#420)
 
-- `deriveApplicationStatus` → `assessment_pending` (no null, no «Sin clasificar»).
-- Visible en lista default con umbral 70%+; badge muestra `A-pendiente`.
-- Bucket filtro lista «Sin clasificar» incluye `assessment_pending` para fetch server-side.
+- Checkbox **Assessment pendiente** en detalle: **solo visible** si hay señal Gmail (`proximoPaso` / `notas` con label `Entrevistas-Assessments/Pendientes`). Sin señal → no se renderiza (legacy manual con «Completar assessment» sigue mostrando badge tracker).
+- PATCH requiere señal Gmail + haber aplicado (`Enviada`, `Borrador abierto`, etc.).
+- Desmarcar assessment: vuelve a `Enviada` si hay `fechaAplicacion`, si no `Pendiente`.
+- `deriveApplicationStatus` → `assessment_pending`.
+- Filtro lista dedicado «Assessment pendiente» + `?filter=assessment`. **Sin clasificar** ya no incluye `A-pendiente`.
+- `JobMatch.assessmentGmailPending` expone la señal Gmail al cliente.
 
 ### Meta lista
 
@@ -97,9 +105,10 @@ Conviven en lista y detalle:
 
 ### API `JobMatch`
 
-- Campos `estado` y `canal` propagados en `applicationToJobMatch` (subsume parte de #330).
+- Campos `estado`, `canal` y `assessmentGmailPending` propagados en `applicationToJobMatch` (subsume parte de #330).
 
 ## Tests
 
+- `tests/tracker/gmail-assessment-label.test.ts` — detección señal Gmail
 - `tests/dashboard/match-jobs.test.ts` — matriz `deriveApplicationStatus` ↔ `matchesDashboardFilter`
 - `tests/dashboard/application-writes.test.ts` — patches de escritura al tracker

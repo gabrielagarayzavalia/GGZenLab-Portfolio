@@ -13,7 +13,7 @@ export type ApplicationStatus =
   | "applied"
   | "not_applied"
   | "not_selected"
-  /** Assessment en curso (tracker `A-pendiente`) — sin checkbox #373. */
+  /** Assessment en curso (tracker `A-pendiente`) — checkbox #420. */
   | "assessment_pending";
 
 export interface ApplicationStatusEntry {

@@ -38,6 +38,8 @@ export interface JobMatch extends JobListing {
   estado?: TrackerEstado;
   /** Canal de postulación (Easy Apply / Externo). */
   canal?: TrackerCanal;
+  /** Señal Gmail label Entrevistas-Assessments/Pendientes (#420). */
+  assessmentGmailPending?: boolean;
 }
 
 export interface AnalysisResult {

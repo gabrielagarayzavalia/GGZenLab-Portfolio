@@ -13,6 +13,7 @@ import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import type { JobMatch } from "../types.js";
 import { jdSectionsFromDescription, normalizeFeedbackFields } from "../types/dashboard-match.js";
 import type { JdSections } from "../jd/parse-sections.js";
+import { hasGmailAssessmentPendingSignal } from "../tracker/gmail-assessment-label.js";
 import type { TrackerApplication, TrackerEstado } from "../types/tracker-application.js";
 
 export type DashboardMatchFilter =
@@ -20,6 +21,7 @@ export type DashboardMatchFilter =
   | "applied"
   | "not_applied"
   | "not_selected"
+  | "assessment"
   | "rejected"
   | "closed"
   | "duplicated";
@@ -31,6 +33,7 @@ export type DashboardMatchFilter =
  * | Aplicados          | Aplicado             | Enviada, A-realizado, Borrador  |
  * | No aplicados       | No aplicado          | Stand-by                        |
  * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
+ * | Assessment         | Assessment pendiente   | A-pendiente (+ señal Gmail)     |
  * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
  * | Cerrado            | badge Cerrado        | jobClosed LinkedIn (read-only)  |
  * | Duplicado          | badge estado tracker | estado Duplicado (opt-in)       |
@@ -119,8 +122,10 @@ export function matchesDashboardFilter(
       return status === "not_applied" && !feedback.matchRejected;
     case "not_selected":
       return status === "not_selected" && !feedback.matchRejected;
+    case "assessment":
+      return status === "assessment_pending" && !feedback.matchRejected;
     case "unmarked":
-      return (status === null || status === "assessment_pending") && !feedback.matchRejected;
+      return status === null && !feedback.matchRejected;
     case "duplicated":
       return app.estado === "Duplicado";
     case "closed":
@@ -193,7 +198,11 @@ export function applicationToJobMatch(
   const rejected = feedback.matchRejected;
   const jobClosed = isLinkedInJobClosed(app);
 
-  const trackerFields = { estado: app.estado, canal: app.canal };
+  const trackerFields = {
+    estado: app.estado,
+    canal: app.canal,
+    assessmentGmailPending: hasGmailAssessmentPendingSignal(app) || undefined,
+  };
 
   if (analysis) {
     return {

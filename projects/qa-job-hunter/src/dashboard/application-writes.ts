@@ -1,6 +1,9 @@
 import type { ApplicationStatus } from "../application-status.js";
+import {
+  gmailAssessmentPendingProximoPaso,
+  hasGmailAssessmentPendingSignal,
+} from "../tracker/gmail-assessment-label.js";
 import type { TrackerApplication, TrackerApplicationPatch } from "../types/tracker-application.js";
-
 export type DashboardApplicationPatch = TrackerApplicationPatch & {
   matchRejected?: boolean;
   matchRejectedReason?: string;
@@ -9,8 +12,20 @@ export type DashboardApplicationPatch = TrackerApplicationPatch & {
 
 const NOTA_NO_APLICADO = "No aplicado (dashboard)";
 const NOTA_NO_SELECCIONADA = "No seleccionada/o (dashboard)";
+const NOTA_ASSESSMENT_PENDIENTE = "Assessment pendiente (dashboard)";
 const NOTA_REJECT = "Match incorrecto (dashboard)";
 const NOTA_DESMARCAR = "Desmarcado (dashboard)";
+/** Precondición PO #420: solo después de aplicar o legacy A-pendiente. */
+const ASSESSMENT_PRECONDITION_ESTADOS: TrackerApplication["estado"][] = [
+  "Enviada",
+  "A-realizado",
+  "Borrador abierto",
+  "A-pendiente",
+];
+
+export function canMarkAssessmentPending(existing: TrackerApplication): boolean {
+  return ASSESSMENT_PRECONDITION_ESTADOS.includes(existing.estado);
+}
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -29,6 +44,15 @@ export function patchForApplicationStatus(
 ): { patch: DashboardApplicationPatch; error?: string } {
   if (status === null) {
     // Acción explícita usuaria — mismo criterio que PATCH en /tracker (source=user).
+    if (existing.estado === "A-pendiente") {
+      const hasApplied = Boolean(existing.fechaAplicacion?.trim());
+      return {
+        patch: {
+          estado: hasApplied ? "Enviada" : "Pendiente",
+          notas: appendNota(existing.notas, NOTA_DESMARCAR),
+        },
+      };
+    }
     return {
       patch: {
         estado: "Pendiente",
@@ -60,7 +84,29 @@ export function patchForApplicationStatus(
           notas: appendNota(existing.notas, NOTA_NO_SELECCIONADA),
         },
       };
-    default:
+    case "assessment_pending": {
+      if (!canMarkAssessmentPending(existing)) {
+        return {
+          patch: {},
+          error:
+            "Assessment pendiente solo después de aplicar (Enviada, Borrador abierto o assessment previo)",
+        };
+      }
+      if (!hasGmailAssessmentPendingSignal(existing)) {
+        return {
+          patch: {},
+          error:
+            "Assessment pendiente requiere mail en Gmail Entrevistas-Assessments/Pendientes",
+        };
+      }
+      return {
+        patch: {
+          estado: "A-pendiente",
+          proximoPaso: gmailAssessmentPendingProximoPaso(),
+          notas: appendNota(existing.notas, NOTA_ASSESSMENT_PENDIENTE),
+        },
+      };
+    }    default:
       return { patch: {}, error: "Estado de postulación inválido" };
   }
 }

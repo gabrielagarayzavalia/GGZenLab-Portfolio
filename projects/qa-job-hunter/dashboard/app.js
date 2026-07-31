@@ -11,6 +11,7 @@ let showApplied = false;
 let showNotApplied = false;
 let showNotSelected = false;
 let showUnmarked = true;
+let showAssessment = false;
 let showClosed = false;
 let showDuplicated = false;
 let filterCompany = "";
@@ -23,7 +24,7 @@ const MATCH_INCORRECT_HINT =
 let rejectedIds = new Set();
 /** @type {Map<string, { reason?: string; rejectedAt: string }>} */
 let rejectionMeta = new Map();
-/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected'>} */
+/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected' | 'assessment_pending'>} */
 let applicationStatus = new Map();
 
 const els = {
@@ -37,6 +38,7 @@ const els = {
   showNotApplied: document.getElementById("show-not-applied"),
   showNotSelected: document.getElementById("show-not-selected"),
   showUnmarked: document.getElementById("show-unmarked"),
+  showAssessment: document.getElementById("show-assessment"),
   showClosed: document.getElementById("show-closed"),
   showDuplicated: document.getElementById("show-duplicated"),
   detailEmpty: document.getElementById("detail-empty"),
@@ -82,6 +84,7 @@ function applicationStatusSavedMessage(status, estadoFromApi) {
     applied: "Enviada",
     not_applied: "Stand-by",
     not_selected: "Cerrado",
+    assessment_pending: "A-pendiente",
   };
   if (status === null) return "Estado guardado: Pendiente";
   const label = byStatus[status];
@@ -147,6 +150,15 @@ function isLinkedInClosed(job) {
   return job?.jobClosed === true;
 }
 
+/** Estado de filtro lista tras guardar, cuando el PATCH devuelve tracker `estado`. */
+function applicationStatusFromTrackerEstado(estado) {
+  if (["Enviada", "A-realizado", "Borrador abierto"].includes(estado)) return "applied";
+  if (estado === "Stand-by") return "not_applied";
+  if (estado === "Cerrado") return "not_selected";
+  if (estado === "A-pendiente") return "assessment_pending";
+  return null;
+}
+
 function isRejected(jobId) {
   return rejectedIds.has(jobId);
 }
@@ -164,7 +176,7 @@ function isVisibleInList(jobId) {
   if (status === "applied") return showApplied;
   if (status === "not_applied") return showNotApplied;
   if (status === "not_selected") return showNotSelected;
-  if (status === "assessment_pending") return showUnmarked;
+  if (status === "assessment_pending") return showAssessment;
   return showUnmarked;
 }
 
@@ -406,6 +418,12 @@ function renderDetail(job) {
     ? `<p class="application-section__note">Postulación deshabilitada: aviso cerrado en LinkedIn.</p>`
     : "";
   const checkboxDisabled = closed ? "disabled" : "";
+  const assessmentCheck = job.assessmentGmailPending
+    ? `<label class="application-check application-check--assessment">
+                <input type="checkbox" id="chk-assessment-pending" ${appStatus === "assessment_pending" ? "checked" : ""} ${checkboxDisabled} />
+                <span>Assessment pendiente</span>
+              </label>`
+    : "";
   const linkedInLink = job.url
     ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
     : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
@@ -438,6 +456,7 @@ function renderDetail(job) {
                 <input type="checkbox" id="chk-not-selected" ${appStatus === "not_selected" ? "checked" : ""} ${checkboxDisabled} />
                 <span>No seleccionada/o</span>
               </label>
+              ${assessmentCheck}
             </div>
           </div>
           <div class="feedback-section feedback-section--compact${rejected ? " feedback-section--rejected" : ""}">
@@ -471,21 +490,36 @@ function wireApplicationChecks(job) {
   const chkApplied = document.getElementById("chk-applied");
   const chkNotApplied = document.getElementById("chk-not-applied");
   const chkNotSelected = document.getElementById("chk-not-selected");
+  const chkAssessment = document.getElementById("chk-assessment-pending");
   if (!chkApplied || !chkNotApplied || !chkNotSelected) return;
 
-  const boxes = [
+  const postulationBoxes = [
     { el: chkApplied, status: "applied" },
     { el: chkNotApplied, status: "not_applied" },
     { el: chkNotSelected, status: "not_selected" },
   ];
 
-  for (const { el, status } of boxes) {
+  for (const { el, status } of postulationBoxes) {
     el.addEventListener("change", () => {
       if (el.checked) {
-        for (const other of boxes) {
+        for (const other of postulationBoxes) {
           if (other.el !== el) other.el.checked = false;
         }
+        chkAssessment?.checked = false;
         saveApplicationStatus(job, status);
+      } else {
+        saveApplicationStatus(job, null);
+      }
+    });
+  }
+
+  if (chkAssessment) {
+    chkAssessment.addEventListener("change", () => {
+      if (chkAssessment.checked) {
+        for (const { el } of postulationBoxes) {
+          el.checked = false;
+        }
+        saveApplicationStatus(job, "assessment_pending");
       } else {
         saveApplicationStatus(job, null);
       }
@@ -519,7 +553,9 @@ async function saveApplicationStatus(job, status) {
         "success"
       );
     }
-    enableFilterForApplicationStatus(status);
+    enableFilterForApplicationStatus(
+      status ?? applicationStatusFromTrackerEstado(data.application?.estado)
+    );
     await loadMatchJobs();
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
     if (isVisibleInList(job.id)) {
@@ -550,6 +586,7 @@ function serverFilterFromUI() {
   if (showApplied) active.push("applied");
   if (showNotApplied) active.push("not_applied");
   if (showNotSelected) active.push("not_selected");
+  if (showAssessment) active.push("assessment");
   if (showClosed) active.push("closed");
   if (showDuplicated) active.push("duplicated");
   if (showUnmarked) active.push("unmarked");
@@ -577,6 +614,7 @@ function syncFilterFlagsFromUI(changed) {
     els.showRejected.checked = false;
     els.showClosed.checked = false;
     els.showDuplicated.checked = false;
+    els.showAssessment.checked = false;
   } else if (changed !== els.showUnmarked && changed.checked) {
     els.showUnmarked.checked = false;
   }
@@ -586,6 +624,7 @@ function syncFilterFlagsFromUI(changed) {
   showNotApplied = els.showNotApplied.checked;
   showNotSelected = els.showNotSelected.checked;
   showUnmarked = els.showUnmarked.checked;
+  showAssessment = els.showAssessment.checked;
   showClosed = els.showClosed.checked;
   showDuplicated = els.showDuplicated.checked;
 
@@ -595,6 +634,7 @@ function syncFilterFlagsFromUI(changed) {
     !showNotApplied &&
     !showNotSelected &&
     !showUnmarked &&
+    !showAssessment &&
     !showClosed &&
     !showDuplicated
   ) {
@@ -611,6 +651,7 @@ function isExclusiveUnmarkedOnly() {
     !els.showApplied.checked &&
     !els.showNotApplied.checked &&
     !els.showNotSelected.checked &&
+    !els.showAssessment.checked &&
     !els.showClosed.checked &&
     !els.showDuplicated.checked
   );
@@ -625,7 +666,8 @@ function isExclusiveApplicationBucketOnly(bucketEl) {
     !els.showRejected.checked &&
     !els.showClosed.checked &&
     !els.showDuplicated.checked &&
-    !els.showUnmarked.checked
+    !els.showUnmarked.checked &&
+    !els.showAssessment.checked
   );
 }
 
@@ -656,6 +698,7 @@ function enableFilterForApplicationStatus(status) {
     applied: els.showApplied,
     not_applied: els.showNotApplied,
     not_selected: els.showNotSelected,
+    assessment_pending: els.showAssessment,
   };
   const bucket = bucketByStatus[status];
   if (!bucket) return;
@@ -907,6 +950,7 @@ async function init() {
   els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
+  els.showAssessment.addEventListener("change", () => onFilterChange(els.showAssessment));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
   els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
   els.showDuplicated.addEventListener("change", () => onFilterChange(els.showDuplicated));

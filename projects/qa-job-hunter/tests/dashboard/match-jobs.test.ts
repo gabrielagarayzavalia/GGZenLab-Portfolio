@@ -13,6 +13,7 @@ import {
   isVisibleMatchApplication,
   matchesDashboardFilter,
   resolveJobFallback,
+  type DashboardMatchFilter,
 } from "../../src/dashboard/match-jobs.js";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
@@ -99,6 +100,79 @@ test("matchesDashboardFilter closed solo avisos LinkedIn cerrados", () => {
   assert.equal(matchesDashboardFilter(linkedInClosed, "closed"), true);
   assert.equal(matchesDashboardFilter(userClosed, "closed"), false);
   assert.equal(matchesDashboardFilter(userClosed, "not_selected"), true);
+});
+
+const UI_BUCKETS: DashboardMatchFilter[] = [
+  "unmarked",
+  "applied",
+  "not_applied",
+  "not_selected",
+  "rejected",
+  "closed",
+];
+
+/** Paridad #373: cada estado tracker cae en un solo bucket UI (salvo rejected y LinkedIn closed). */
+test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", () => {
+  const cases: Array<{ fixture: TrackerApplication; primary: DashboardMatchFilter }> = [
+    { fixture: app({ estado: "Pendiente" }), primary: "unmarked" },
+    { fixture: app({ estado: "Enviada" }), primary: "applied" },
+    { fixture: app({ estado: "A-realizado" }), primary: "applied" },
+    { fixture: app({ estado: "Borrador abierto" }), primary: "applied" },
+    { fixture: app({ estado: "Stand-by" }), primary: "not_applied" },
+    { fixture: app({ estado: "Cerrado" }), primary: "not_selected" },
+    { fixture: app({ matchRejected: true, estado: "Stand-by" }), primary: "rejected" },
+    { fixture: app({ jobClosed: true, estado: "Pendiente" }), primary: "closed" },
+  ];
+
+  for (const { fixture, primary } of cases) {
+    const derived = deriveApplicationStatus(fixture);
+    const linkedInClosed = isLinkedInJobClosed(fixture);
+
+    for (const filter of UI_BUCKETS) {
+      const matches = matchesDashboardFilter(fixture, filter);
+      let expected = false;
+
+      if (filter === "rejected") {
+        expected = fixture.matchRejected === true;
+      } else if (filter === "closed") {
+        expected = linkedInClosed;
+      } else if (fixture.matchRejected) {
+        expected = false;
+      } else if (filter === "unmarked") {
+        expected = derived === null;
+      } else {
+        expected = derived === filter;
+      }
+
+      assert.equal(
+        matches,
+        expected,
+        `estado=${fixture.estado} matchRejected=${fixture.matchRejected} jobClosed=${fixture.jobClosed} filter=${filter}`
+      );
+    }
+
+    assert.equal(
+      matchesDashboardFilter(fixture, primary),
+      true,
+      `fixture debe pertenecer al bucket primario ${primary}`
+    );
+  }
+});
+
+test("paridad: LinkedIn cerrado visible solo con filtro closed o showLinkedInClosed", () => {
+  const linkedInClosed = app({ jobClosed: true, estado: "Pendiente" });
+  assert.equal(matchesDashboardFilter(linkedInClosed, "closed"), true);
+  assert.equal(matchesDashboardFilter(linkedInClosed, "unmarked"), true);
+  assert.equal(isVisibleMatchApplication(linkedInClosed), false);
+  assert.equal(isVisibleMatchApplication(linkedInClosed, { showLinkedInClosed: true }), true);
+});
+
+test("paridad: tracker Cerrado usuaria no coincide con filtro closed LinkedIn", () => {
+  const userNotSelected = app({ estado: "Cerrado" });
+  assert.equal(deriveApplicationStatus(userNotSelected), "not_selected");
+  assert.equal(matchesDashboardFilter(userNotSelected, "not_selected"), true);
+  assert.equal(matchesDashboardFilter(userNotSelected, "closed"), false);
+  assert.equal(isLinkedInJobClosed(userNotSelected), false);
 });
 
 test("isVisibleMatchApplication oculta avisos cerrados LinkedIn por defecto", () => {

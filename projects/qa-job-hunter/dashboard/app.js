@@ -282,7 +282,7 @@ function renderList() {
     const colorVar =
       job.matchPercent >= 85 ? "match-high" : job.matchPercent >= 75 ? "match-mid" : "match-low";
     const rejectedBadge = rejected ? `<span class="badge-rejected">Match incorrecto</span>` : "";
-    const closedBadge = closed ? `<span class="badge-closed">Aviso cerrado</span>` : "";
+    const closedBadge = closed ? `<span class="badge-closed">Cerrado</span>` : "";
     const appStatus = getApplicationStatus(job.id);
     const appBadge =
       appStatus === "applied"
@@ -371,8 +371,12 @@ function renderDetail(job) {
   const descriptionBlock = renderDescriptionBlock(job);
   const appStatus = getApplicationStatus(job.id);
   const closedBadge = closed
-    ? `<p class="detail__closed-badge"><span class="badge-closed">Aviso cerrado</span> LinkedIn ya no acepta postulaciones.</p>`
+    ? `<p class="detail__closed-badge"><span class="badge-closed">Cerrado</span> LinkedIn ya no acepta postulaciones — no llegaste a aplicar.</p>`
     : "";
+  const applicationClosedNote = closed
+    ? `<p class="application-section__note">Postulación deshabilitada: aviso cerrado en LinkedIn.</p>`
+    : "";
+  const checkboxDisabled = closed ? "disabled" : "";
   const linkedInLink = job.url
     ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
     : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
@@ -388,19 +392,20 @@ function renderDetail(job) {
           ${linkedInLink}
         </div>
         <aside class="detail__header-aside" aria-label="Acciones">
-          <div class="application-section application-section--compact">
+          <div class="application-section application-section--compact${closed ? " application-section--linkedin-closed" : ""}">
             <h3 class="application-section__title">Postulación</h3>
+            ${applicationClosedNote}
             <div class="application-checks">
               <label class="application-check application-check--applied">
-                <input type="checkbox" id="chk-applied" ${appStatus === "applied" ? "checked" : ""} />
+                <input type="checkbox" id="chk-applied" ${appStatus === "applied" ? "checked" : ""} ${checkboxDisabled} />
                 <span>Aplicado</span>
               </label>
               <label class="application-check application-check--skipped">
-                <input type="checkbox" id="chk-not-applied" ${appStatus === "not_applied" ? "checked" : ""} />
+                <input type="checkbox" id="chk-not-applied" ${appStatus === "not_applied" ? "checked" : ""} ${checkboxDisabled} />
                 <span>No aplicado</span>
               </label>
               <label class="application-check application-check--not-selected">
-                <input type="checkbox" id="chk-not-selected" ${appStatus === "not_selected" ? "checked" : ""} />
+                <input type="checkbox" id="chk-not-selected" ${appStatus === "not_selected" ? "checked" : ""} ${checkboxDisabled} />
                 <span>No seleccionada/o</span>
               </label>
             </div>
@@ -431,6 +436,8 @@ function renderDetail(job) {
 }
 
 function wireApplicationChecks(job) {
+  if (isLinkedInClosed(job)) return;
+
   const chkApplied = document.getElementById("chk-applied");
   const chkNotApplied = document.getElementById("chk-not-applied");
   const chkNotSelected = document.getElementById("chk-not-selected");
@@ -482,13 +489,15 @@ async function saveApplicationStatus(job, status) {
         "success"
       );
     }
+    enableFilterForApplicationStatus(status);
     await loadMatchJobs();
-    if (status && !isVisibleInList(job.id)) {
-      focusNextVisibleJob(job.id);
-    } else {
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    if (isVisibleInList(job.id)) {
       renderList();
       renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
-      renderDetail(job);
+      renderDetail(refreshed);
+    } else {
+      focusNextVisibleJob(job.id);
     }
   } catch (e) {
     showAppFlash(String(e.message ?? e));
@@ -551,6 +560,77 @@ function syncFilterFlagsFromUI(changed) {
     showUnmarked = true;
     els.showUnmarked.checked = true;
   }
+}
+
+/** Solo «Sin clasificar» activo — modo exclusivo que oculta buckets clasificados. */
+function isExclusiveUnmarkedOnly() {
+  return (
+    els.showUnmarked.checked &&
+    !els.showRejected.checked &&
+    !els.showApplied.checked &&
+    !els.showNotApplied.checked &&
+    !els.showNotSelected.checked &&
+    !els.showClosed.checked
+  );
+}
+
+/** Solo un bucket de postulación activo (sin rejected/closed/unmarked). */
+function isExclusiveApplicationBucketOnly(bucketEl) {
+  const buckets = [els.showApplied, els.showNotApplied, els.showNotSelected];
+  return (
+    bucketEl.checked &&
+    buckets.filter((el) => el.checked).length === 1 &&
+    !els.showRejected.checked &&
+    !els.showClosed.checked &&
+    !els.showUnmarked.checked
+  );
+}
+
+/**
+ * Tras marcar en detalle (#373): activar el filtro de lista que corresponde al nuevo estado
+ * para que el empleo siga visible (p. ej. solo «Sin clasificar» → marcar Aplicado).
+ */
+function enableFilterForApplicationStatus(status) {
+  if (status === null) {
+    els.showUnmarked.checked = true;
+    for (const bucket of [els.showApplied, els.showNotApplied, els.showNotSelected]) {
+      if (isExclusiveApplicationBucketOnly(bucket)) bucket.checked = false;
+    }
+    if (
+      els.showRejected.checked &&
+      !els.showApplied.checked &&
+      !els.showNotApplied.checked &&
+      !els.showNotSelected.checked &&
+      !els.showClosed.checked
+    ) {
+      els.showRejected.checked = false;
+    }
+    syncFilterFlagsFromUI(els.showUnmarked);
+    return;
+  }
+
+  const bucketByStatus = {
+    applied: els.showApplied,
+    not_applied: els.showNotApplied,
+    not_selected: els.showNotSelected,
+  };
+  const bucket = bucketByStatus[status];
+  if (!bucket) return;
+
+  bucket.checked = true;
+  if (isExclusiveUnmarkedOnly()) {
+    els.showUnmarked.checked = false;
+  }
+  syncFilterFlagsFromUI(bucket);
+}
+
+/** Tras reject match (#373): activar filtro «Match incorrecto» para mantener el empleo visible. */
+function enableFilterForRejected() {
+  els.showRejected.checked = true;
+  if (isExclusiveUnmarkedOnly()) {
+    els.showUnmarked.checked = false;
+  }
+  syncFilterFlagsFromUI(els.showRejected);
 }
 
 async function loadMatchJobs(filter) {
@@ -692,8 +772,16 @@ async function rejectMatch(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
     showApiWarnings(data.warnings);
+    enableFilterForRejected();
     await loadMatchJobs();
-    focusNextVisibleJob(job.id);
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    if (isVisibleInList(job.id)) {
+      renderList();
+      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+      renderDetail(refreshed);
+    } else {
+      focusNextVisibleJob(job.id);
+    }
   } catch (e) {
     showAppFlash(String(e.message ?? e));
   }
@@ -708,13 +796,20 @@ async function undoReject(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
     showApiWarnings(data.warnings);
+    enableFilterForApplicationStatus(null);
     await loadMatchJobs();
-    renderList();
-    renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
-    renderDetail(refreshed);
+    if (isVisibleInList(job.id)) {
+      renderList();
+      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+      renderDetail(refreshed);
+    } else {
+      focusNextVisibleJob(job.id);
+    }
   } catch (e) {
     showAppFlash(String(e.message ?? e));
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    renderDetail(refreshed);
   }
 }
 

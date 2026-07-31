@@ -176,7 +176,8 @@ function isVisibleInList(jobId) {
   if (status === "applied") return showApplied;
   if (status === "not_applied") return showNotApplied;
   if (status === "not_selected") return showNotSelected;
-  if (status === "assessment_pending") return showAssessment;
+  if (job?.assessmentGmailPending) return showAssessment;
+  if (status === "assessment_pending") return false;
   return showUnmarked;
 }
 

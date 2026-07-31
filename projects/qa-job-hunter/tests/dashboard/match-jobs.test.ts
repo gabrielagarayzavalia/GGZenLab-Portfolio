@@ -15,7 +15,7 @@ import {
   resolveJobFallback,
   type DashboardMatchFilter,
 } from "../../src/dashboard/match-jobs.js";
-import { gmailAssessmentPendingProximoPaso } from "../../src/tracker/gmail-assessment-label.js";
+import { gmailAssessmentPendingProximoPaso, hasGmailAssessmentPendingSignal } from "../../src/tracker/gmail-assessment-label.js";
 import { FULLSTACK_4439380038_JD } from "../jd/fixtures/fullstack-4439380038.ts";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
@@ -123,7 +123,7 @@ test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", ()
     { fixture: app({ estado: "Enviada" }), primary: "applied" },
     { fixture: app({ estado: "A-realizado" }), primary: "applied" },
     { fixture: app({ estado: "Borrador abierto" }), primary: "applied" },
-    { fixture: app({ estado: "A-pendiente" }), primary: "assessment" },
+    { fixture: app({ estado: "A-pendiente", proximoPaso: gmailAssessmentPendingProximoPaso() }), primary: "assessment" },
     { fixture: app({ estado: "Stand-by" }), primary: "not_applied" },
     { fixture: app({ estado: "Cerrado" }), primary: "not_selected" },
     { fixture: app({ matchRejected: true, estado: "Stand-by" }), primary: "rejected" },
@@ -149,7 +149,7 @@ test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", ()
       } else if (filter === "unmarked") {
         expected = derived === null;
       } else if (filter === "assessment") {
-        expected = derived === "assessment_pending";
+        expected = hasGmailAssessmentPendingSignal(fixture);
       } else {
         expected = derived === filter;
       }
@@ -215,8 +215,13 @@ test("isVisibleMatchApplication oculta Duplicado salvo showDuplicated y Descarta
   assert.equal(isVisibleMatchApplication(app({ estado: "Descartado" })), false);
 });
 
-test("A-pendiente usa filtro assessment y no Sin clasificar", () => {
-  const assessment = app({ estado: "A-pendiente", matchPercent: 85, inLatestAnalysis: true });
+test("A-pendiente con señal Gmail usa filtro assessment y no Sin clasificar", () => {
+  const assessment = app({
+    estado: "A-pendiente",
+    proximoPaso: gmailAssessmentPendingProximoPaso(),
+    matchPercent: 85,
+    inLatestAnalysis: true,
+  });
   assert.equal(deriveApplicationStatus(assessment), "assessment_pending");
   assert.equal(isVisibleMatchApplication(assessment), true);
   assert.equal(matchesDashboardFilter(assessment, "unmarked"), false);
@@ -224,10 +229,22 @@ test("A-pendiente usa filtro assessment y no Sin clasificar", () => {
   assert.equal(matchesDashboardFilter(assessment, "applied"), false);
 });
 
+test("A-pendiente sin señal Gmail no entra al filtro assessment", () => {
+  const stale = app({ estado: "A-pendiente", matchPercent: 85, inLatestAnalysis: true });
+  assert.equal(deriveApplicationStatus(stale), "assessment_pending");
+  assert.equal(matchesDashboardFilter(stale, "assessment"), false);
+});
+
 test("composeMatchJobsFromApplications filter=assessment", () => {
   const apps = [
     app({ estado: "Pendiente" }),
-    app({ id: "a1", jobId: "a1-job", estado: "A-pendiente", matchPercent: 90 }),
+    app({
+      id: "a1",
+      jobId: "a1-job",
+      estado: "A-pendiente",
+      proximoPaso: gmailAssessmentPendingProximoPaso(),
+      matchPercent: 90,
+    }),
     app({ estado: "Enviada" }),
   ];
 

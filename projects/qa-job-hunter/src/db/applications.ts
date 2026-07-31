@@ -462,6 +462,7 @@ export interface EasyApplyUpsertResult {
 }
 
 export interface ReconcileUpsertResult {
+  inserted: number;
   updated: number;
   skipped: number;
 }
@@ -516,6 +517,7 @@ export async function upsertReconcileRows(
 ): Promise<ReconcileUpsertResult> {
   const db = getDb();
   const col = db.collection<ApplicationDoc>("applications");
+  let inserted = 0;
   let updated = 0;
   let skipped = 0;
   const now = new Date();
@@ -535,6 +537,18 @@ export async function upsertReconcileRows(
       continue;
     }
 
+    if (plan.action === "insert") {
+      await col.insertOne({
+        _id: new ObjectId(),
+        ...buildDocFields({ ...plan.fields, updatedBy: "reconcile" }, now),
+        createdAt: now,
+        updatedAt: now,
+        updatedBy: "reconcile",
+      });
+      inserted++;
+      continue;
+    }
+
     const result = await col.updateOne(
       { _id: existing!._id },
       { $set: { ...plan.update, updatedAt: now } }
@@ -543,5 +557,5 @@ export async function upsertReconcileRows(
     else skipped++;
   }
 
-  return { updated, skipped };
+  return { inserted, updated, skipped };
 }

@@ -76,6 +76,30 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .badge-not-applied { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); background: rgba(139, 156, 179, 0.15); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; }
 .badge-not-selected { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #fbbf24; background: rgba(251, 191, 36, 0.12); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; margin-right: 0.25rem; }
 .badge-closed { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #f87171; background: rgba(248, 113, 113, 0.15); padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.25rem; margin-right: 0.25rem; }
+
+/* Tracker estado canónico (#410) — aproximación CSS según paleta PO */
+.estado-tracker {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-top: 0.25rem;
+  margin-right: 0.25rem;
+}
+.estado-tracker--detail { font-size: 0.75rem; margin-top: 0.35rem; }
+.estado-tracker--struck { text-decoration: line-through; }
+.estado-tracker--pendiente { color: var(--text-muted); background: rgba(139, 156, 179, 0.12); }
+.estado-tracker--standby { color: #38bdf8; background: rgba(56, 189, 248, 0.15); }
+.estado-tracker--enviada { color: #22c55e; background: rgba(34, 197, 94, 0.15); }
+.estado-tracker--borrador { color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+.estado-tracker--a-pendiente { color: #fb923c; background: rgba(251, 146, 60, 0.15); }
+.estado-tracker--a-realizado { color: #a78bfa; background: rgba(167, 139, 250, 0.15); }
+.estado-tracker--cerrado { color: #6b7280; background: rgba(107, 114, 128, 0.18); }
+.estado-tracker--duplicado { color: #94a3b8; background: rgba(148, 163, 184, 0.18); }
+.estado-tracker--descartado { color: #6b7280; background: rgba(107, 114, 128, 0.18); }
+.detail__estado-chip { margin: 0.25rem 0 0.35rem; }
 .job-item.closed { opacity: 0.65; }
 .job-item.closed .job-item__title { text-decoration: line-through; }
 .application-section {

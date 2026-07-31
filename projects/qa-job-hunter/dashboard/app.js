@@ -12,6 +12,7 @@ let showNotApplied = false;
 let showNotSelected = false;
 let showUnmarked = true;
 let showClosed = false;
+let showDuplicated = false;
 let filterCompany = "";
 let filterTitle = "";
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
@@ -37,6 +38,7 @@ const els = {
   showNotSelected: document.getElementById("show-not-selected"),
   showUnmarked: document.getElementById("show-unmarked"),
   showClosed: document.getElementById("show-closed"),
+  showDuplicated: document.getElementById("show-duplicated"),
   detailEmpty: document.getElementById("detail-empty"),
   detailContent: document.getElementById("detail-content"),
   listEmpty: document.getElementById("list-empty"),
@@ -102,11 +104,31 @@ function isMeaningfulMeta(value) {
   return !META_PLACEHOLDERS.has(t.toLowerCase());
 }
 
+function estadoTrackerClass(estado) {
+  const l = (estado || "").toLowerCase();
+  if (l === "pendiente") return "estado-tracker--pendiente";
+  if (l.includes("stand")) return "estado-tracker--standby";
+  if (l === "enviada") return "estado-tracker--enviada";
+  if (l.includes("borrador")) return "estado-tracker--borrador";
+  if (l.includes("a-pendiente")) return "estado-tracker--a-pendiente";
+  if (l.includes("a-realizado")) return "estado-tracker--a-realizado";
+  if (l === "cerrado") return "estado-tracker--cerrado";
+  if (l === "duplicado") return "estado-tracker--duplicado";
+  if (l === "descartado") return "estado-tracker--descartado";
+  return "estado-tracker--pendiente";
+}
+
+function renderEstadoTrackerBadge(estado, extraClass = "") {
+  if (!estado) return "";
+  const cls = estadoTrackerClass(estado);
+  const strike =
+    estado === "Cerrado" || estado === "Descartado" ? " estado-tracker--struck" : "";
+  return `<span class="estado-tracker ${cls}${strike}${extraClass ? ` ${extraClass}` : ""}">${escapeHtml(estado)}</span>`;
+}
+
 function formatListMeta(job) {
-  return [job.modality, job.datePosted]
-    .filter(isMeaningfulMeta)
-    .map(escapeHtml)
-    .join(" · ");
+  if (!isMeaningfulMeta(job.canal)) return "";
+  return escapeHtml(job.canal);
 }
 
 function renderDetailMeta(job) {
@@ -135,12 +157,14 @@ function getApplicationStatus(jobId) {
 
 function isVisibleInList(jobId) {
   const job = jobs.find((j) => j.id === jobId);
+  if (job?.estado === "Duplicado") return showDuplicated;
   if (job && isLinkedInClosed(job)) return showClosed;
   if (isRejected(jobId)) return showRejected;
   const status = getApplicationStatus(jobId);
   if (status === "applied") return showApplied;
   if (status === "not_applied") return showNotApplied;
   if (status === "not_selected") return showNotSelected;
+  if (status === "assessment_pending") return showUnmarked;
   return showUnmarked;
 }
 
@@ -294,6 +318,7 @@ function renderList() {
             : "";
 
     const listMeta = formatListMeta(job);
+    const estadoBadge = job.estado ? renderEstadoTrackerBadge(job.estado) : "";
 
     li.innerHTML = `
       <div class="match-badge">
@@ -306,6 +331,7 @@ function renderList() {
         <p class="job-item__title">${escapeHtml(job.title)}</p>
         <p class="job-item__company">${escapeHtml(job.company)}</p>
         ${listMeta ? `<p class="job-item__meta">${listMeta}</p>` : ""}
+        ${estadoBadge}
         ${rejectedBadge}
         ${closedBadge}
         ${appBadge}
@@ -373,6 +399,9 @@ function renderDetail(job) {
   const closedBadge = closed
     ? `<p class="detail__closed-badge"><span class="badge-closed">Cerrado</span> LinkedIn ya no acepta postulaciones — no llegaste a aplicar.</p>`
     : "";
+  const estadoChip = job.estado
+    ? `<p class="detail__estado-chip">${renderEstadoTrackerBadge(job.estado, "estado-tracker--detail")}</p>`
+    : "";
   const applicationClosedNote = closed
     ? `<p class="application-section__note">Postulación deshabilitada: aviso cerrado en LinkedIn.</p>`
     : "";
@@ -387,6 +416,7 @@ function renderDetail(job) {
         <div class="detail__header-main">
           <h1 class="detail__title">${escapeHtml(job.title)}</h1>
           <p class="detail__company">${escapeHtml(job.company)}</p>
+          ${estadoChip}
           ${renderDetailMeta(job)}
           ${closedBadge}
           ${linkedInLink}
@@ -521,6 +551,7 @@ function serverFilterFromUI() {
   if (showNotApplied) active.push("not_applied");
   if (showNotSelected) active.push("not_selected");
   if (showClosed) active.push("closed");
+  if (showDuplicated) active.push("duplicated");
   if (showUnmarked) active.push("unmarked");
   return active.length === 1 ? active[0] : null;
 }
@@ -545,6 +576,7 @@ function syncFilterFlagsFromUI(changed) {
     els.showNotSelected.checked = false;
     els.showRejected.checked = false;
     els.showClosed.checked = false;
+    els.showDuplicated.checked = false;
   } else if (changed !== els.showUnmarked && changed.checked) {
     els.showUnmarked.checked = false;
   }
@@ -555,8 +587,17 @@ function syncFilterFlagsFromUI(changed) {
   showNotSelected = els.showNotSelected.checked;
   showUnmarked = els.showUnmarked.checked;
   showClosed = els.showClosed.checked;
+  showDuplicated = els.showDuplicated.checked;
 
-  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked && !showClosed) {
+  if (
+    !showRejected &&
+    !showApplied &&
+    !showNotApplied &&
+    !showNotSelected &&
+    !showUnmarked &&
+    !showClosed &&
+    !showDuplicated
+  ) {
     showUnmarked = true;
     els.showUnmarked.checked = true;
   }
@@ -570,7 +611,8 @@ function isExclusiveUnmarkedOnly() {
     !els.showApplied.checked &&
     !els.showNotApplied.checked &&
     !els.showNotSelected.checked &&
-    !els.showClosed.checked
+    !els.showClosed.checked &&
+    !els.showDuplicated.checked
   );
 }
 
@@ -582,6 +624,7 @@ function isExclusiveApplicationBucketOnly(bucketEl) {
     buckets.filter((el) => el.checked).length === 1 &&
     !els.showRejected.checked &&
     !els.showClosed.checked &&
+    !els.showDuplicated.checked &&
     !els.showUnmarked.checked
   );
 }
@@ -866,6 +909,7 @@ async function init() {
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
   els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
+  els.showDuplicated.addEventListener("change", () => onFilterChange(els.showDuplicated));
 
   async function onFilterChange(changed) {
     syncFilterFlagsFromUI(changed);

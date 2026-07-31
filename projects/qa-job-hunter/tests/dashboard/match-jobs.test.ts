@@ -15,6 +15,7 @@ import {
   resolveJobFallback,
   type DashboardMatchFilter,
 } from "../../src/dashboard/match-jobs.js";
+import { FULLSTACK_4439380038_JD } from "../jd/fixtures/fullstack-4439380038.ts";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
   return {
@@ -217,6 +218,26 @@ test("applicationToJobMatch propaga jdSections desde analysis (#370)", () => {
 
   assert.equal(job.jdSections?.requirements[0], "4+ years Manual QA");
   assert.equal(job.jdSections?.niceToHave[0], "Cursor");
+});
+
+test("applicationToJobMatch deriva jdSections desde description raw (#369)", () => {
+  const job = applicationToJobMatch(
+    app({
+      analysis: {
+        description: FULLSTACK_4439380038_JD,
+        matchedSkills: ["QA"],
+        summary: "Fit",
+      },
+    })
+  );
+
+  assert.ok(job.jdSections);
+  assert.ok(job.jdSections!.requirements.length > 0);
+  assert.match(job.jdSections!.requirements[0], /Manual QA/i);
+  assert.equal(
+    job.jdSections!.requirements.some((line) => /people clicked apply/i.test(line)),
+    false
+  );
 });
 
 test("applicationToJobMatch usa analysis snapshot", () => {

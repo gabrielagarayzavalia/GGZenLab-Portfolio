@@ -30,7 +30,7 @@ export type DashboardMatchFilter =
  * | No aplicados       | No aplicado          | Stand-by                        |
  * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
  * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
- * | Cerrado            | badge Aviso cerrado  | jobClosed LinkedIn (read-only)  |
+ * | Cerrado            | badge Cerrado        | jobClosed LinkedIn (read-only)  |
  */
 
 const HIDDEN_ESTADOS: TrackerEstado[] = ["Duplicado", "Descartado"];

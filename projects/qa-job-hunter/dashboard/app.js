@@ -282,7 +282,7 @@ function renderList() {
     const colorVar =
       job.matchPercent >= 85 ? "match-high" : job.matchPercent >= 75 ? "match-mid" : "match-low";
     const rejectedBadge = rejected ? `<span class="badge-rejected">Match incorrecto</span>` : "";
-    const closedBadge = closed ? `<span class="badge-closed">Aviso cerrado</span>` : "";
+    const closedBadge = closed ? `<span class="badge-closed">Cerrado</span>` : "";
     const appStatus = getApplicationStatus(job.id);
     const appBadge =
       appStatus === "applied"
@@ -371,10 +371,10 @@ function renderDetail(job) {
   const descriptionBlock = renderDescriptionBlock(job);
   const appStatus = getApplicationStatus(job.id);
   const closedBadge = closed
-    ? `<p class="detail__closed-badge"><span class="badge-closed">Aviso cerrado</span> LinkedIn ya no acepta postulaciones. Los checkboxes de postulación no aplican a avisos cerrados (distinto de «No seleccionada/o» en el tracker).</p>`
+    ? `<p class="detail__closed-badge"><span class="badge-closed">Cerrado</span> LinkedIn ya no acepta postulaciones — no llegaste a aplicar.</p>`
     : "";
   const applicationClosedNote = closed
-    ? `<p class="application-section__note">Postulación deshabilitada: el aviso está cerrado en LinkedIn.</p>`
+    ? `<p class="application-section__note">Postulación deshabilitada: aviso cerrado en LinkedIn.</p>`
     : "";
   const checkboxDisabled = closed ? "disabled" : "";
   const linkedInLink = job.url

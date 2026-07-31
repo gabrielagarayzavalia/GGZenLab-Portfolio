@@ -11,14 +11,14 @@ Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/36
 | No aplicados | No aplicado | `Stand-by` |
 | No seleccionada/o | No seleccionada/o | `Cerrado` (marcado por la usuaria) |
 | Match incorrecto | disclosure «¿Match incorrecto?» | `matchRejected` (no es checkbox de postulación) |
-| Cerrado | badge «Aviso cerrado» (solo lectura) | `jobClosed` / `acceptingApplications: false` en LinkedIn |
+| Cerrado | badge **Cerrado** (solo lectura) | `jobClosed` / `acceptingApplications: false` en LinkedIn |
 
-### Importante: dos tipos de «cerrado»
+### Dos significados de «Cerrado» en el producto
 
-- **Aviso cerrado (LinkedIn):** el scrape detectó que LinkedIn ya no acepta postulaciones. Badge read-only; checkboxes de postulación deshabilitados. Filtro lista «Cerrado».
-- **No seleccionada/o (tracker):** la usuaria marcó que no fue seleccionada. Escribe `estado: Cerrado` en el tracker. Checkbox «No seleccionada/o» en detalle. Filtro lista «No seleccionada/o».
+- **Cerrado (LinkedIn)** — filtro lista «Cerrado», badge en lista/detalle: el aviso ya no acepta postulaciones; **no llegaste a aplicar**. Checkboxes de postulación deshabilitados.
+- **No seleccionada/o** — checkbox en detalle: vos marcaste que no te seleccionaron; en tracker escribe `estado: Cerrado`. Es **después** del proceso de postulación.
 
-No confundir `estado: Cerrado` (usuaria) con `jobClosed: true` (LinkedIn).
+En UI el badge corto es **Cerrado** (LinkedIn). En tracker Excel/Mongo, `estado: Cerrado` solo lo setea «No seleccionada/o» desde el dashboard.
 
 ## Implementación en código
 

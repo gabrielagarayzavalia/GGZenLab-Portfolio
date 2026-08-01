@@ -35,12 +35,14 @@ Labs para cubrir requisitos frecuentes en job postings que aún no están en min
 
 ### Job Hunter / automatización (planificados — ir agregando)
 
-| Lab | Tema |
-|-----|------|
-| LAB-JH-14 | API dashboard (Postman/Newman) |
-| LAB-JH-15 | UI Playwright + POM |
-| LAB-JH-16 | Performance k6 |
-| LAB-JH-17 | CI/CD Job Hunter en GitHub Actions |
+| Lab | Archivo | Tema |
+|-----|---------|------|
+| **LAB-JH-14** | [LAB-JH-14-api-dashboard-newman.md](./LAB-JH-14-api-dashboard-newman.md) | API dashboard (Postman/Newman) |
+| **LAB-JH-15** | [LAB-JH-15-playwright-dashboard-pom.md](./LAB-JH-15-playwright-dashboard-pom.md) | UI Playwright + POM |
+| **LAB-JH-16** | [LAB-JH-16-k6-match-jobs-performance.md](./LAB-JH-16-k6-match-jobs-performance.md) | Performance k6 |
+| **LAB-JH-17** | [LAB-JH-17-cicd-job-hunter-actions.md](./LAB-JH-17-cicd-job-hunter-actions.md) | CI/CD Job Hunter en GitHub Actions |
+| **LAB-JH-18** | [LAB-JH-18-contract-openapi-dashboard.md](./LAB-JH-18-contract-openapi-dashboard.md) | Contract-first OpenAPI dashboard |
+| **LAB-JH-19** | [LAB-JH-19-mongo-fixtures-seed-qa.md](./LAB-JH-19-mongo-fixtures-seed-qa.md) | Mongo fixtures y seed QA |
 
 Registro de instancias (estado, fechas, contador): [`docs/qa/labs/index.html`](../../qa/labs/index.html) · datos en [`projects/labs/`](../../../projects/labs/).
 

@@ -221,6 +221,91 @@
         { "key": "slack-github", "label": "Slack · GitHub app · webhooks" },
         { "key": "slack-manual", "label": "Slack · plantillas manuales (sin apps)" }
       ]
+    },
+    {
+      "id": "LAB-JH-14",
+      "title": "Job Hunter API dashboard (Newman)",
+      "descriptionShort": "Smoke/regression HTTP match-jobs, filtros assessment y meta banner.",
+      "availability": "planned",
+      "track": "job-hunter-qa",
+      "jobSkills": ["postman", "newman", "api-testing"],
+      "guidePath": "docs/guides/labs/LAB-JH-14-api-dashboard-newman.md",
+      "infraPath": "projects/qa-job-hunter/qa/v1/postman",
+      "defaultFrameworkKey": "newman",
+      "frameworkOptions": [
+        { "key": "newman", "label": "Postman · Newman" },
+        { "key": "tsx-api", "label": "Node · tests/api" }
+      ]
+    },
+    {
+      "id": "LAB-JH-15",
+      "title": "Job Hunter dashboard Playwright POM",
+      "descriptionShort": "E2E UI sidebar filtros, counts, banner assessment.",
+      "availability": "planned",
+      "track": "job-hunter-qa",
+      "jobSkills": ["playwright", "pom", "e2e-ui"],
+      "guidePath": "docs/guides/labs/LAB-JH-15-playwright-dashboard-pom.md",
+      "infraPath": "projects/qa-job-hunter",
+      "defaultFrameworkKey": "ts-playwright",
+      "frameworkOptions": [
+        { "key": "ts-playwright", "label": "TypeScript · Playwright · POM" }
+      ]
+    },
+    {
+      "id": "LAB-JH-16",
+      "title": "Job Hunter match-jobs performance (k6)",
+      "descriptionShort": "Baseline p95 GET /api/dashboard/match-jobs.",
+      "availability": "planned",
+      "track": "job-hunter-qa",
+      "jobSkills": ["k6", "performance-testing"],
+      "guidePath": "docs/guides/labs/LAB-JH-16-k6-match-jobs-performance.md",
+      "infraPath": "projects/qa-job-hunter",
+      "defaultFrameworkKey": "k6",
+      "frameworkOptions": [
+        { "key": "k6", "label": "k6 · thresholds" }
+      ]
+    },
+    {
+      "id": "LAB-JH-17",
+      "title": "Job Hunter CI/CD (GitHub Actions)",
+      "descriptionShort": "Workflow PR release/v2: test:match-jobs, API, optional Newman.",
+      "availability": "planned",
+      "track": "job-hunter-qa",
+      "jobSkills": ["github-actions", "ci-cd"],
+      "guidePath": "docs/guides/labs/LAB-JH-17-cicd-job-hunter-actions.md",
+      "infraPath": ".github/workflows",
+      "defaultFrameworkKey": "github-actions",
+      "frameworkOptions": [
+        { "key": "github-actions", "label": "GitHub Actions" }
+      ]
+    },
+    {
+      "id": "LAB-JH-18",
+      "title": "Dashboard OpenAPI contract-first",
+      "descriptionShort": "OpenAPI + schema tests para endpoints dashboard.",
+      "availability": "planned",
+      "track": "job-hunter-qa",
+      "jobSkills": ["openapi", "contract-testing"],
+      "guidePath": "docs/guides/labs/LAB-JH-18-contract-openapi-dashboard.md",
+      "infraPath": "projects/qa-job-hunter",
+      "defaultFrameworkKey": "openapi-ajv",
+      "frameworkOptions": [
+        { "key": "openapi-ajv", "label": "OpenAPI 3 · AJV" }
+      ]
+    },
+    {
+      "id": "LAB-JH-19",
+      "title": "Mongo fixtures & seed for QA",
+      "descriptionShort": "Seeds assessment, fixtures custom, dataset smoke sin campaña real.",
+      "availability": "planned",
+      "track": "job-hunter-qa",
+      "jobSkills": ["mongodb", "test-data"],
+      "guidePath": "docs/guides/labs/LAB-JH-19-mongo-fixtures-seed-qa.md",
+      "infraPath": "projects/qa-job-hunter/scripts",
+      "defaultFrameworkKey": "mongo-seed",
+      "frameworkOptions": [
+        { "key": "mongo-seed", "label": "Mongo · seed scripts · Compass" }
+      ]
     }
   ]
 }

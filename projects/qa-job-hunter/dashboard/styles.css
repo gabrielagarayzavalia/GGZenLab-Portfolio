@@ -205,6 +205,40 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   color: #9fd4b0;
 }
 .app-flash.hidden { display: none; }
+
+.banner-assessment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0.65rem 1.25rem 0.65rem calc(1.25rem - 3px);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-left: 3px solid var(--border);
+}
+.banner--warn {
+  background: color-mix(in srgb, var(--surface) 88%, var(--match-mid) 12%);
+  border-left-color: color-mix(in srgb, var(--match-mid) 55%, var(--border));
+  color: #e0c88a;
+}
+.banner--ok {
+  background: color-mix(in srgb, var(--surface) 88%, var(--match-high) 12%);
+  border-left-color: color-mix(in srgb, var(--match-high) 45%, var(--border));
+  color: #9fd4b0;
+}
+.banner-assessment.hidden { display: none; }
+.banner-assessment__text { margin: 0; flex: 1 1 auto; }
+.banner-assessment__cta { flex-shrink: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .banner-assessment { animation: none; }
+}
+
 .empty-state .hint { font-size: 0.85rem; margin-top: 0.5rem; }
 .empty-state code { background: var(--surface); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
 .detail__header { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }

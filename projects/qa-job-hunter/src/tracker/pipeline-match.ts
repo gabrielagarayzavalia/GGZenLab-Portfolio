@@ -69,6 +69,27 @@ export function shouldSyncPipelineMatch(m: PipelineMatchResult): boolean {
   return true;
 }
 
+/** Scrape indica aviso LinkedIn cerrado (mismas señales que `isLinkedInJobClosed`). */
+export function isScrapedJobClosed(scraped?: PipelineScrapedJob | null): boolean {
+  if (!scraped) return false;
+  if (scraped.jobClosed === true) return true;
+  if (scraped.acceptingApplications === false) return true;
+  return false;
+}
+
+/**
+ * Gate ingesta (#408): aviso nuevo cerrado al primer scrape → skip insert.
+ * Updates a documentos existentes siempre permitidos.
+ */
+export function shouldIngestClosedApplication(
+  _match: PipelineMatchResult,
+  scraped?: PipelineScrapedJob | null,
+  existing?: unknown | null
+): boolean {
+  if (existing) return true;
+  return !isScrapedJobClosed(scraped);
+}
+
 export function analysisSnapshotFromPipelineMatch(
   match: PipelineMatchResult,
   scraped?: PipelineScrapedJob | null,

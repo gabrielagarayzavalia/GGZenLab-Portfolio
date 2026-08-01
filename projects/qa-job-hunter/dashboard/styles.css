@@ -128,6 +128,7 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .application-check--applied input { accent-color: var(--match-high); }
 .application-check--skipped input { accent-color: var(--text-muted); }
 .application-check--not-selected input { accent-color: #fbbf24; }
+.application-check--assessment input { accent-color: #fb923c; }
 .header-apps { color: var(--text-muted); font-size: 0.85rem; }
 .header-apps strong { color: var(--match-high); font-weight: 600; }
 .feedback-section { margin-top: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }

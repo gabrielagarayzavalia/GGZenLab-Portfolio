@@ -82,6 +82,7 @@ const DASHBOARD_MATCH_FILTERS = new Set<DashboardMatchFilter>([
   "applied",
   "not_applied",
   "not_selected",
+  "assessment",
   "rejected",
   "closed",
   "duplicated",

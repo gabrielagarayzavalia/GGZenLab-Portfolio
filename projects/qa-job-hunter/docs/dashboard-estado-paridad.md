@@ -10,7 +10,7 @@ Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/36
 | Aplicados | Aplicado | `Enviada`, `A-realizado`, `Borrador abierto` |
 | No aplicados | No aplicado | `Stand-by` |
 | No seleccionada/o | No seleccionada/o | `Cerrado` (marcado por la usuaria) |
-| Assessment pendiente | Assessment pendiente | `A-pendiente` (solo después de aplicar) |
+| Assessment pendiente | Assessment pendiente (checkbox solo con señal Gmail) | tracker `A-pendiente` |
 | Match incorrecto | disclosure «¿Match incorrecto?» | `matchRejected` (no es checkbox de postulación) |
 | Cerrado | badge **Cerrado** (solo lectura) | `jobClosed` / `acceptingApplications: false` en LinkedIn |
 
@@ -92,12 +92,14 @@ Conviven en lista y detalle:
 
 ### A-pendiente (#420)
 
-- Checkbox **Assessment pendiente** en detalle: **solo visible** si hay señal Gmail (`proximoPaso` / `notas` con label `Entrevistas-Assessments/Pendientes`). Sin señal → no se renderiza (legacy manual con «Completar assessment» sigue mostrando badge tracker).
-- PATCH requiere señal Gmail + haber aplicado (`Enviada`, `Borrador abierto`, etc.).
+**Filtro lista vs escritura detalle (desacoplados):**
+
+- **Filtro lista** «Assessment pendiente» (`?filter=assessment`): incluye **todas** las filas con tracker `estado: A-pendiente`, con o sin señal Gmail en `proximoPaso`/`notas`. `matchesDashboardFilter` usa `deriveApplicationStatus` → `assessment_pending`.
+- **Checkbox detalle** «Assessment pendiente»: **solo visible** si hay señal Gmail (`proximoPaso` / `notas` con label `Entrevistas-Assessments/Pendientes`). Sin señal → no se renderiza (legacy manual con «Completar assessment» sigue mostrando badge tracker).
+- **PATCH** marcar assessment: sigue requiriendo señal Gmail + haber aplicado (`Enviada`, `Borrador abierto`, etc.) — ver `application-writes.ts`.
 - Desmarcar assessment: vuelve a `Enviada` si hay `fechaAplicacion`, si no `Pendiente`.
-- `deriveApplicationStatus` → `assessment_pending`.
-- Filtro lista dedicado «Assessment pendiente» + `?filter=assessment`. **Sin clasificar** ya no incluye `A-pendiente`.
-- `JobMatch.assessmentGmailPending` expone la señal Gmail al cliente.
+- **Sin clasificar** ya no incluye `A-pendiente`.
+- `JobMatch.assessmentGmailPending` expone la señal Gmail al cliente (UI detalle; no condiciona el filtro lista).
 
 ### Meta lista
 

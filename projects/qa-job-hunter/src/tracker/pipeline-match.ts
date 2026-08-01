@@ -90,6 +90,19 @@ export function shouldIngestClosedApplication(
   return !isScrapedJobClosed(scraped);
 }
 
+/** Skills para UI cuando el motor no desglosó labels pero el % es alto (#335). */
+export function matchedSkillsForSnapshot(match: PipelineMatchResult): string[] | undefined {
+  if (match.matchedSkills?.length) return [...match.matchedSkills];
+  if (match.matchPercent < DASHBOARD_MIN_MATCH) return undefined;
+  if (match.gaps?.length) return undefined;
+  const summary = match.summary?.trim();
+  if (!summary) return undefined;
+  const cv = summary.match(/CV\s+(\w+)/i)?.[1];
+  return cv
+    ? [`Perfil ${cv} alineado al aviso`]
+    : ["Requisitos del aviso cubiertos por tu perfil"];
+}
+
 export function analysisSnapshotFromPipelineMatch(
   match: PipelineMatchResult,
   scraped?: PipelineScrapedJob | null,
@@ -98,9 +111,11 @@ export function analysisSnapshotFromPipelineMatch(
   if (match.matchPercent < DASHBOARD_MIN_MATCH) return undefined;
 
   const hasSkills = Boolean(match.matchedSkills?.length);
+  const hasGaps = Boolean(match.gaps?.length);
+  const hasSummary = Boolean(match.summary?.trim());
   const description = scraped?.description?.trim();
   const hasDescription = Boolean(description);
-  if (!hasSkills && !hasDescription) return undefined;
+  if (!hasSkills && !hasGaps && !hasSummary && !hasDescription) return undefined;
 
   const jdSections = description ? parseJdSections(description) : undefined;
   const parsedJd =
@@ -114,7 +129,7 @@ export function analysisSnapshotFromPipelineMatch(
     ...(parsedJd ? { jdSections: parsedJd } : {}),
     searchTerm: scraped?.scrapedTitle ?? match.title,
     source: "pipeline",
-    matchedSkills: match.matchedSkills?.length ? [...match.matchedSkills] : undefined,
+    matchedSkills: matchedSkillsForSnapshot(match),
     gaps: match.gaps?.length ? [...match.gaps] : undefined,
     cvSuggestions: match.cvSuggestions?.length ? [...match.cvSuggestions] : undefined,
     summary: match.summary || undefined,

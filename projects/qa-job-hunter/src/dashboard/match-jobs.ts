@@ -12,6 +12,7 @@ import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import type { JobMatch } from "../types.js";
 import { jdSectionsFromDescription, normalizeFeedbackFields } from "../types/dashboard-match.js";
+import type { AnalysisSnapshot } from "../types/dashboard-match.js";
 import type { JdSections } from "../jd/parse-sections.js";
 import { hasGmailAssessmentPendingSignal } from "../tracker/gmail-assessment-label.js";
 import type { TrackerApplication, TrackerEstado } from "../types/tracker-application.js";
@@ -227,6 +228,23 @@ function stubDescription(app: TrackerApplication, rejected: boolean): string {
   return "Empleo de una corrida anterior con estado de postulación guardado.";
 }
 
+/** #335 — skills vacíos en snapshot pero % alto: fallback legible en detalle. */
+function resolveMatchedSkillsForDisplay(
+  analysis: AnalysisSnapshot,
+  matchPercent: number,
+  jobFallback?: JobMatch | null
+): string[] {
+  if (analysis.matchedSkills?.length) return analysis.matchedSkills;
+  if (jobFallback?.matchedSkills?.length) return jobFallback.matchedSkills;
+  if (matchPercent >= DASHBOARD_MIN_MATCH && !analysis.gaps?.length && analysis.summary?.trim()) {
+    const cv = analysis.summary.match(/CV\s+(\w+)/i)?.[1];
+    return cv
+      ? [`Perfil ${cv} alineado al aviso`]
+      : ["Requisitos del aviso cubiertos por tu perfil"];
+  }
+  return [];
+}
+
 export function applicationToJobMatch(
   app: TrackerApplication,
   jobFallback?: JobMatch | null
@@ -268,7 +286,7 @@ export function applicationToJobMatch(
       source: analysis.source ?? jobFallback?.source,
       externalId: analysis.externalId ?? jobFallback?.externalId,
       matchPercent: app.matchPercent,
-      matchedSkills: analysis.matchedSkills ?? jobFallback?.matchedSkills ?? [],
+      matchedSkills: resolveMatchedSkillsForDisplay(analysis, app.matchPercent, jobFallback),
       gaps: analysis.gaps ?? jobFallback?.gaps ?? [],
       cvSuggestions: analysis.cvSuggestions ?? jobFallback?.cvSuggestions ?? [],
       summary: analysis.summary ?? jobFallback?.summary ?? stubSummary(app, rejected),

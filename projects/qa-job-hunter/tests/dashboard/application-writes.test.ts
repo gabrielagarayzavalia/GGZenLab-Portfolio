@@ -7,6 +7,7 @@ import {
   canMarkAssessmentPending,
 } from "../../src/dashboard/application-writes.js";
 import {
+  gmailAssessmentDoneProximoPaso,
   gmailAssessmentPendingProximoPaso,
 } from "../../src/tracker/gmail-assessment-label.js";
 import type { TrackerApplication } from "../../src/types/tracker-application.js";
@@ -118,6 +119,44 @@ test("patchForApplicationStatus desmarcar A-pendiente sin fecha → Pendiente", 
   const { patch, error } = patchForApplicationStatus(null, app({ estado: "A-pendiente" }));
   assert.equal(error, undefined);
   assert.equal(patch.estado, "Pendiente");
+});
+
+test("patchForApplicationStatus assessment_done desde A-pendiente → A-realizado", () => {
+  const { patch, error } = patchForApplicationStatus(
+    "assessment_done",
+    app({
+      estado: "A-pendiente",
+      proximoPaso: gmailAssessmentPendingProximoPaso(),
+    })
+  );
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "A-realizado");
+  assert.equal(patch.proximoPaso, gmailAssessmentDoneProximoPaso());
+  assert.match(patch.notas ?? "", /Assessment realizado \(dashboard\)/);
+});
+
+test("patchForApplicationStatus assessment_done rechaza si no es A-pendiente", () => {
+  const { error } = patchForApplicationStatus(
+    "assessment_done",
+    app({ estado: "Enviada", fechaAplicacion: "2026-01-15" })
+  );
+  assert.match(error ?? "", /solo desde A-pendiente/);
+});
+
+test("patchForApplicationStatus assessment_pending rechaza desde A-realizado", () => {
+  const { error } = patchForApplicationStatus(
+    "assessment_pending",
+    app({
+      estado: "A-realizado",
+      proximoPaso: gmailAssessmentDoneProximoPaso(),
+    })
+  );
+  assert.match(error ?? "", /No se puede volver a A-pendiente/);
+});
+
+test("patchForApplicationStatus desmarcar A-realizado bloqueado", () => {
+  const { error } = patchForApplicationStatus(null, app({ estado: "A-realizado" }));
+  assert.match(error ?? "", /No se puede desmarcar A-realizado/);
 });
 
 test("patchForRejectMatch setea matchRejected y Stand-by", () => {

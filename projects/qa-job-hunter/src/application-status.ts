@@ -14,7 +14,9 @@ export type ApplicationStatus =
   | "not_applied"
   | "not_selected"
   /** Assessment en curso (tracker `A-pendiente`) — checkbox #420. */
-  | "assessment_pending";
+  | "assessment_pending"
+  /** Assessment completado (tracker `A-realizado`) — checkbox #424. */
+  | "assessment_done";
 
 export interface ApplicationStatusEntry {
   jobId: string;

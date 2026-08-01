@@ -1,5 +1,6 @@
 import type { ApplicationStatus } from "../application-status.js";
 import {
+  gmailAssessmentDoneProximoPaso,
   gmailAssessmentPendingProximoPaso,
   hasGmailAssessmentPendingSignal,
 } from "../tracker/gmail-assessment-label.js";
@@ -13,12 +14,12 @@ export type DashboardApplicationPatch = TrackerApplicationPatch & {
 const NOTA_NO_APLICADO = "No aplicado (dashboard)";
 const NOTA_NO_SELECCIONADA = "No seleccionada/o (dashboard)";
 const NOTA_ASSESSMENT_PENDIENTE = "Assessment pendiente (dashboard)";
+const NOTA_ASSESSMENT_REALIZADO = "Assessment realizado (dashboard)";
 const NOTA_REJECT = "Match incorrecto (dashboard)";
 const NOTA_DESMARCAR = "Desmarcado (dashboard)";
 /** Precondición PO #420: solo después de aplicar o legacy A-pendiente. */
 const ASSESSMENT_PRECONDITION_ESTADOS: TrackerApplication["estado"][] = [
   "Enviada",
-  "A-realizado",
   "Borrador abierto",
   "A-pendiente",
 ];
@@ -44,6 +45,12 @@ export function patchForApplicationStatus(
 ): { patch: DashboardApplicationPatch; error?: string } {
   if (status === null) {
     // Acción explícita usuaria — mismo criterio que PATCH en /tracker (source=user).
+    if (existing.estado === "A-realizado") {
+      return {
+        patch: {},
+        error: "No se puede desmarcar A-realizado desde el dashboard",
+      };
+    }
     if (existing.estado === "A-pendiente") {
       const hasApplied = Boolean(existing.fechaAplicacion?.trim());
       return {
@@ -85,6 +92,12 @@ export function patchForApplicationStatus(
         },
       };
     case "assessment_pending": {
+      if (existing.estado === "A-realizado") {
+        return {
+          patch: {},
+          error: "No se puede volver a A-pendiente desde A-realizado",
+        };
+      }
       if (!canMarkAssessmentPending(existing)) {
         return {
           patch: {},
@@ -106,7 +119,23 @@ export function patchForApplicationStatus(
           notas: appendNota(existing.notas, NOTA_ASSESSMENT_PENDIENTE),
         },
       };
-    }    default:
+    }
+    case "assessment_done": {
+      if (existing.estado !== "A-pendiente") {
+        return {
+          patch: {},
+          error: "Assessment realizado solo desde A-pendiente",
+        };
+      }
+      return {
+        patch: {
+          estado: "A-realizado",
+          proximoPaso: gmailAssessmentDoneProximoPaso(),
+          notas: appendNota(existing.notas, NOTA_ASSESSMENT_REALIZADO),
+        },
+      };
+    }
+    default:
       return { patch: {}, error: "Estado de postulación inválido" };
   }
 }

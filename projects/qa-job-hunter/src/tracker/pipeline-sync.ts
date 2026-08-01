@@ -75,15 +75,19 @@ export async function syncPipelineToTracker(
   const scrapedByJobId = loadPipelineScrapedJobs(appliedListRoot);
   if (!matches.length) {
     console.log("📋 Tracker dual-write: 0 matches para sync (filtro MIN_MATCH / skip).");
-    return { inserted: 0, updated: 0, skipped: 0 };
+    return { inserted: 0, updated: 0, skipped: 0, skipped_closed_never_visible: 0 };
   }
 
   await connect();
   await ensureIndexes();
   try {
     const result = await upsertPipelineMatches(matches, scrapedByJobId);
+    const closedSkip =
+      result.skipped_closed_never_visible > 0
+        ? ` | ${result.skipped_closed_never_visible} cerrados sin historial (skip insert)`
+        : "";
     console.log(
-      `📋 Tracker Mongo: +${result.inserted} nuevas | ${result.updated} actualizadas | ${result.skipped} omitidas (estado protegido)`
+      `📋 Tracker Mongo: +${result.inserted} nuevas | ${result.updated} actualizadas | ${result.skipped} omitidas (estado protegido)${closedSkip}`
     );
     return result;
   } finally {

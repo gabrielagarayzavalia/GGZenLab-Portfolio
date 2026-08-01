@@ -8,11 +8,15 @@ import {
 
   DASHBOARD_MIN_MATCH,
 
+  isScrapedJobClosed,
+
   notasFromSummary,
 
   PIPELINE_MIN_MATCH,
 
   pipelineMatchToApplicationInput,
+
+  shouldIngestClosedApplication,
 
   shouldSyncPipelineMatch,
 
@@ -62,6 +66,44 @@ test("shouldSyncPipelineMatch excluye skip bajo umbral", () => {
 
   assert.equal(shouldSyncPipelineMatch({ ...baseMatch, recommendation: "skip", matchPercent: 70 }), true);
 
+});
+
+
+
+const closedScrape = {
+  jobId: baseMatch.jobId,
+  url: baseMatch.url,
+  title: baseMatch.title,
+  company: baseMatch.company,
+  jobClosed: true,
+  acceptingApplications: false,
+};
+
+test("isScrapedJobClosed detecta jobClosed y acceptingApplications", () => {
+  assert.equal(isScrapedJobClosed(closedScrape), true);
+  assert.equal(isScrapedJobClosed({ ...closedScrape, jobClosed: false, acceptingApplications: true }), false);
+  assert.equal(isScrapedJobClosed(undefined), false);
+});
+
+test("shouldIngestClosedApplication gate insert (#408)", () => {
+  // Nuevo + cerrado al scrape → no insertar
+  assert.equal(shouldIngestClosedApplication(baseMatch, closedScrape, null), false);
+  assert.equal(shouldIngestClosedApplication(baseMatch, closedScrape, undefined), false);
+
+  // Existente + cerrado → update permitido
+  assert.equal(
+    shouldIngestClosedApplication(baseMatch, closedScrape, { jobId: baseMatch.jobId }),
+    true
+  );
+
+  // Nuevo + abierto → insertar
+  assert.equal(
+    shouldIngestClosedApplication(baseMatch, { ...closedScrape, jobClosed: false, acceptingApplications: true }, null),
+    true
+  );
+
+  // Nuevo sin señal de cierre en scrape → insertar (conservador)
+  assert.equal(shouldIngestClosedApplication(baseMatch, undefined, null), true);
 });
 
 

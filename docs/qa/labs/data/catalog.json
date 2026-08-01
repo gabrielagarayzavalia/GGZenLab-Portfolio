@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-05",
+  "updatedAt": "2026-08-01",
   "labs": [
     {
       "id": "LAB-00",
@@ -188,6 +188,38 @@
         { "key": "terraform-local", "label": "Terraform · plan · validate · localstack" },
         { "key": "terratest-go", "label": "Terratest · Go · infra assertions" },
         { "key": "checkov-ci", "label": "Checkov · policy-as-code · CI" }
+      ]
+    },
+    {
+      "id": "LAB-12",
+      "title": "Scrum, Kanban & sprint planning",
+      "descriptionShort": "Backlog, sprint, WIP, ceremonias ligeras y trazabilidad AC → tests en GGZenLab.",
+      "availability": "planned",
+      "track": "process",
+      "jobSkills": ["scrum", "kanban", "agile", "sprint-planning", "sdlc"],
+      "jobPostingGap": "Experience with Agile/Scrum/Kanban and participation in planning and refinement",
+      "guidePath": "docs/guides/labs/LAB-12-scrum-kanban-planning-qa.md",
+      "infraPath": null,
+      "defaultFrameworkKey": "github-issues",
+      "frameworkOptions": [
+        { "key": "github-issues", "label": "GitHub Issues · Projects · BACKLOG.md" },
+        { "key": "jira-board", "label": "Jira · Kanban (conceptos transferibles)" }
+      ]
+    },
+    {
+      "id": "LAB-13",
+      "title": "Slack workspace setup & QA usage",
+      "descriptionShort": "Canales, notificaciones, integración GitHub y plantillas de bug/smoke/campaña.",
+      "availability": "planned",
+      "track": "process",
+      "jobSkills": ["slack", "team-collaboration", "incident-comms"],
+      "jobPostingGap": "Slack or similar collaboration tools in distributed teams",
+      "guidePath": "docs/guides/labs/LAB-13-slack-setup-usage-qa.md",
+      "infraPath": null,
+      "defaultFrameworkKey": "slack-github",
+      "frameworkOptions": [
+        { "key": "slack-github", "label": "Slack · GitHub app · webhooks" },
+        { "key": "slack-manual", "label": "Slack · plantillas manuales (sin apps)" }
       ]
     }
   ]

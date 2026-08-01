@@ -64,6 +64,23 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
 | Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
 
+## Dashboard recovery (B-38) — Sprint 3 · Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/365)
+
+### Done reciente — assessment filters/counts (2026-08-01)
+
+| ID | GitHub | Notas |
+|----|--------|-------|
+| B-38-29 | [#420](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/420) | Checkbox + filtro A-pendiente |
+| B-38-32 | [#424](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/424) | Checkbox + filtro A-realizado · PR [#427](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/427) |
+| B-38-33 | [#425](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/425) | Contadores filtros · PR [#428](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/428) |
+| — | PR [#426](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/426) | Filtro A-pendiente por `estado` (desacople Gmail) |
+
+### Planned / spike (puede esperar)
+
+| ID | GitHub | Priority | Notas |
+|----|--------|----------|-------|
+| B-38-34 | [#429](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/429) | Medium | SPIKE Gmail Realizados → A-realizado; ~15 mails vs count 0 dashboard |
+
 ## Botonera web workflow (B-40)
 
 | Fase | Backlog ID | Issue | Notas |

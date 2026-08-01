@@ -46,6 +46,14 @@ const NOT_SELECTED_ESTADOS: TrackerEstado[] = ["Cerrado"];
 const NOT_APPLIED_ESTADOS: TrackerEstado[] = ["Stand-by"];
 const ASSESSMENT_PENDING_ESTADOS: TrackerEstado[] = ["A-pendiente"];
 
+export type AssessmentBannerState = "pending" | "ok" | "hidden";
+
+export interface AssessmentBannerMeta {
+  assessmentPendingCount: number;
+  assessmentDoneCount: number;
+  assessmentBanner: AssessmentBannerState;
+}
+
 export interface MatchJobsResponse {
   scrapedAt: string;
   totalAnalyzed: number;
@@ -65,7 +73,7 @@ export interface MatchJobsResponse {
     count: number;
     filter?: DashboardMatchFilter;
     source: "mongo";
-  };
+  } & AssessmentBannerMeta;
 }
 
 export interface ComposeMatchJobsOptions {
@@ -137,6 +145,33 @@ export function matchesDashboardFilter(
     default:
       return true;
   }
+}
+
+/**
+ * Banner assessments (#421): cuenta A-pendiente / A-realizado en scope dashboard
+ * (misma visibilidad por defecto que la lista, sin Duplicado/Descartado ocultos).
+ * Se calcula antes de filtrar por `?filter=`.
+ */
+export function computeAssessmentBannerMeta(apps: TrackerApplication[]): AssessmentBannerMeta {
+  let assessmentPendingCount = 0;
+  let assessmentDoneCount = 0;
+
+  for (const app of apps) {
+    if (!isVisibleMatchApplication(app)) continue;
+    if (app.estado === "A-pendiente") assessmentPendingCount += 1;
+    else if (app.estado === "A-realizado") assessmentDoneCount += 1;
+  }
+
+  let assessmentBanner: AssessmentBannerState;
+  if (assessmentPendingCount >= 1) {
+    assessmentBanner = "pending";
+  } else if (assessmentDoneCount >= 1) {
+    assessmentBanner = "ok";
+  } else {
+    assessmentBanner = "hidden";
+  }
+
+  return { assessmentPendingCount, assessmentDoneCount, assessmentBanner };
 }
 
 export function isVisibleMatchApplication(
@@ -360,6 +395,7 @@ export function composeMatchJobsFromApplications(
 ): MatchJobsResponse {
   const showLinkedInClosed = options.filter === "closed";
   const showDuplicated = options.filter === "duplicated";
+  const assessmentMeta = computeAssessmentBannerMeta(apps);
   const visible = apps.filter((app) =>
     isVisibleMatchApplication(app, { showLinkedInClosed, showDuplicated })
   );
@@ -388,6 +424,7 @@ export function composeMatchJobsFromApplications(
       count: matchedJobs.length,
       filter: options.filter,
       source: "mongo",
+      ...assessmentMeta,
     },
   };
 }

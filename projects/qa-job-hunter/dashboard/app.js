@@ -86,6 +86,64 @@ function clearAppFlash() {
   el.classList.add("hidden");
 }
 
+/** Banner persistente assessments (#421) — no usa #app-flash. */
+function renderAssessmentBanner(meta) {
+  const el = document.getElementById("banner-assessment");
+  if (!el) return;
+
+  const state = meta?.assessmentBanner ?? "hidden";
+  if (state === "hidden") {
+    el.textContent = "";
+    el.hidden = true;
+    el.className = "banner-assessment hidden";
+    el.removeAttribute("data-testid");
+    return;
+  }
+
+  el.hidden = false;
+  el.classList.remove("hidden");
+
+  if (state === "pending") {
+    const n = meta.assessmentPendingCount ?? 0;
+    const suffix = n === 1 ? "" : "s";
+    el.className = "banner-assessment banner--warn";
+    el.setAttribute("data-testid", "banner-assessment-warn");
+    el.innerHTML = `
+      <p class="banner-assessment__text">Tenés <strong>${n}</strong> assessment${suffix} pendiente${suffix}</p>
+      <button type="button" class="btn btn--ghost banner-assessment__cta" data-testid="banner-assessment-cta">Ver pendientes</button>
+    `;
+    const cta = el.querySelector("[data-testid='banner-assessment-cta']");
+    cta?.addEventListener("click", () => void activateAssessmentPendingFilter());
+    return;
+  }
+
+  el.className = "banner-assessment banner--ok";
+  el.setAttribute("data-testid", "banner-assessment-ok");
+  el.innerHTML = `<p class="banner-assessment__text">Estás al día con tus assessments</p>`;
+}
+
+async function activateAssessmentPendingFilter() {
+  els.showAssessment.checked = true;
+  syncFilterFlagsFromUI(els.showAssessment);
+  try {
+    clearListError();
+    const result = await loadMatchJobs(serverFilterFromUI());
+    const list = visibleJobs();
+    const firstPending = list.find((j) => j.estado === "A-pendiente") ?? jobs.find((j) => j.estado === "A-pendiente");
+    if (firstPending) {
+      selectJob(firstPending.id);
+    } else {
+      renderList();
+      renderHeader(result);
+    }
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const li = els.jobList.querySelector(`[data-id="${CSS.escape(firstPending?.id ?? "")}"]`);
+    li?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion ? "auto" : "smooth" });
+  } catch (e) {
+    showListError(String(e.message ?? e));
+  }
+}
+
 function showApiWarnings(warnings) {
   if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
 }
@@ -828,6 +886,7 @@ async function loadMatchJobs(filter = null) {
   }
   jobs = result.matchedJobs ?? result.jobs ?? [];
   populateDropdownFilters();
+  renderAssessmentBanner(result.meta);
   return result;
 }
 

@@ -14,7 +14,7 @@
     "tracker:sync-pipeline": "npx tsx src/tracker/pipeline-sync.ts",
     "tracker:sync-reconcile": "npx tsx src/tracker/reconcile-sync.ts",
     "test:tracker": "npx tsx --test tests/tracker/estado-policy.test.ts tests/tracker/pipeline-sync.test.ts tests/tracker/automation-merge.test.ts tests/tracker/apply-queue-map.test.ts tests/tracker/apply-sync.test.ts tests/tracker/reconcile-sync.test.ts tests/tracker/schema-b38-13.test.ts tests/tracker/applications-b38-13.test.ts tests/tracker/excel-legacy.test.ts tests/tracker/export-xlsx.test.ts tests/feedback/match-feedback-sync.test.ts",
-    "test:match-jobs": "npx tsx --test tests/dashboard/match-jobs.test.ts",
+    "test:match-jobs": "npx tsx --test tests/dashboard/match-jobs.test.ts tests/dashboard/assessment-banner.test.ts",
     "test:filter-counts": "npx tsx --test tests/dashboard/filter-counts.test.ts",
     "test:api": "npx tsx --test tests/api/jobs.test.ts tests/api/match-jobs.test.ts tests/api/tracker-export.test.ts",
     "test:m-lite-wiring": "npx tsx --test tests/dashboard/m-lite-wiring.test.ts",

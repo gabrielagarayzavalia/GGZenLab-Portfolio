@@ -2,6 +2,16 @@
 
 Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/365) · Issue [#373](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/373)
 
+## Layout (#415)
+
+Tres columnas en desktop: **sidebar filtros (izq)** · **detalle (centro)** · **lista empleos (der)**.
+
+- Sidebar (`data-testid="dash-sidebar-filters"`): checkboxes de filtro lista (incl. Duplicado). Solo afectan visibilidad en la lista; no escriben al tracker.
+- Detalle: checkboxes **Postulación** guardan estado (`application-writes`). Hint `dash-detail-write-hint` aclara la distinción.
+- Lista: título, orden, dropdowns empresa/puesto (#402/#425 counts).
+
+En mobile (`max-width: 900px`) la sidebar de filtros va arriba en fila envolvente; lista y detalle conservan el stack previo.
+
 ## Tabla canónica
 
 | Filtro lista (checkbox) | Detalle (checkbox postulación) | Tracker `estado` / fuente |

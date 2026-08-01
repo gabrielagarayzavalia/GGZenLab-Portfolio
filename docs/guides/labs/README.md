@@ -26,6 +26,22 @@ Labs para cubrir requisitos frecuentes en job postings que aún no están en min
 | **LAB-10** | [LAB-10-contract-testing-wiremock.md](./LAB-10-contract-testing-wiremock.md) | Contract testing, WireMock, mock services |
 | **LAB-11** | [LAB-11-terraform-cloud-qa.md](./LAB-11-terraform-cloud-qa.md) | Terraform, cloud infrastructure |
 
+## Proceso y colaboración (planificados)
+
+| Lab | Archivo | Tema |
+|-----|---------|------|
+| **LAB-12** | [LAB-12-scrum-kanban-planning-qa.md](./LAB-12-scrum-kanban-planning-qa.md) | Scrum, Kanban, planning, trazabilidad AC → tests |
+| **LAB-13** | [LAB-13-slack-setup-usage-qa.md](./LAB-13-slack-setup-usage-qa.md) | Seteo Slack, canales, GitHub, plantillas QA |
+
+### Job Hunter / automatización (planificados — ir agregando)
+
+| Lab | Tema |
+|-----|------|
+| LAB-JH-14 | API dashboard (Postman/Newman) |
+| LAB-JH-15 | UI Playwright + POM |
+| LAB-JH-16 | Performance k6 |
+| LAB-JH-17 | CI/CD Job Hunter en GitHub Actions |
+
 Registro de instancias (estado, fechas, contador): [`docs/qa/labs/index.html`](../../qa/labs/index.html) · datos en [`projects/labs/`](../../../projects/labs/).
 
 Labs del subsitio publicado: [`docs/guides/index.html`](../index.html) · Job Hunter Mongo: [`docs/projects/qa-job-hunter/`](../projects/qa-job-hunter/)

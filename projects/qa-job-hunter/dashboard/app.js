@@ -559,6 +559,7 @@ function renderDetail(job) {
         <aside class="detail__header-aside" aria-label="Acciones">
           <div class="application-section application-section--compact${closed ? " application-section--linkedin-closed" : ""}">
             <h3 class="application-section__title">Postulación</h3>
+            <p class="application-section__note" data-testid="dash-detail-write-hint">Guardan estado en el tracker. Para filtrar la lista, usá la barra izquierda.</p>
             ${applicationClosedNote}
             <div class="application-checks">
               <label class="application-check application-check--applied">

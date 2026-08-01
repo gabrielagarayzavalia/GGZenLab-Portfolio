@@ -73,6 +73,26 @@ test("index.html expone data-testid de filtros empresa y puesto", () => {
   }
 });
 
+test("index.html expone sidebar de filtros estado con data-testid", () => {
+  const html = readHtml("index.html");
+  assert.match(html, /data-testid="dash-sidebar-filters"/);
+  const bucketTestids = [
+    "dash-filter-unmarked",
+    "dash-filter-applied",
+    "dash-filter-not-applied",
+    "dash-filter-not-selected",
+    "dash-filter-assessment",
+    "dash-filter-assessment-done",
+    "dash-filter-rejected",
+    "dash-filter-closed",
+    "dash-filter-duplicated",
+  ];
+  for (const testid of bucketTestids) {
+    assert.match(html, new RegExp(`data-testid="${testid}"`), `missing ${testid}`);
+  }
+  assert.doesNotMatch(html, /class="list-filters"/, "state filters should not stay in list-header");
+});
+
 test("app.js expone empty state filtrado por dropdown", () => {
   const appJs = fs.readFileSync(path.join(DASHBOARD_DIR, "app.js"), "utf-8");
   assert.match(appJs, /data-testid", "list-empty-filtered"/);
@@ -81,6 +101,7 @@ test("app.js expone empty state filtrado por dropdown", () => {
     /No se encontraron empleos para el criterio seleccionado/
   );
   assert.match(appJs, /buildFilterSelectOptions/);
+  assert.match(appJs, /data-testid="dash-detail-write-hint"/);
 });
 
 test("run.html expone data-testid de controles Easy Apply", () => {

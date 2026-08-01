@@ -33,7 +33,7 @@ export type DashboardMatchFilter =
  * | Aplicados          | Aplicado             | Enviada, A-realizado, Borrador  |
  * | No aplicados       | No aplicado          | Stand-by                        |
  * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
- * | Assessment         | Assessment pendiente   | señal Gmail Pendientes (#420) |
+ * | Assessment         | Assessment pendiente   | tracker `A-pendiente` (#420)  |
  * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
  * | Cerrado            | badge Cerrado        | jobClosed LinkedIn (read-only)  |
  * | Duplicado          | badge estado tracker | estado Duplicado (opt-in)       |
@@ -123,7 +123,7 @@ export function matchesDashboardFilter(
     case "not_selected":
       return status === "not_selected" && !feedback.matchRejected;
     case "assessment":
-      return hasGmailAssessmentPendingSignal(app) && !feedback.matchRejected;
+      return status === "assessment_pending" && !feedback.matchRejected;
     case "unmarked":
       return status === null && !feedback.matchRejected;
     case "duplicated":

@@ -22,6 +22,7 @@ export type DashboardMatchFilter =
   | "not_applied"
   | "not_selected"
   | "assessment"
+  | "assessment_done"
   | "rejected"
   | "closed"
   | "duplicated";
@@ -34,6 +35,7 @@ export type DashboardMatchFilter =
  * | No aplicados       | No aplicado          | Stand-by                        |
  * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
  * | Assessment         | Assessment pendiente   | tracker `A-pendiente` (#420)  |
+ * | A-realizado        | Assessment realizado   | tracker `A-realizado` (#424)  |
  * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
  * | Cerrado            | badge Cerrado        | jobClosed LinkedIn (read-only)  |
  * | Duplicado          | badge estado tracker | estado Duplicado (opt-in)       |
@@ -124,6 +126,8 @@ export function matchesDashboardFilter(
       return status === "not_selected" && !feedback.matchRejected;
     case "assessment":
       return status === "assessment_pending" && !feedback.matchRejected;
+    case "assessment_done":
+      return app.estado === "A-realizado" && !feedback.matchRejected;
     case "unmarked":
       return status === null && !feedback.matchRejected;
     case "duplicated":

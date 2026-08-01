@@ -15,7 +15,7 @@ import {
   resolveJobFallback,
   type DashboardMatchFilter,
 } from "../../src/dashboard/match-jobs.js";
-import { gmailAssessmentPendingProximoPaso } from "../../src/tracker/gmail-assessment-label.js";
+import { gmailAssessmentDoneProximoPaso, gmailAssessmentPendingProximoPaso } from "../../src/tracker/gmail-assessment-label.js";
 import { FULLSTACK_4439380038_JD } from "../jd/fixtures/fullstack-4439380038.ts";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
@@ -111,6 +111,7 @@ const UI_BUCKETS: DashboardMatchFilter[] = [
   "not_applied",
   "not_selected",
   "assessment",
+  "assessment_done",
   "rejected",
   "closed",
   "duplicated",
@@ -121,7 +122,8 @@ test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", ()
   const cases: Array<{ fixture: TrackerApplication; primary: DashboardMatchFilter }> = [
     { fixture: app({ estado: "Pendiente" }), primary: "unmarked" },
     { fixture: app({ estado: "Enviada" }), primary: "applied" },
-    { fixture: app({ estado: "A-realizado" }), primary: "applied" },
+    { fixture: app({ estado: "A-realizado" }), primary: "assessment_done" },
+    { fixture: app({ estado: "A-realizado", proximoPaso: gmailAssessmentDoneProximoPaso() }), primary: "assessment_done" },
     { fixture: app({ estado: "Borrador abierto" }), primary: "applied" },
     { fixture: app({ estado: "A-pendiente" }), primary: "assessment" },
     { fixture: app({ estado: "A-pendiente", proximoPaso: gmailAssessmentPendingProximoPaso() }), primary: "assessment" },
@@ -151,6 +153,8 @@ test("paridad deriveApplicationStatus ↔ matchesDashboardFilter UI buckets", ()
         expected = derived === null;
       } else if (filter === "assessment") {
         expected = derived === "assessment_pending";
+      } else if (filter === "assessment_done") {
+        expected = fixture.estado === "A-realizado";
       } else {
         expected = derived === filter;
       }
@@ -235,6 +239,44 @@ test("A-pendiente sin señal Gmail entra al filtro assessment", () => {
   assert.equal(deriveApplicationStatus(stale), "assessment_pending");
   assert.equal(matchesDashboardFilter(stale, "assessment"), true);
   assert.equal(matchesDashboardFilter(stale, "unmarked"), false);
+});
+
+test("A-realizado no entra al filtro assessment pendiente", () => {
+  const done = app({
+    estado: "A-realizado",
+    proximoPaso: gmailAssessmentDoneProximoPaso(),
+    matchPercent: 85,
+    inLatestAnalysis: true,
+  });
+  assert.equal(deriveApplicationStatus(done), "applied");
+  assert.equal(matchesDashboardFilter(done, "assessment"), false);
+  assert.equal(matchesDashboardFilter(done, "assessment_done"), true);
+  assert.equal(matchesDashboardFilter(done, "applied"), true);
+});
+
+test("composeMatchJobsFromApplications filter=assessment_done", () => {
+  const apps = [
+    app({ estado: "Pendiente" }),
+    app({
+      id: "a1",
+      jobId: "a1-job",
+      estado: "A-realizado",
+      proximoPaso: gmailAssessmentDoneProximoPaso(),
+      matchPercent: 90,
+    }),
+    app({ id: "a2", jobId: "a2-job", estado: "A-pendiente", matchPercent: 88 }),
+    app({ estado: "Enviada" }),
+  ];
+
+  const doneOnly = composeMatchJobsFromApplications(
+    apps,
+    new Map(),
+    new Map(),
+    { scrapedAt: "2026-07-25T09:00:00.000Z", totalAnalyzed: 4 },
+    { filter: "assessment_done" }
+  );
+  assert.equal(doneOnly.matchedJobs.length, 1);
+  assert.equal(doneOnly.matchedJobs[0].estado, "A-realizado");
 });
 
 test("composeMatchJobsFromApplications filter=assessment", () => {

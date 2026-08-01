@@ -1,4 +1,14 @@
 /** Headers writes tracker (US-JH-B38-15 #314). */
+import {
+  FILTER_BUCKET_LABELS,
+  FILTER_BUCKET_ORDER,
+  computeFilterCounts,
+  filterVisibleJobs,
+  formatFilterCountLabel,
+  isJobVisibleForStateFilters,
+  isLinkedInClosed,
+} from "./filter-counts.js";
+
 const TRACKER_USER_HEADERS = {
   "Content-Type": "application/json",
   "X-Tracker-User": "1",
@@ -149,11 +159,6 @@ function renderDetailMeta(job) {
   return `<div class="detail__meta">${spans.join("")}</div>`;
 }
 
-function isLinkedInClosed(job) {
-  return job?.jobClosed === true;
-}
-
-/** Estado de filtro lista tras guardar, cuando el PATCH devuelve tracker `estado`. */
 function applicationStatusFromTrackerEstado(estado) {
   if (["Enviada", "A-realizado", "Borrador abierto"].includes(estado)) return "applied";
   if (estado === "Stand-by") return "not_applied";
@@ -170,18 +175,35 @@ function getApplicationStatus(jobId) {
   return applicationStatus.get(jobId) ?? null;
 }
 
+function getFilterContext() {
+  return {
+    rejectedIds,
+    getApplicationStatus,
+  };
+}
+
+function getFilterFlags() {
+  return {
+    showUnmarked,
+    showApplied,
+    showNotApplied,
+    showNotSelected,
+    showAssessment,
+    showAssessmentDone,
+    showRejected,
+    showClosed,
+    showDuplicated,
+  };
+}
+
+function getDropdownFilters() {
+  return { filterCompany, filterTitle };
+}
+
 function isVisibleInList(jobId) {
   const job = jobs.find((j) => j.id === jobId);
-  if (job?.estado === "Duplicado") return showDuplicated;
-  if (job && isLinkedInClosed(job)) return showClosed;
-  if (isRejected(jobId)) return showRejected;
-  if (job?.estado === "A-realizado" && showAssessmentDone) return true;
-  const status = getApplicationStatus(jobId);
-  if (status === "applied") return showApplied;
-  if (status === "not_applied") return showNotApplied;
-  if (status === "not_selected") return showNotSelected;
-  if (status === "assessment_pending") return showAssessment;
-  return showUnmarked;
+  if (!job) return false;
+  return isJobVisibleForStateFilters(job, getFilterFlags(), getFilterContext());
 }
 
 function distinctSorted(values) {
@@ -190,28 +212,52 @@ function distinctSorted(values) {
   );
 }
 
-function buildFilterSelectOptions(values, placeholder, selected) {
-  const options = values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`);
+function buildFilterSelectOptions(values, placeholder, selected, counts = {}) {
+  const options = values.map((v) => {
+    const count = counts[v] ?? 0;
+    const zeroClass = count === 0 ? ' class="filter-option--zero"' : "";
+    return `<option value="${escapeAttr(v)}"${zeroClass}>${escapeHtml(formatFilterCountLabel(v, count))}</option>`;
+  });
   if (selected && !values.includes(selected)) {
-    options.push(`<option value="${escapeAttr(selected)}">${escapeHtml(selected)}</option>`);
+    const selectedCount = counts[selected] ?? 0;
+    options.push(
+      `<option value="${escapeAttr(selected)}">${escapeHtml(formatFilterCountLabel(selected, selectedCount))}</option>`
+    );
   }
   return `<option value="">${placeholder}</option>${options.join("")}`;
 }
 
+function renderFilterCounts() {
+  const counts = computeFilterCounts(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
+  for (const bucket of FILTER_BUCKET_ORDER) {
+    const labelEl = document.querySelector(`[data-filter-label="${bucket}"]`);
+    if (!labelEl) continue;
+    const n = counts.buckets[bucket] ?? 0;
+    labelEl.textContent = formatFilterCountLabel(FILTER_BUCKET_LABELS[bucket], n);
+    labelEl.classList.toggle("filter-count--zero", n === 0);
+  }
+  return counts;
+}
+
 function populateDropdownFilters() {
+  const counts = computeFilterCounts(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
   const companies = distinctSorted(jobs.map((j) => j.company));
   const titles = distinctSorted(jobs.map((j) => j.title));
 
-  els.filterCompany.innerHTML = buildFilterSelectOptions(companies, "Todas", filterCompany);
-  els.filterTitle.innerHTML = buildFilterSelectOptions(titles, "Todos", filterTitle);
+  els.filterCompany.innerHTML = buildFilterSelectOptions(
+    companies,
+    "Todas",
+    filterCompany,
+    counts.companies
+  );
+  els.filterTitle.innerHTML = buildFilterSelectOptions(titles, "Todos", filterTitle, counts.titles);
   els.filterCompany.value = filterCompany;
   els.filterTitle.value = filterTitle;
+  renderFilterCounts();
 }
 
 function visibleJobs() {
-  let list = jobs.filter((j) => isVisibleInList(j.id));
-  if (filterCompany) list = list.filter((j) => j.company === filterCompany);
-  if (filterTitle) list = list.filter((j) => j.title === filterTitle);
+  const list = filterVisibleJobs(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
   return list.sort((a, b) =>
     sortOrder === "desc" ? b.matchPercent - a.matchPercent : a.matchPercent - b.matchPercent
   );
@@ -282,10 +328,11 @@ function renderHeader(result) {
   els.headerStats.innerHTML = `
     <span>Fecha: <strong>${date}</strong></span>
     <span>Analizados: <strong>${result.totalAnalyzed}</strong></span>
-    <span>Visibles: <strong>${visible}</strong> / ${jobs.length}</span>
+    <span>Visibles: <strong data-testid="dash-visible-count">${visible}</strong> / ${jobs.length}</span>
     ${fbLine}
     ${appLine}
   `;
+  renderFilterCounts();
 }
 
 function renderList() {
@@ -754,8 +801,8 @@ function enableFilterForRejected() {
   syncFilterFlagsFromUI(els.showRejected);
 }
 
-async function loadMatchJobs(filter) {
-  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
+async function loadMatchJobs(filter = null) {
+  const serverFilter = filter;
   const url = serverFilter
     ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
     : "/api/dashboard/match-jobs";
@@ -965,6 +1012,7 @@ async function init() {
   function onDropdownFilterChange() {
     filterCompany = els.filterCompany.value;
     filterTitle = els.filterTitle.value;
+    populateDropdownFilters();
     const list = visibleJobs();
     if (selectedId && !list.some((j) => j.id === selectedId)) {
       focusNextVisibleJob(selectedId);

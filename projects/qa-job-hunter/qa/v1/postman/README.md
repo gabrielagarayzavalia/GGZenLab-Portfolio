@@ -1,5 +1,6 @@
 # Postman — Job Hunter Dashboard API (v1)
 
+<<<<<<< HEAD
 Dos collections separadas para no mezclar smoke y regression.
 
 ## Archivos
@@ -17,20 +18,36 @@ Dos collections separadas para no mezclar smoke y regression.
 2. Importar **ambas** collections (smoke + regression)
 3. Importar environment: `job-hunter-local.postman_environment.json`
 4. Seleccionar environment **Job Hunter — Local**
+=======
+Colección para **smoke manual** y exploración de APIs del dashboard (`npm run dashboard`, puerto **3847**).
+
+## Importar en Postman
+
+1. Abrir Postman → **Import** → **File**
+2. Seleccionar: `qa/v1/postman/job-hunter-dashboard-v1.postman_collection.json`
+3. Importar environment (opcional): `qa/v1/postman/job-hunter-local.postman_environment.json`
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 ## Variables
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `baseUrl` | `http://localhost:3847` | URL del dashboard |
+<<<<<<< HEAD
 | `sampleJobId` | _(vacío)_ | Auto-set en SMK-V1-02 (también en **environment**) |
 | `sampleApplicationId` | _(vacío)_ | Auto-set en SMK-V1-18 |
+=======
+| `trackerUserHeader` | `1` | Valor para `X-Tracker-User` en writes |
+| `sampleJobId` | _(vacío)_ | Setear tras listar match-jobs |
+| `sampleApplicationId` | _(vacío)_ | Setear tras GET applications |
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 ## Prerrequisitos
 
 ```bash
 cd projects/qa-job-hunter
 docker compose up -d
+<<<<<<< HEAD
 npm run tracker:seed
 npm run dashboard   # terminal aparte
 ```
@@ -68,19 +85,54 @@ Casos **no** en Postman (solo markdown): REG-V1-05 (503 sin Mongo), REG-V1-08–
 Doc: `qa/v1/regression-green-path-v1.md`
 
 ## Headers (writes)
+=======
+npm run tracker:seed    # o db:seed + tracker:seed
+npm run dashboard       # terminal aparte
+```
+
+## Carpetas de la collection
+
+| Carpeta | Endpoints | Casos SMK/REG |
+|---------|-----------|---------------|
+| **Health** | `GET /api/health` | SMK-V1-01 |
+| **Match Jobs** | match-jobs, results shim, filtros | SMK-V1-02–04 |
+| **Jobs** | `GET /api/jobs` | SMK-V1-05 |
+| **Tracker** | applications, export xlsx | SMK-V1-18–19 |
+| **Dashboard Writes** | application-status, reject-match | SMK-V1-10–12 |
+| **Run Apply** | status, start dry-run, cancel | SMK-V1-15–17 |
+| **Config** | questions GET/POST | SMK-V1-13 |
+
+## Headers importantes
+
+Writes a Mongo (`/api/dashboard/*`) **requieren**:
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 ```
 X-Tracker-User: 1
 Content-Type: application/json
 ```
 
+<<<<<<< HEAD
 Sin header → `403`.
 
 **Si SMK-V1-10 da `400`:** el environment `sampleJobId` está vacío. Corré **SMK-V1-02** con environment **Job Hunter — Local** seleccionado, o pegá un jobId a mano en el environment.
+=======
+Sin ese header → `403 Requiere header X-Tracker-User: 1`.
+
+## Orden sugerido (smoke manual ~5 min)
+
+1. Health
+2. Match-jobs (copiar un `jobId` a variable `sampleJobId`)
+3. Tracker applications
+4. _(opcional)_ POST application-status `applied` → verificar GET applications
+5. _(opcional)_ POST reject-match → DELETE undo
+6. Run apply status
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 ## Newman (futuro CI)
 
 ```bash
+<<<<<<< HEAD
 npx newman run qa/v1/postman/job-hunter-smoke-v1.postman_collection.json \
   -e qa/v1/postman/job-hunter-local.postman_environment.json
 
@@ -95,11 +147,31 @@ Si editás la collection combinada legacy o el script:
 ```bash
 node qa/v1/postman/split-collections.mjs
 ```
+=======
+npx newman run qa/v1/postman/job-hunter-dashboard-v1.postman_collection.json \
+  -e qa/v1/postman/job-hunter-local.postman_environment.json
+```
+
+## Relación con tests TS
+
+Los tests en `tests/api/` cubren los mismos contratos. Postman es para:
+
+- Exploración manual durante desarrollo
+- Demos / labs QA
+- Smoke cuando no querés correr todo `npm run test:api`
+
+**Fuente de verdad automatizada:** `tests/api/*.test.ts`
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 ## Mantenimiento
 
 Al agregar endpoint en `src/serve-dashboard.ts`:
 
+<<<<<<< HEAD
 1. Agregar request en smoke **o** regression (según `SMK-V1-*` / `REG-V1-*`)
 2. Actualizar `smoke-green-path-v1.md` o `regression-green-path-v1.md`
+=======
+1. Actualizar collection JSON
+2. Actualizar `smoke-green-path-v1.md` si es green path
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 3. Preferir test TS en `tests/api/` para CI

@@ -11,10 +11,14 @@ import { getLatestAnalysisRun } from "../db/runs.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import type { JobMatch } from "../types.js";
+<<<<<<< HEAD
 import { jdSectionsFromDescription, normalizeFeedbackFields } from "../types/dashboard-match.js";
 import type { AnalysisSnapshot } from "../types/dashboard-match.js";
 import type { JdSections } from "../jd/parse-sections.js";
 import { hasGmailAssessmentPendingSignal } from "../tracker/gmail-assessment-label.js";
+=======
+import { normalizeFeedbackFields } from "../types/dashboard-match.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 import type { TrackerApplication, TrackerEstado } from "../types/tracker-application.js";
 
 export type DashboardMatchFilter =
@@ -22,11 +26,16 @@ export type DashboardMatchFilter =
   | "applied"
   | "not_applied"
   | "not_selected"
+<<<<<<< HEAD
   | "assessment"
   | "assessment_done"
   | "rejected"
   | "closed"
   | "duplicated";
+=======
+  | "rejected"
+  | "closed";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 /**
  * Paridad filtros lista ↔ detalle (dashboard/app.js):
@@ -35,6 +44,7 @@ export type DashboardMatchFilter =
  * | Aplicados          | Aplicado             | Enviada, A-realizado, Borrador  |
  * | No aplicados       | No aplicado          | Stand-by                        |
  * | No seleccionada/o  | No seleccionada/o    | estado Cerrado (usuaria)        |
+<<<<<<< HEAD
  * | Assessment         | Assessment pendiente   | tracker `A-pendiente` (#420)  |
  * | A-realizado        | Assessment realizado   | tracker `A-realizado` (#424)  |
  * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
@@ -54,6 +64,17 @@ export interface AssessmentBannerMeta {
   assessmentDoneCount: number;
   assessmentBanner: AssessmentBannerState;
 }
+=======
+ * | Match incorrecto   | disclosure reject    | matchRejected (lista-only)      |
+ * | Cerrado            | badge Aviso cerrado  | jobClosed LinkedIn (read-only)  |
+ */
+
+const HIDDEN_ESTADOS: TrackerEstado[] = ["Duplicado", "Descartado"];
+
+const APPLIED_ESTADOS: TrackerEstado[] = ["Enviada", "A-realizado", "Borrador abierto"];
+const NOT_SELECTED_ESTADOS: TrackerEstado[] = ["Cerrado"];
+const NOT_APPLIED_ESTADOS: TrackerEstado[] = ["Stand-by"];
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 export interface MatchJobsResponse {
   scrapedAt: string;
@@ -74,7 +95,11 @@ export interface MatchJobsResponse {
     count: number;
     filter?: DashboardMatchFilter;
     source: "mongo";
+<<<<<<< HEAD
   } & AssessmentBannerMeta;
+=======
+  };
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 }
 
 export interface ComposeMatchJobsOptions {
@@ -91,7 +116,10 @@ export type LegacyResultsResponse = MatchJobsResponse;
 /** Mapeo spike § B38-11-02 — lectura tracker → filtros legacy dashboard. */
 export function deriveApplicationStatus(app: TrackerApplication): ApplicationStatus | null {
   if (APPLIED_ESTADOS.includes(app.estado)) return "applied";
+<<<<<<< HEAD
   if (ASSESSMENT_PENDING_ESTADOS.includes(app.estado)) return "assessment_pending";
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   if (NOT_SELECTED_ESTADOS.includes(app.estado)) return "not_selected";
   if (NOT_APPLIED_ESTADOS.includes(app.estado) && !app.matchRejected) return "not_applied";
   return null;
@@ -109,8 +137,11 @@ export function isLinkedInJobClosed(app: TrackerApplication): boolean {
 export interface VisibleMatchApplicationOptions {
   /** Incluir avisos cerrados en LinkedIn (filtro `closed`). */
   showLinkedInClosed?: boolean;
+<<<<<<< HEAD
   /** Incluir filas Duplicado (filtro opt-in `duplicated`). */
   showDuplicated?: boolean;
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 }
 
 export function dashboardJobId(app: TrackerApplication): string {
@@ -133,6 +164,7 @@ export function matchesDashboardFilter(
       return status === "not_applied" && !feedback.matchRejected;
     case "not_selected":
       return status === "not_selected" && !feedback.matchRejected;
+<<<<<<< HEAD
     case "assessment":
       return status === "assessment_pending" && !feedback.matchRejected;
     case "assessment_done":
@@ -141,6 +173,10 @@ export function matchesDashboardFilter(
       return status === null && !feedback.matchRejected;
     case "duplicated":
       return app.estado === "Duplicado";
+=======
+    case "unmarked":
+      return status === null && !feedback.matchRejected;
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     case "closed":
       return isLinkedInJobClosed(app);
     default:
@@ -148,6 +184,7 @@ export function matchesDashboardFilter(
   }
 }
 
+<<<<<<< HEAD
 /**
  * Banner assessments (#421): cuenta A-pendiente / A-realizado en scope dashboard
  * (misma visibilidad por defecto que la lista, sin Duplicado/Descartado ocultos).
@@ -175,12 +212,18 @@ export function computeAssessmentBannerMeta(apps: TrackerApplication[]): Assessm
   return { assessmentPendingCount, assessmentDoneCount, assessmentBanner };
 }
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 export function isVisibleMatchApplication(
   app: TrackerApplication,
   options: VisibleMatchApplicationOptions = {}
 ): boolean {
+<<<<<<< HEAD
   if (app.estado === "Duplicado" && !options.showDuplicated) return false;
   if (app.estado === "Descartado") return false;
+=======
+  if (HIDDEN_ESTADOS.includes(app.estado)) return false;
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   if (isLinkedInJobClosed(app) && !options.showLinkedInClosed) return false;
 
   const feedback = normalizeFeedbackFields(app);
@@ -204,6 +247,7 @@ function stubSummary(app: TrackerApplication, rejected: boolean): string {
   return "Sin análisis detallado disponible.";
 }
 
+<<<<<<< HEAD
 function resolveJobMatchJdSections(
   primary?: JdSections,
   primaryDescription?: string,
@@ -218,6 +262,8 @@ function resolveJobMatchJdSections(
   );
 }
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 function stubDescription(app: TrackerApplication, rejected: boolean): string {
   const reason = app.matchRejectedReason?.trim();
   if (rejected) {
@@ -228,6 +274,7 @@ function stubDescription(app: TrackerApplication, rejected: boolean): string {
   return "Empleo de una corrida anterior con estado de postulación guardado.";
 }
 
+<<<<<<< HEAD
 /** #335 — skills vacíos en snapshot pero % alto: fallback legible en detalle. */
 function resolveMatchedSkillsForDisplay(
   analysis: AnalysisSnapshot,
@@ -245,6 +292,8 @@ function resolveMatchedSkillsForDisplay(
   return [];
 }
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 export function applicationToJobMatch(
   app: TrackerApplication,
   jobFallback?: JobMatch | null
@@ -255,17 +304,23 @@ export function applicationToJobMatch(
   const rejected = feedback.matchRejected;
   const jobClosed = isLinkedInJobClosed(app);
 
+<<<<<<< HEAD
   const trackerFields = {
     estado: app.estado,
     canal: app.canal,
     assessmentGmailPending: hasGmailAssessmentPendingSignal(app) || undefined,
   };
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   if (analysis) {
     return {
       id,
       applicationId: app.id,
+<<<<<<< HEAD
       ...trackerFields,
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
       title: app.puesto,
       company: app.empresa,
       location: analysis.location ?? jobFallback?.location ?? "—",
@@ -276,17 +331,25 @@ export function applicationToJobMatch(
         analysis.description ??
         jobFallback?.description ??
         stubDescription(app, rejected),
+<<<<<<< HEAD
       jdSections: resolveJobMatchJdSections(
         analysis.jdSections,
         analysis.description ?? jobFallback?.description,
         jobFallback?.jdSections,
         jobFallback?.description
       ),
+=======
+      jdSections: analysis.jdSections ?? jobFallback?.jdSections,
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
       searchTerm: analysis.searchTerm ?? jobFallback?.searchTerm ?? "—",
       source: analysis.source ?? jobFallback?.source,
       externalId: analysis.externalId ?? jobFallback?.externalId,
       matchPercent: app.matchPercent,
+<<<<<<< HEAD
       matchedSkills: resolveMatchedSkillsForDisplay(analysis, app.matchPercent, jobFallback),
+=======
+      matchedSkills: analysis.matchedSkills ?? jobFallback?.matchedSkills ?? [],
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
       gaps: analysis.gaps ?? jobFallback?.gaps ?? [],
       cvSuggestions: analysis.cvSuggestions ?? jobFallback?.cvSuggestions ?? [],
       summary: analysis.summary ?? jobFallback?.summary ?? stubSummary(app, rejected),
@@ -299,14 +362,20 @@ export function applicationToJobMatch(
       ...jobFallback,
       id,
       applicationId: app.id,
+<<<<<<< HEAD
       ...trackerFields,
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
       title: app.puesto || jobFallback.title,
       company: app.empresa || jobFallback.company,
       matchPercent: app.matchPercent,
       url: app.linkedinUrl || jobFallback.url,
       description: jobFallback.description || stubDescription(app, rejected),
+<<<<<<< HEAD
       jdSections:
         jobFallback.jdSections ?? jdSectionsFromDescription(jobFallback.description),
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
       summary: jobFallback.summary || stubSummary(app, rejected),
       jobClosed: jobClosed || jobFallback.jobClosed || undefined,
     };
@@ -315,7 +384,10 @@ export function applicationToJobMatch(
   return {
     id,
     applicationId: app.id,
+<<<<<<< HEAD
     ...trackerFields,
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     title: app.puesto,
     company: app.empresa,
     location: "—",
@@ -412,10 +484,15 @@ export function composeMatchJobsFromApplications(
   jobsByLinkedInId: Map<string, JobMatch> = new Map()
 ): MatchJobsResponse {
   const showLinkedInClosed = options.filter === "closed";
+<<<<<<< HEAD
   const showDuplicated = options.filter === "duplicated";
   const assessmentMeta = computeAssessmentBannerMeta(apps);
   const visible = apps.filter((app) =>
     isVisibleMatchApplication(app, { showLinkedInClosed, showDuplicated })
+=======
+  const visible = apps.filter((app) =>
+    isVisibleMatchApplication(app, { showLinkedInClosed })
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   );
   const filtered = options.filter
     ? visible.filter((app) => matchesDashboardFilter(app, options.filter!))
@@ -442,7 +519,10 @@ export function composeMatchJobsFromApplications(
       count: matchedJobs.length,
       filter: options.filter,
       source: "mongo",
+<<<<<<< HEAD
       ...assessmentMeta,
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     },
   };
 }

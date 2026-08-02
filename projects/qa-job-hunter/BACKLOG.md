@@ -64,6 +64,7 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
 | Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
 
+<<<<<<< HEAD
 ## Dashboard recovery (B-38) — Sprint 3 · Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/365)
 
 ### Done reciente — assessment filters/counts (2026-08-01)
@@ -81,6 +82,8 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 |----|--------|----------|-------|
 | B-38-34 | [#429](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/429) | Medium | SPIKE Gmail Realizados → A-realizado; ~15 mails vs count 0 dashboard |
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 ## Botonera web workflow (B-40)
 
 | Fase | Backlog ID | Issue | Notas |

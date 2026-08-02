@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+<<<<<<< HEAD
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -9,10 +10,16 @@ import { FIXTURE_TEMPLATE } from "../../src/tracker/excel-template-path.js";
 import { readEmpleosFromXlsx } from "../../src/tracker/import-xlsx.js";
 import type { TrackerApplication } from "../../src/types/tracker-application.js";
 import { COL } from "../../../qa-job-applied-list/scripts/excel/internal.js";
+=======
+import ExcelJS from "exceljs";
+import { buildApplicationsXlsxBuffer } from "../../src/tracker/export-xlsx.js";
+import type { TrackerApplication } from "../../src/types/tracker-application.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 const SAMPLE: TrackerApplication[] = [
   {
     id: "abc123",
+<<<<<<< HEAD
     jobId: "4439380038",
     gmailId: "msg-1",
     cvType: "QA",
@@ -25,6 +32,14 @@ const SAMPLE: TrackerApplication[] = [
     estado: "Pendiente",
     fechaAplicacion: "2026-01-15",
     portalExterno: "—",
+=======
+    matchPercent: 82,
+    puesto: "QA Engineer",
+    empresa: "Acme",
+    linkedinUrl: "https://www.linkedin.com/jobs/view/1/",
+    canal: "Easy Apply",
+    estado: "Pendiente",
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     proximoPaso: "Revisar",
     notas: "Bot hint",
     misComentarios: "Mi nota",
@@ -33,6 +48,7 @@ const SAMPLE: TrackerApplication[] = [
   },
 ];
 
+<<<<<<< HEAD
 async function loadExportedWorkbook(applications = SAMPLE): Promise<ExcelJS.Workbook> {
   const buffer = await buildApplicationsXlsxBuffer(applications);
   assert.ok(buffer.length > 0);
@@ -118,4 +134,18 @@ test("export vacío conserva estructura canónica (solo header)", async () => {
   const ws = wb.getWorksheet("Empleos")!;
   assert.equal(ws.getRow(1).getCell(COL.Match).text, "Match");
   assert.equal(ws.getRow(2).getCell(COL.Puesto).text, "");
+=======
+test("buildApplicationsXlsxBuffer genera hoja Empleos con headers", async () => {
+  const buffer = await buildApplicationsXlsxBuffer(SAMPLE);
+  assert.ok(buffer.length > 0);
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buffer);
+  const ws = wb.getWorksheet("Empleos");
+  assert.ok(ws);
+  assert.equal(ws!.getRow(1).getCell(1).text, "Match");
+  assert.equal(ws!.getRow(2).getCell(2).text, "QA Engineer");
+  assert.equal(ws!.getRow(2).getCell(6).text, "Pendiente");
+  assert.equal(ws!.getRow(2).getCell(11).text, "Mi nota");
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 });

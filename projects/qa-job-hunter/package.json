@@ -14,8 +14,12 @@
     "tracker:sync-pipeline": "npx tsx src/tracker/pipeline-sync.ts",
     "tracker:sync-reconcile": "npx tsx src/tracker/reconcile-sync.ts",
     "test:tracker": "npx tsx --test tests/tracker/estado-policy.test.ts tests/tracker/pipeline-sync.test.ts tests/tracker/automation-merge.test.ts tests/tracker/apply-queue-map.test.ts tests/tracker/apply-sync.test.ts tests/tracker/reconcile-sync.test.ts tests/tracker/schema-b38-13.test.ts tests/tracker/applications-b38-13.test.ts tests/tracker/excel-legacy.test.ts tests/tracker/export-xlsx.test.ts tests/feedback/match-feedback-sync.test.ts",
+<<<<<<< HEAD
     "test:match-jobs": "npx tsx --test tests/dashboard/match-jobs.test.ts tests/dashboard/assessment-banner.test.ts",
     "test:filter-counts": "npx tsx --test tests/dashboard/filter-counts.test.ts",
+=======
+    "test:match-jobs": "npx tsx --test tests/dashboard/match-jobs.test.ts",
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     "test:api": "npx tsx --test tests/api/jobs.test.ts tests/api/match-jobs.test.ts tests/api/tracker-export.test.ts",
     "test:m-lite-wiring": "npx tsx --test tests/dashboard/m-lite-wiring.test.ts",
     "playwright:ide": "npx tsx src/open-playwright-ide.ts",
@@ -51,7 +55,10 @@
     "qa:dry-run-campaign:full": "npx tsx scripts/qa/dry-run-campaign-gate.ts",
     "qa:dry-run-campaign:pipeline": "npx tsx scripts/qa/dry-run-campaign-gate.ts --pipeline-only",
     "qa:regression-b38-13": "npx tsx scripts/qa/regression-b38-13.ts",
+<<<<<<< HEAD
     "qa:seed-assessment-estados": "npx tsx scripts/seed-assessment-estados.ts",
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     "e2e:dashboard-full": "npx tsx scripts/e2e/campaign-dashboard-full.ts",
     "export:jobs-result": "npx tsx src/tracker/export-jobs-result.ts",
     "test:jd": "npx tsx --test tests/jd/parse-sections.test.ts"

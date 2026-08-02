@@ -8,19 +8,25 @@ import {
 
   DASHBOARD_MIN_MATCH,
 
+<<<<<<< HEAD
   isScrapedJobClosed,
 
   analysisSnapshotFromPipelineMatch,
   matchedSkillsForSnapshot,
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   notasFromSummary,
 
   PIPELINE_MIN_MATCH,
 
   pipelineMatchToApplicationInput,
 
+<<<<<<< HEAD
   shouldIngestClosedApplication,
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   shouldSyncPipelineMatch,
 
 } from "../../src/tracker/pipeline-match.js";
@@ -73,6 +79,7 @@ test("shouldSyncPipelineMatch excluye skip bajo umbral", () => {
 
 
 
+<<<<<<< HEAD
 const closedScrape = {
   jobId: baseMatch.jobId,
   url: baseMatch.url,
@@ -111,6 +118,8 @@ test("shouldIngestClosedApplication gate insert (#408)", () => {
 
 
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 test("canalFromPipelineMatch", () => {
 
   assert.equal(canalFromPipelineMatch(baseMatch), "Easy Apply");
@@ -286,6 +295,7 @@ test("isTrackerDualWriteEnabled respeta env", () => {
 
 });
 
+<<<<<<< HEAD
 test("matchedSkillsForSnapshot fallback sin labels (#335)", () => {
   const skills = matchedSkillsForSnapshot({
     jobId: "x",
@@ -322,3 +332,31 @@ test("analysisSnapshotFromPipelineMatch con summary sin description (#335)", () 
   assert.ok(snap);
   assert.deepEqual(snap?.matchedSkills, ["Playwright"]);
 });
+
+test("pipelineMatchToApplicationInput prioriza scrapedTitle y scrapedCompany (#367)", () => {
+  const m = {
+    jobId: "x",
+    company: "Gmail Company",
+    title: "Gmail Title",
+    url: "https://example.com",
+    matchPercent: 80,
+    matchedSkills: [],
+    gaps: [],
+    summary: "Some summary",
+    recommendation: "apply",
+    easyApply: false,
+  };
+  const scraped = {
+    url: "https://example.com",
+    scrapedAt: "2026-07-28",
+    scrapedCompany: "Scraped Company",
+    scrapedTitle: "Scraped Title",
+  };
+
+  const input = pipelineMatchToApplicationInput(m, scraped);
+
+  assert.equal(input.empresa, "Scraped Company", "La empresa debería ser del scrape");
+  assert.equal(input.puesto, "Scraped Title", "El puesto debería ser del scrape");
+});
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a

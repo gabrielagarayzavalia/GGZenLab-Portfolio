@@ -1,10 +1,15 @@
 import type { ApplicationStatus } from "../application-status.js";
+<<<<<<< HEAD
 import {
   gmailAssessmentDoneProximoPaso,
   gmailAssessmentPendingProximoPaso,
   hasGmailAssessmentPendingSignal,
 } from "../tracker/gmail-assessment-label.js";
 import type { TrackerApplication, TrackerApplicationPatch } from "../types/tracker-application.js";
+=======
+import type { TrackerApplication, TrackerApplicationPatch } from "../types/tracker-application.js";
+
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 export type DashboardApplicationPatch = TrackerApplicationPatch & {
   matchRejected?: boolean;
   matchRejectedReason?: string;
@@ -13,6 +18,7 @@ export type DashboardApplicationPatch = TrackerApplicationPatch & {
 
 const NOTA_NO_APLICADO = "No aplicado (dashboard)";
 const NOTA_NO_SELECCIONADA = "No seleccionada/o (dashboard)";
+<<<<<<< HEAD
 const NOTA_ASSESSMENT_PENDIENTE = "Assessment pendiente (dashboard)";
 const NOTA_ASSESSMENT_REALIZADO = "Assessment realizado (dashboard)";
 const NOTA_REJECT = "Match incorrecto (dashboard)";
@@ -27,6 +33,10 @@ const ASSESSMENT_PRECONDITION_ESTADOS: TrackerApplication["estado"][] = [
 export function canMarkAssessmentPending(existing: TrackerApplication): boolean {
   return ASSESSMENT_PRECONDITION_ESTADOS.includes(existing.estado);
 }
+=======
+const NOTA_REJECT = "Match incorrecto (dashboard)";
+const NOTA_DESMARCAR = "Desmarcado (dashboard)";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -45,6 +55,7 @@ export function patchForApplicationStatus(
 ): { patch: DashboardApplicationPatch; error?: string } {
   if (status === null) {
     // Acción explícita usuaria — mismo criterio que PATCH en /tracker (source=user).
+<<<<<<< HEAD
     if (existing.estado === "A-realizado") {
       return {
         patch: {},
@@ -60,6 +71,8 @@ export function patchForApplicationStatus(
         },
       };
     }
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     return {
       patch: {
         estado: "Pendiente",
@@ -91,6 +104,7 @@ export function patchForApplicationStatus(
           notas: appendNota(existing.notas, NOTA_NO_SELECCIONADA),
         },
       };
+<<<<<<< HEAD
     case "assessment_pending": {
       if (existing.estado === "A-realizado") {
         return {
@@ -135,6 +149,8 @@ export function patchForApplicationStatus(
         },
       };
     }
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     default:
       return { patch: {}, error: "Estado de postulación inválido" };
   }

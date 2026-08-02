@@ -11,8 +11,12 @@ import type { JobMatch } from "../types.js";
 
 export type { JdSections };
 
+<<<<<<< HEAD
 /** Deriva secciones JD desde texto scrapeado cuando falta snapshot (#369). */
 export function jdSectionsFromDescription(description?: string): JdSections | undefined {
+=======
+function jdSectionsFromDescription(description?: string): JdSections | undefined {
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   const text = description?.trim();
   if (!text) return undefined;
   const sections = parseJdSections(text);

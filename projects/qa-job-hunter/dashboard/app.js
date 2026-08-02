@@ -1,4 +1,5 @@
 /** Headers writes tracker (US-JH-B38-15 #314). */
+<<<<<<< HEAD
 import {
   FILTER_BUCKET_LABELS,
   FILTER_BUCKET_ORDER,
@@ -9,6 +10,8 @@ import {
   isLinkedInClosed,
 } from "./filter-counts.js";
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 const TRACKER_USER_HEADERS = {
   "Content-Type": "application/json",
   "X-Tracker-User": "1",
@@ -21,12 +24,16 @@ let showApplied = false;
 let showNotApplied = false;
 let showNotSelected = false;
 let showUnmarked = true;
+<<<<<<< HEAD
 let showAssessment = false;
 let showAssessmentDone = false;
 let showClosed = false;
 let showDuplicated = false;
 let filterCompany = "";
 let filterTitle = "";
+=======
+let showClosed = false;
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 /** Futuro: 'bullets' | 'full' | 'ai' — por ahora siempre bullets */
 const DESCRIPTION_VIEW = "bullets";
 const MATCH_INCORRECT_HINT =
@@ -49,10 +56,14 @@ const els = {
   showNotApplied: document.getElementById("show-not-applied"),
   showNotSelected: document.getElementById("show-not-selected"),
   showUnmarked: document.getElementById("show-unmarked"),
+<<<<<<< HEAD
   showAssessment: document.getElementById("show-assessment"),
   showAssessmentDone: document.getElementById("show-assessment-done"),
   showClosed: document.getElementById("show-closed"),
   showDuplicated: document.getElementById("show-duplicated"),
+=======
+  showClosed: document.getElementById("show-closed"),
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   detailEmpty: document.getElementById("detail-empty"),
   detailContent: document.getElementById("detail-content"),
   listEmpty: document.getElementById("list-empty"),
@@ -70,11 +81,14 @@ function showAppFlash(message, kind = "error") {
   el.hidden = false;
   el.classList.remove("hidden");
   el.textContent = message;
+<<<<<<< HEAD
   if (kind === "success") {
     el.setAttribute("data-testid", "dash-flash-success");
   } else {
     el.removeAttribute("data-testid");
   }
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   appFlashTimer = setTimeout(() => clearAppFlash(), kind === "error" ? 12_000 : 6_000);
 }
 
@@ -86,6 +100,7 @@ function clearAppFlash() {
   el.classList.add("hidden");
 }
 
+<<<<<<< HEAD
 /** Banner persistente assessments (#421) — no usa #app-flash. */
 function renderAssessmentBanner(meta) {
   const el = document.getElementById("banner-assessment");
@@ -144,10 +159,13 @@ async function activateAssessmentPendingFilter() {
   }
 }
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 function showApiWarnings(warnings) {
   if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
 }
 
+<<<<<<< HEAD
 function applicationStatusSavedMessage(status, estadoFromApi) {
   if (estadoFromApi) return `Estado guardado: ${estadoFromApi}`;
   const byStatus = {
@@ -162,6 +180,8 @@ function applicationStatusSavedMessage(status, estadoFromApi) {
   return label ? `Estado guardado: ${label}` : "Estado guardado";
 }
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 function matchClass(pct) {
   if (pct >= 85) return "match-badge__pct--high";
   if (pct >= 75) return "match-badge__pct--mid";
@@ -178,6 +198,7 @@ function isMeaningfulMeta(value) {
   return !META_PLACEHOLDERS.has(t.toLowerCase());
 }
 
+<<<<<<< HEAD
 function estadoTrackerClass(estado) {
   const l = (estado || "").toLowerCase();
   if (l === "pendiente") return "estado-tracker--pendiente";
@@ -203,6 +224,13 @@ function renderEstadoTrackerBadge(estado, extraClass = "") {
 function formatListMeta(job) {
   if (!isMeaningfulMeta(job.canal)) return "";
   return escapeHtml(job.canal);
+=======
+function formatListMeta(job) {
+  return [job.modality, job.datePosted]
+    .filter(isMeaningfulMeta)
+    .map(escapeHtml)
+    .join(" · ");
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 }
 
 function renderDetailMeta(job) {
@@ -217,12 +245,17 @@ function renderDetailMeta(job) {
   return `<div class="detail__meta">${spans.join("")}</div>`;
 }
 
+<<<<<<< HEAD
 function applicationStatusFromTrackerEstado(estado) {
   if (["Enviada", "A-realizado", "Borrador abierto"].includes(estado)) return "applied";
   if (estado === "Stand-by") return "not_applied";
   if (estado === "Cerrado") return "not_selected";
   if (estado === "A-pendiente") return "assessment_pending";
   return null;
+=======
+function isLinkedInClosed(job) {
+  return job?.jobClosed === true;
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 }
 
 function isRejected(jobId) {
@@ -260,6 +293,7 @@ function getDropdownFilters() {
 
 function isVisibleInList(jobId) {
   const job = jobs.find((j) => j.id === jobId);
+<<<<<<< HEAD
   if (!job) return false;
   return isJobVisibleForStateFilters(job, getFilterFlags(), getFilterContext());
 }
@@ -312,6 +346,15 @@ function populateDropdownFilters() {
   els.filterCompany.value = filterCompany;
   els.filterTitle.value = filterTitle;
   renderFilterCounts();
+=======
+  if (job && isLinkedInClosed(job)) return showClosed;
+  if (isRejected(jobId)) return showRejected;
+  const status = getApplicationStatus(jobId);
+  if (status === "applied") return showApplied;
+  if (status === "not_applied") return showNotApplied;
+  if (status === "not_selected") return showNotSelected;
+  return showUnmarked;
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 }
 
 function visibleJobs() {
@@ -400,7 +443,13 @@ function renderList() {
   if (!els.listError.hidden) return;
 
   if (jobs.length === 0) {
+<<<<<<< HEAD
     showListEmpty("No hay empleos con 70%+ de match.", false);
+=======
+    els.listEmpty.classList.remove("hidden");
+    els.listEmpty.hidden = false;
+    els.listEmpty.querySelector("p").textContent = "No hay empleos con 70%+ de match.";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     return;
   }
 
@@ -427,7 +476,11 @@ function renderList() {
     const colorVar =
       job.matchPercent >= 85 ? "match-high" : job.matchPercent >= 75 ? "match-mid" : "match-low";
     const rejectedBadge = rejected ? `<span class="badge-rejected">Match incorrecto</span>` : "";
+<<<<<<< HEAD
     const closedBadge = closed ? `<span class="badge-closed">Cerrado</span>` : "";
+=======
+    const closedBadge = closed ? `<span class="badge-closed">Aviso cerrado</span>` : "";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     const appStatus = getApplicationStatus(job.id);
     const appBadge =
       appStatus === "applied"
@@ -439,7 +492,10 @@ function renderList() {
             : "";
 
     const listMeta = formatListMeta(job);
+<<<<<<< HEAD
     const estadoBadge = job.estado ? renderEstadoTrackerBadge(job.estado) : "";
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
     li.innerHTML = `
       <div class="match-badge">
@@ -452,7 +508,10 @@ function renderList() {
         <p class="job-item__title">${escapeHtml(job.title)}</p>
         <p class="job-item__company">${escapeHtml(job.company)}</p>
         ${listMeta ? `<p class="job-item__meta">${listMeta}</p>` : ""}
+<<<<<<< HEAD
         ${estadoBadge}
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
         ${rejectedBadge}
         ${closedBadge}
         ${appBadge}
@@ -518,6 +577,7 @@ function renderDetail(job) {
   const descriptionBlock = renderDescriptionBlock(job);
   const appStatus = getApplicationStatus(job.id);
   const closedBadge = closed
+<<<<<<< HEAD
     ? `<p class="detail__closed-badge"><span class="badge-closed">Cerrado</span> LinkedIn ya no acepta postulaciones — no llegaste a aplicar.</p>`
     : "";
   const estadoChip = job.estado
@@ -541,6 +601,10 @@ function renderDetail(job) {
                 <span>Assessment realizado</span>
               </label>`
       : "";
+=======
+    ? `<p class="detail__closed-badge"><span class="badge-closed">Aviso cerrado</span> LinkedIn ya no acepta postulaciones.</p>`
+    : "";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   const linkedInLink = job.url
     ? `<a class="detail__link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener noreferrer">Ver en LinkedIn →</a>`
     : `<p class="detail__meta detail__meta--muted">Sin enlace — empleo de una corrida anterior.</p>`;
@@ -551,7 +615,10 @@ function renderDetail(job) {
         <div class="detail__header-main">
           <h1 class="detail__title">${escapeHtml(job.title)}</h1>
           <p class="detail__company">${escapeHtml(job.company)}</p>
+<<<<<<< HEAD
           ${estadoChip}
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
           ${renderDetailMeta(job)}
           ${closedBadge}
           ${linkedInLink}
@@ -579,10 +646,15 @@ function renderDetail(job) {
             </div>
           </div>
           <div class="feedback-section feedback-section--compact${rejected ? " feedback-section--rejected" : ""}">
+<<<<<<< HEAD
             <div class="feedback-disclosure__header">
               ${feedbackToggle}
               ${feedbackHintTrigger}
             </div>
+=======
+            ${feedbackToggle}
+            <p class="feedback-hint feedback-hint--inline">Match incorrecto: usá el filtro de lista o el botón aquí (no es un checkbox de postulación).</p>
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
           </div>
         </aside>
       </div>
@@ -679,8 +751,15 @@ async function saveApplicationStatus(job, status) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
+<<<<<<< HEAD
     if (data.warnings?.length) {
       showApiWarnings(data.warnings);
+=======
+    showApiWarnings(data.warnings);
+    await loadMatchJobs();
+    if (status && !isVisibleInList(job.id)) {
+      focusNextVisibleJob(job.id);
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     } else {
       showAppFlash(
         applicationStatusSavedMessage(status, data.application?.estado),
@@ -720,10 +799,14 @@ function serverFilterFromUI() {
   if (showApplied) active.push("applied");
   if (showNotApplied) active.push("not_applied");
   if (showNotSelected) active.push("not_selected");
+<<<<<<< HEAD
   if (showAssessment) active.push("assessment");
   if (showAssessmentDone) active.push("assessment_done");
   if (showClosed) active.push("closed");
   if (showDuplicated) active.push("duplicated");
+=======
+  if (showClosed) active.push("closed");
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   if (showUnmarked) active.push("unmarked");
   return active.length === 1 ? active[0] : null;
 }
@@ -748,9 +831,12 @@ function syncFilterFlagsFromUI(changed) {
     els.showNotSelected.checked = false;
     els.showRejected.checked = false;
     els.showClosed.checked = false;
+<<<<<<< HEAD
     els.showDuplicated.checked = false;
     els.showAssessment.checked = false;
     els.showAssessmentDone.checked = false;
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   } else if (changed !== els.showUnmarked && changed.checked) {
     els.showUnmarked.checked = false;
   }
@@ -760,6 +846,7 @@ function syncFilterFlagsFromUI(changed) {
   showNotApplied = els.showNotApplied.checked;
   showNotSelected = els.showNotSelected.checked;
   showUnmarked = els.showUnmarked.checked;
+<<<<<<< HEAD
   showAssessment = els.showAssessment.checked;
   showAssessmentDone = els.showAssessmentDone.checked;
   showClosed = els.showClosed.checked;
@@ -862,6 +949,18 @@ function enableFilterForRejected() {
 
 async function loadMatchJobs(filter = null) {
   const serverFilter = filter;
+=======
+  showClosed = els.showClosed.checked;
+
+  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked && !showClosed) {
+    showUnmarked = true;
+    els.showUnmarked.checked = true;
+  }
+}
+
+async function loadMatchJobs(filter) {
+  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   const url = serverFilter
     ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
     : "/api/dashboard/match-jobs";
@@ -886,8 +985,11 @@ async function loadMatchJobs(filter = null) {
     applyApplicationStatus(result.applicationStatus);
   }
   jobs = result.matchedJobs ?? result.jobs ?? [];
+<<<<<<< HEAD
   populateDropdownFilters();
   renderAssessmentBanner(result.meta);
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   return result;
 }
 
@@ -1000,6 +1102,7 @@ async function rejectMatch(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
     showApiWarnings(data.warnings);
+<<<<<<< HEAD
     enableFilterForRejected();
     await loadMatchJobs();
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
@@ -1010,6 +1113,10 @@ async function rejectMatch(job) {
     } else {
       focusNextVisibleJob(job.id);
     }
+=======
+    await loadMatchJobs();
+    focusNextVisibleJob(job.id);
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   } catch (e) {
     showAppFlash(String(e.message ?? e));
   }
@@ -1024,6 +1131,7 @@ async function undoReject(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
     showApiWarnings(data.warnings);
+<<<<<<< HEAD
     enableFilterForApplicationStatus(null);
     await loadMatchJobs();
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
@@ -1038,6 +1146,15 @@ async function undoReject(job) {
     showAppFlash(String(e.message ?? e));
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
     renderDetail(refreshed);
+=======
+    await loadMatchJobs();
+    renderList();
+    renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    renderDetail(refreshed);
+  } catch (e) {
+    showAppFlash(String(e.message ?? e));
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   }
 }
 
@@ -1069,6 +1186,7 @@ async function init() {
     renderList();
   });
 
+<<<<<<< HEAD
   function onDropdownFilterChange() {
     filterCompany = els.filterCompany.value;
     filterTitle = els.filterTitle.value;
@@ -1089,15 +1207,22 @@ async function init() {
   els.filterCompany.addEventListener("change", onDropdownFilterChange);
   els.filterTitle.addEventListener("change", onDropdownFilterChange);
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   els.showRejected.addEventListener("change", () => onFilterChange(els.showRejected));
   els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
+<<<<<<< HEAD
   els.showAssessment.addEventListener("change", () => onFilterChange(els.showAssessment));
   els.showAssessmentDone.addEventListener("change", () => onFilterChange(els.showAssessmentDone));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
   els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
   els.showDuplicated.addEventListener("change", () => onFilterChange(els.showDuplicated));
+=======
+  els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
+  els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
   async function onFilterChange(changed) {
     syncFilterFlagsFromUI(changed);

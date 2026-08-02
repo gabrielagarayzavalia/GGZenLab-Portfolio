@@ -69,6 +69,7 @@ export function shouldSyncPipelineMatch(m: PipelineMatchResult): boolean {
   return true;
 }
 
+<<<<<<< HEAD
 /** Scrape indica aviso LinkedIn cerrado (mismas señales que `isLinkedInJobClosed`). */
 export function isScrapedJobClosed(scraped?: PipelineScrapedJob | null): boolean {
   if (!scraped) return false;
@@ -103,6 +104,8 @@ export function matchedSkillsForSnapshot(match: PipelineMatchResult): string[] |
     : ["Requisitos del aviso cubiertos por tu perfil"];
 }
 
+=======
+>>>>>>> origin/main
 export function analysisSnapshotFromPipelineMatch(
   match: PipelineMatchResult,
   scraped?: PipelineScrapedJob | null,
@@ -111,11 +114,17 @@ export function analysisSnapshotFromPipelineMatch(
   if (match.matchPercent < DASHBOARD_MIN_MATCH) return undefined;
 
   const hasSkills = Boolean(match.matchedSkills?.length);
+<<<<<<< HEAD
   const hasGaps = Boolean(match.gaps?.length);
   const hasSummary = Boolean(match.summary?.trim());
   const description = scraped?.description?.trim();
   const hasDescription = Boolean(description);
   if (!hasSkills && !hasGaps && !hasSummary && !hasDescription) return undefined;
+=======
+  const description = scraped?.description?.trim();
+  const hasDescription = Boolean(description);
+  if (!hasSkills && !hasDescription) return undefined;
+>>>>>>> origin/main
 
   const jdSections = description ? parseJdSections(description) : undefined;
   const parsedJd =
@@ -129,7 +138,11 @@ export function analysisSnapshotFromPipelineMatch(
     ...(parsedJd ? { jdSections: parsedJd } : {}),
     searchTerm: scraped?.scrapedTitle ?? match.title,
     source: "pipeline",
+<<<<<<< HEAD
     matchedSkills: matchedSkillsForSnapshot(match),
+=======
+    matchedSkills: match.matchedSkills?.length ? [...match.matchedSkills] : undefined,
+>>>>>>> origin/main
     gaps: match.gaps?.length ? [...match.gaps] : undefined,
     cvSuggestions: match.cvSuggestions?.length ? [...match.cvSuggestions] : undefined,
     summary: match.summary || undefined,

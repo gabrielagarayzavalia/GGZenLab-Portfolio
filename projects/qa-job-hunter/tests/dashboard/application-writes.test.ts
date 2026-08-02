@@ -4,12 +4,16 @@ import {
   patchForApplicationStatus,
   patchForRejectMatch,
   patchForUndoReject,
+<<<<<<< HEAD
   canMarkAssessmentPending,
 } from "../../src/dashboard/application-writes.js";
 import {
   gmailAssessmentDoneProximoPaso,
   gmailAssessmentPendingProximoPaso,
 } from "../../src/tracker/gmail-assessment-label.js";
+=======
+} from "../../src/dashboard/application-writes.js";
+>>>>>>> origin/main
 import type { TrackerApplication } from "../../src/types/tracker-application.js";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
@@ -58,6 +62,7 @@ test("patchForApplicationStatus desmarcar desde Stand-by → Pendiente", () => {
   assert.equal(patch.estado, "Pendiente");
 });
 
+<<<<<<< HEAD
 test("patchForApplicationStatus assessment_pending desde Enviada → A-pendiente", () => {
   const { patch, error } = patchForApplicationStatus(
     "assessment_pending",
@@ -159,6 +164,8 @@ test("patchForApplicationStatus desmarcar A-realizado bloqueado", () => {
   assert.match(error ?? "", /No se puede desmarcar A-realizado/);
 });
 
+=======
+>>>>>>> origin/main
 test("patchForRejectMatch setea matchRejected y Stand-by", () => {
   const patch = patchForRejectMatch("No es QA", app());
   assert.equal(patch.matchRejected, true);

@@ -23,14 +23,22 @@ export async function syncReconcileToTracker(
 
   if (!fs.existsSync(xlsxPath)) {
     console.warn(`⚠  Reconcile dual-write: no se encontró Excel en ${xlsxPath}`);
+<<<<<<< HEAD
     return { inserted: 0, updated: 0, skipped: 0 };
+=======
+    return { updated: 0, skipped: 0 };
+>>>>>>> origin/main
   }
 
   const rows = await readEmpleosFromXlsx(xlsxPath);
   const syncable = rows.filter(isReconcileSyncableRow).map(excelRowToReconcileFields);
   if (!syncable.length) {
     console.log("📋 Reconcile dual-write: 0 filas Excel con jobId/URL para sync.");
+<<<<<<< HEAD
     return { inserted: 0, updated: 0, skipped: 0 };
+=======
+    return { updated: 0, skipped: 0 };
+>>>>>>> origin/main
   }
 
   await connect();
@@ -38,7 +46,11 @@ export async function syncReconcileToTracker(
   try {
     const result = await upsertReconcileRows(syncable);
     console.log(
+<<<<<<< HEAD
       `📋 Tracker reconcile Mongo: ${result.inserted} insertadas | ${result.updated} actualizadas | ${result.skipped} omitidas`
+=======
+      `📋 Tracker reconcile Mongo: ${result.updated} actualizadas | ${result.skipped} omitidas (protegido/sin cambio)`
+>>>>>>> origin/main
     );
     return result;
   } finally {

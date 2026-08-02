@@ -81,18 +81,6 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 |----|--------|----------|-------|
 | B-38-34 | [#429](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/429) | Medium | SPIKE Gmail Realizados → A-realizado; ~15 mails vs count 0 dashboard |
 
-## Botonera web workflow (B-40)
-
-| Fase | Backlog ID | Issue | Notas |
-|------|------------|-------|-------|
-| Spike workflow completo | B-40-0 | [#318](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/318) | no solo EA · tasks #319–#322 |
-
-**Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
-
-**Orden:** B-38 spike **antes** de implementar B-08 / B-14 como listas o stores aparte — tracking y home futura viven en el tracker web.
-
----
-
 ## Backlog — execution order
 
 | Order | ID | Priority | Scope |

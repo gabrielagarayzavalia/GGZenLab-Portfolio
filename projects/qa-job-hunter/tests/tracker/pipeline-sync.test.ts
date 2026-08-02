@@ -8,19 +8,25 @@ import {
 
   DASHBOARD_MIN_MATCH,
 
+<<<<<<< HEAD
   isScrapedJobClosed,
 
   analysisSnapshotFromPipelineMatch,
   matchedSkillsForSnapshot,
 
+=======
+>>>>>>> origin/main
   notasFromSummary,
 
   PIPELINE_MIN_MATCH,
 
   pipelineMatchToApplicationInput,
 
+<<<<<<< HEAD
   shouldIngestClosedApplication,
 
+=======
+>>>>>>> origin/main
   shouldSyncPipelineMatch,
 
 } from "../../src/tracker/pipeline-match.js";
@@ -73,6 +79,7 @@ test("shouldSyncPipelineMatch excluye skip bajo umbral", () => {
 
 
 
+<<<<<<< HEAD
 const closedScrape = {
   jobId: baseMatch.jobId,
   url: baseMatch.url,
@@ -111,6 +118,8 @@ test("shouldIngestClosedApplication gate insert (#408)", () => {
 
 
 
+=======
+>>>>>>> origin/main
 test("canalFromPipelineMatch", () => {
 
   assert.equal(canalFromPipelineMatch(baseMatch), "Easy Apply");
@@ -286,6 +295,7 @@ test("isTrackerDualWriteEnabled respeta env", () => {
 
 });
 
+<<<<<<< HEAD
 test("matchedSkillsForSnapshot fallback sin labels (#335)", () => {
   const skills = matchedSkillsForSnapshot({
     jobId: "x",
@@ -322,3 +332,5 @@ test("analysisSnapshotFromPipelineMatch con summary sin description (#335)", () 
   assert.ok(snap);
   assert.deepEqual(snap?.matchedSkills, ["Playwright"]);
 });
+=======
+>>>>>>> origin/main

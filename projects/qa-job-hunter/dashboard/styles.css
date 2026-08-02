@@ -167,6 +167,7 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 .feedback-disclosure__panel--wide { margin-top: 0.65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .detail__closed-badge { margin: 0.35rem 0 0.5rem; font-size: 0.82rem; color: var(--text-muted); }
 .feedback-hint { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-muted); }
+.feedback-hint--inline { margin: 0.35rem 0.55rem 0.5rem; font-size: 0.72rem; color: var(--text-muted); }
 .feedback-section--rejected { border-color: rgba(239, 68, 68, 0.35); }
 .feedback-disclosure__header { display: flex; align-items: stretch; }
 .feedback-disclosure__header .feedback-disclosure__toggle { flex: 1; width: auto; }

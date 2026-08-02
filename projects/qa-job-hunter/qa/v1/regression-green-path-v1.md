@@ -50,7 +50,11 @@
 | REG-V1-22 | Reject con razón | POST reject-match + reason | `matchRejected: true`, Stand-by | **sí** |
 | REG-V1-23 | Undo reject | DELETE reject-match | `matchRejected: false`, Pendiente | **sí** |
 | REG-V1-24 | Dual-write JSON | Tras reject, verificar `output/match-feedback.json` | Entrada presente; tras undo, ausente | **parcial** — requiere dashboard actualizado |
+<<<<<<< HEAD
 | REG-V1-25 | Legacy POST /api/feedback/reject | POST body `{ jobId, title, company, searchTerm, matchPercent, reason? }` | `200` (ruta legacy) | **parcial** — Postman |
+=======
+| REG-V1-25 | Legacy POST /api/feedback/reject | POST body `{ jobId }` | `200` (ruta legacy) | **parcial** — Postman |
+>>>>>>> origin/main
 
 ## 5. Config — preguntas y banco apply
 

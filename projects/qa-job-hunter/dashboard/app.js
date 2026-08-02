@@ -8,7 +8,6 @@ import {
   isJobVisibleForStateFilters,
   isLinkedInClosed,
 } from "./filter-counts.js";
-
 const TRACKER_USER_HEADERS = {
   "Content-Type": "application/json",
   "X-Tracker-User": "1",
@@ -143,7 +142,6 @@ async function activateAssessmentPendingFilter() {
     showListError(String(e.message ?? e));
   }
 }
-
 function showApiWarnings(warnings) {
   if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
 }
@@ -161,7 +159,6 @@ function applicationStatusSavedMessage(status, estadoFromApi) {
   const label = byStatus[status];
   return label ? `Estado guardado: ${label}` : "Estado guardado";
 }
-
 function matchClass(pct) {
   if (pct >= 85) return "match-badge__pct--high";
   if (pct >= 75) return "match-badge__pct--mid";
@@ -1000,16 +997,16 @@ async function rejectMatch(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
     showApiWarnings(data.warnings);
-    enableFilterForRejected();
-    await loadMatchJobs();
-    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
-    if (isVisibleInList(job.id)) {
-      renderList();
-      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
-      renderDetail(refreshed);
-    } else {
-      focusNextVisibleJob(job.id);
-    }
+  enableFilterForRejected();
+  await loadMatchJobs();
+  const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+  if (isVisibleInList(job.id)) {
+    renderList();
+    renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+    renderDetail(refreshed);
+  } else {
+    focusNextVisibleJob(job.id);
+  }
   } catch (e) {
     showAppFlash(String(e.message ?? e));
   }
@@ -1024,20 +1021,20 @@ async function undoReject(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
     showApiWarnings(data.warnings);
-    enableFilterForApplicationStatus(null);
-    await loadMatchJobs();
-    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
-    if (isVisibleInList(job.id)) {
-      renderList();
-      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
-      renderDetail(refreshed);
-    } else {
-      focusNextVisibleJob(job.id);
-    }
-  } catch (e) {
-    showAppFlash(String(e.message ?? e));
-    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+  enableFilterForApplicationStatus(null);
+  await loadMatchJobs();
+  const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+  if (isVisibleInList(job.id)) {
+    renderList();
+    renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
     renderDetail(refreshed);
+  } else {
+    focusNextVisibleJob(job.id);
+  }
+} catch (e) {
+  showAppFlash(String(e.message ?? e));
+  const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+  renderDetail(refreshed);
   }
 }
 
@@ -1088,7 +1085,6 @@ async function init() {
 
   els.filterCompany.addEventListener("change", onDropdownFilterChange);
   els.filterTitle.addEventListener("change", onDropdownFilterChange);
-
   els.showRejected.addEventListener("change", () => onFilterChange(els.showRejected));
   els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));

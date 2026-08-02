@@ -66,6 +66,7 @@ for (const { file, links } of NAV_PAGES) {
   });
 }
 
+<<<<<<< HEAD
 test("index.html expone data-testid de filtros empresa y puesto", () => {
   const html = readHtml("index.html");
   for (const testid of ["dash-filter-company", "dash-filter-title"]) {
@@ -104,6 +105,8 @@ test("app.js expone empty state filtrado por dropdown", () => {
   assert.match(appJs, /data-testid="dash-detail-write-hint"/);
 });
 
+=======
+>>>>>>> origin/main
 test("run.html expone data-testid de controles Easy Apply", () => {
   const html = readHtml("run.html");
   const runTestids = [
@@ -116,9 +119,12 @@ test("run.html expone data-testid de controles Easy Apply", () => {
     "run-status",
     "run-state-text",
     "run-log",
+<<<<<<< HEAD
     "run-confirm-dialog",
     "run-confirm-dismiss",
     "run-confirm-accept",
+=======
+>>>>>>> origin/main
   ];
   for (const testid of runTestids) {
     assert.match(html, new RegExp(`data-testid="${testid}"`), `missing ${testid}`);

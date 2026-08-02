@@ -34,7 +34,7 @@ const MATCH_INCORRECT_HINT =
 let rejectedIds = new Set();
 /** @type {Map<string, { reason?: string; rejectedAt: string }>} */
 let rejectionMeta = new Map();
-/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected' | 'assessment_pending' | 'assessment_done'>} */
+/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected' | 'assessment_pending' | 'assessment_done' | 'duplicated'>} */
 let applicationStatus = new Map();
 
 const els = {
@@ -159,6 +159,7 @@ function applicationStatusSavedMessage(status, estadoFromApi) {
   const label = byStatus[status];
   return label ? `Estado guardado: ${label}` : "Estado guardado";
 }
+
 function matchClass(pct) {
   if (pct >= 85) return "match-badge__pct--high";
   if (pct >= 75) return "match-badge__pct--mid";
@@ -198,8 +199,11 @@ function renderEstadoTrackerBadge(estado, extraClass = "") {
 }
 
 function formatListMeta(job) {
-  if (!isMeaningfulMeta(job.canal)) return "";
-  return escapeHtml(job.canal);
+  const parts = [];
+  if (isMeaningfulMeta(job.canal)) parts.push(escapeHtml(job.canal));
+  if (isMeaningfulMeta(job.modality)) parts.push(escapeHtml(job.modality));
+  if (isMeaningfulMeta(job.datePosted)) parts.push(escapeHtml(job.datePosted));
+  return parts.join(" · ");
 }
 
 function renderDetailMeta(job) {
@@ -661,7 +665,7 @@ function wireApplicationChecks(job) {
 async function saveApplicationStatus(job, status) {
   const applicationId = job.applicationId;
   if (!applicationId) {
-    showAppFlash("Sin applicationId en tracker — no se puede guardar el estado.");
+    showAppFlash("Sin applicationId en tracker — no se puede guardar el estado.", "error");
     return;
   }
   try {
@@ -678,6 +682,10 @@ async function saveApplicationStatus(job, status) {
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
     if (data.warnings?.length) {
       showApiWarnings(data.warnings);
+    }
+    await loadMatchJobs();
+    if (status && !isVisibleInList(job.id)) {
+      focusNextVisibleJob(job.id);
     } else {
       showAppFlash(
         applicationStatusSavedMessage(status, data.application?.estado),
@@ -858,7 +866,7 @@ function enableFilterForRejected() {
 }
 
 async function loadMatchJobs(filter = null) {
-  const serverFilter = filter;
+  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
   const url = serverFilter
     ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
     : "/api/dashboard/match-jobs";
@@ -997,16 +1005,16 @@ async function rejectMatch(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el feedback");
     showApiWarnings(data.warnings);
-  enableFilterForRejected();
-  await loadMatchJobs();
-  const refreshed = jobs.find((j) => j.id === job.id) ?? job;
-  if (isVisibleInList(job.id)) {
-    renderList();
-    renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
-    renderDetail(refreshed);
-  } else {
-    focusNextVisibleJob(job.id);
-  }
+    enableFilterForRejected();
+    await loadMatchJobs();
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    if (isVisibleInList(job.id)) {
+      renderList();
+      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+      renderDetail(refreshed);
+    } else {
+      focusNextVisibleJob(job.id);
+    }
   } catch (e) {
     showAppFlash(String(e.message ?? e));
   }
@@ -1021,20 +1029,20 @@ async function undoReject(job) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer");
     showApiWarnings(data.warnings);
-  enableFilterForApplicationStatus(null);
-  await loadMatchJobs();
-  const refreshed = jobs.find((j) => j.id === job.id) ?? job;
-  if (isVisibleInList(job.id)) {
-    renderList();
-    renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+    enableFilterForApplicationStatus(null);
+    await loadMatchJobs();
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
+    if (isVisibleInList(job.id)) {
+      renderList();
+      renderHeader({ scrapedAt: window.__scrapedAt, totalAnalyzed: window.__totalAnalyzed, matchedJobs: jobs });
+      renderDetail(refreshed);
+    } else {
+      focusNextVisibleJob(job.id);
+    }
+  } catch (e) {
+    showAppFlash(String(e.message ?? e));
+    const refreshed = jobs.find((j) => j.id === job.id) ?? job;
     renderDetail(refreshed);
-  } else {
-    focusNextVisibleJob(job.id);
-  }
-} catch (e) {
-  showAppFlash(String(e.message ?? e));
-  const refreshed = jobs.find((j) => j.id === job.id) ?? job;
-  renderDetail(refreshed);
   }
 }
 

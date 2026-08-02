@@ -2,11 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
 
-<<<<<<< HEAD
 import { planReconcileUpsert, canReconcilePromoteEstado } from "../../src/tracker/automation-merge.js";
-=======
-import { planReconcileUpsert } from "../../src/tracker/automation-merge.js";
->>>>>>> origin/main
 import { excelRowToReconcileFields, isReconcileSyncableRow } from "../../src/tracker/reconcile-row-map.js";
 import { syncReconcileToTracker } from "../../src/tracker/reconcile-sync.js";
 import { connect, disconnect } from "../../src/db/client.js";
@@ -28,16 +24,11 @@ const baseFields = {
   estado: "Pendiente" as const,
 };
 
-<<<<<<< HEAD
 test("planReconcileUpsert skip sin existing para Enviada", () => {
-=======
-test("planReconcileUpsert skip sin existing", () => {
->>>>>>> origin/main
   const plan = planReconcileUpsert(null, { ...baseFields, estado: "Enviada" });
   assert.equal(plan.action, "skip");
 });
 
-<<<<<<< HEAD
 test("planReconcileUpsert insert A-pendiente sin existing con jobId", () => {
   const plan = planReconcileUpsert(null, {
     ...baseFields,
@@ -97,8 +88,6 @@ test("planReconcileUpsert skip Enviada a Pendiente", () => {
   assert.equal(plan.action, "skip");
 });
 
-=======
->>>>>>> origin/main
 test("planReconcileUpsert sube Pendiente a Enviada", () => {
   const plan = planReconcileUpsert(
     { estado: "Pendiente" },
@@ -118,16 +107,6 @@ test("planReconcileUpsert sube Pendiente a Enviada", () => {
   }
 });
 
-<<<<<<< HEAD
-=======
-test("planReconcileUpsert skip estados protegidos en Mongo", () => {
-  for (const estado of ["Enviada", "Descartado", "Duplicado", "Stand-by", "Cerrado"]) {
-    const plan = planReconcileUpsert({ estado }, { ...baseFields, estado: "A-pendiente" });
-    assert.equal(plan.action, "skip", `debe skip mongo ${estado}`);
-  }
-});
-
->>>>>>> origin/main
 test("planReconcileUpsert skip sin cambios", () => {
   const plan = planReconcileUpsert(
     { estado: "Pendiente", proximoPaso: "Gmail" },
@@ -233,10 +212,7 @@ test("upsertReconcileRows integración Mongo", async (t) => {
     }),
   ]);
 
-<<<<<<< HEAD
   assert.equal(result.inserted, 0);
-=======
->>>>>>> origin/main
   assert.equal(result.updated, 1);
   assert.equal(result.skipped, 0);
 

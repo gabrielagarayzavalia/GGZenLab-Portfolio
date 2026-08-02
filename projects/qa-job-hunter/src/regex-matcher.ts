@@ -74,7 +74,7 @@ const SKILL_PATTERNS: { label: string; patterns: RegExp[]; weight: number }[] = 
   { label: "ai/ml testing", patterns: [/machine learning/i, /\bllm\b/i, /ai[- ]?(generated|powered|driven)/i, /\bai\s+(testing|test|models?|agents?)\b/i, /non-deterministic/i], weight: 1 },
 ];
 
-const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|indispensable|m[ií]nimo|minimum|essential/i;
+const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|m[ií]nimo|minimum|essential/i;
 const NICE_HINTS = /preferred|nice to have|plus|deseable|valorado|bonus/i;
 const AUTOMATION_JD = /automation|automatiz|selenium|playwright|cypress|sdet/i;
 const GIG_SIGNALS = /\b(freelance|freelancer|freelancers|gig|espor[aá]dic)\b/i;

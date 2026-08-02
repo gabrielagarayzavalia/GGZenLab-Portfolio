@@ -3,11 +3,6 @@
     "_postman_id": "jh-dashboard-v1-green-path",
 <<<<<<< HEAD
     "name": "Job Hunter Dashboard — Green Path v1 (DEPRECATED)",
-    "description": "DEPRECADO — usar job-hunter-smoke-v1 y job-hunter-regression-v1.\nRegenerar con: node qa/v1/postman/split-collections.mjs",
-=======
-    "name": "Job Hunter Dashboard — Green Path v1",
-    "description": "Smoke/regression API manual para qa-job-hunter dashboard (puerto 3847).\nAlineado a SMK-V1-* y REG-V1-* en qa/v1/.",
->>>>>>> origin/main
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -218,33 +213,6 @@
                   "    if (!pm.collectionVariables.get('sampleJobId') && json.applications[0].jobId) {",
                   "      pm.collectionVariables.set('sampleJobId', json.applications[0].jobId);",
                   "    }",
-                  "  }",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "SMK-V1-19 GET /api/tracker/export/xlsx",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/tracker/export/xlsx"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('SMK-V1-19 status 200 or 503', () => {",
-                  "  pm.expect([200, 503]).to.include(pm.response.code);",
-                  "});",
-                  "if (pm.response.code === 200) {",
-                  "  pm.test('xlsx content-type', () => {",
-                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('spreadsheet');",
-                  "  });",
                   "}"
                 ]
               }

@@ -11,14 +11,11 @@ import { applyTrackerPatch, type TrackerWriteSource } from "../tracker/estado-po
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import {
   pipelineMatchToApplicationInput,
-<<<<<<< HEAD
   shouldIngestClosedApplication,
-=======
->>>>>>> origin/main
   type PipelineMatchResult,
   type PipelineScrapedJob,
 } from "../tracker/pipeline-match.js";
-import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
+import { queueRowToApplicationFields } from "../tracker/apply-queue.js";
 import type { QueueRow } from "../apply/apply-queue.js";
 import { planAutomationUpsert, planEasyApplyUpsert, planReconcileUpsert } from "../tracker/automation-merge.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
@@ -400,11 +397,8 @@ export interface PipelineUpsertResult {
   inserted: number;
   updated: number;
   skipped: number;
-<<<<<<< HEAD
   /** Avisos nuevos cerrados al primer scrape — skip insert (#408). */
   skipped_closed_never_visible: number;
-=======
->>>>>>> origin/main
 }
 
 function applicationFilter(fields: ReturnType<typeof buildDocFields>) {
@@ -426,10 +420,7 @@ export async function upsertPipelineMatches(
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
-<<<<<<< HEAD
   let skipped_closed_never_visible = 0;
-=======
->>>>>>> origin/main
   const now = new Date();
   const analyzedAt = now.toISOString();
 
@@ -440,15 +431,12 @@ export async function upsertPipelineMatches(
     const filter = applicationFilter(fields);
 
     const existing = await col.findOne(filter);
-<<<<<<< HEAD
 
     if (!shouldIngestClosedApplication(match, scraped, existing)) {
       skipped_closed_never_visible++;
       continue;
     }
 
-=======
->>>>>>> origin/main
     const plan = planAutomationUpsert(existing, fields, "pipeline");
 
     if (plan.action === "skip") {
@@ -476,11 +464,7 @@ export async function upsertPipelineMatches(
     else skipped++;
   }
 
-<<<<<<< HEAD
   return { inserted, updated, skipped, skipped_closed_never_visible };
-=======
-  return { inserted, updated, skipped };
->>>>>>> origin/main
 }
 
 export interface EasyApplyUpsertResult {
@@ -488,10 +472,7 @@ export interface EasyApplyUpsertResult {
 }
 
 export interface ReconcileUpsertResult {
-<<<<<<< HEAD
   inserted: number;
-=======
->>>>>>> origin/main
   updated: number;
   skipped: number;
 }
@@ -546,10 +527,7 @@ export async function upsertReconcileRows(
 ): Promise<ReconcileUpsertResult> {
   const db = getDb();
   const col = db.collection<ApplicationDoc>("applications");
-<<<<<<< HEAD
   let inserted = 0;
-=======
->>>>>>> origin/main
   let updated = 0;
   let skipped = 0;
   const now = new Date();
@@ -569,7 +547,6 @@ export async function upsertReconcileRows(
       continue;
     }
 
-<<<<<<< HEAD
     if (plan.action === "insert") {
       await col.insertOne({
         _id: new ObjectId(),
@@ -582,8 +559,6 @@ export async function upsertReconcileRows(
       continue;
     }
 
-=======
->>>>>>> origin/main
     const result = await col.updateOne(
       { _id: existing!._id },
       { $set: { ...plan.update, updatedAt: now } }
@@ -592,9 +567,5 @@ export async function upsertReconcileRows(
     else skipped++;
   }
 
-<<<<<<< HEAD
   return { inserted, updated, skipped };
-=======
-  return { updated, skipped };
->>>>>>> origin/main
 }

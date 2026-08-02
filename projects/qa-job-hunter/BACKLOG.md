@@ -81,6 +81,18 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 |----|--------|----------|-------|
 | B-38-34 | [#429](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/429) | Medium | SPIKE Gmail Realizados → A-realizado; ~15 mails vs count 0 dashboard |
 
+## Botonera web workflow (B-40)
+
+| Fase | Backlog ID | Issue | Notas |
+|------|------------|-------|-------|
+| Spike workflow completo | B-40-0 | [#318](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/318) | no solo EA · tasks #319–#322 |
+
+**Visión:** API/DB web canónica; Excel solo import/export transición; un store (no `/api/results` paralelo). B-06 Mongo → colección `applications`. **No cerrar** [#52](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/52) jobs UI hasta post-spike.
+
+**Orden:** B-38 spike **antes** de implementar B-08 / B-14 como listas o stores aparte — tracking y home futura viven en el tracker web.
+
+---
+
 ## Backlog — execution order
 
 | Order | ID | Priority | Scope |
@@ -96,7 +108,7 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | 7 | B-09 | Medium | Generic multi-vertical app (profiles beyond QA) |
 | 8 | B-10 | Medium | Monetization research |
 | 9 | B-12 | Medium | Multi-user + OAuth (LinkedIn, Google, Facebook) |
-| 10 | B-16 | Medium | Cloud deploy (Atlas, hosted app, LLM cloud, cron agent) |
+| 10 | B-16 | Medium | Cloud deploy (Atlas, Railway/Render, LLM cloud, cron agent) |
 | 11 | B-11 | Low | Tokenized / Web3 PoC (exploratory) |
 
 > **Product decision:** B-13 runs right after MongoDB (B-06). B-07 (agent) runs after B-13 so the scheduler scrapes all enabled sources.

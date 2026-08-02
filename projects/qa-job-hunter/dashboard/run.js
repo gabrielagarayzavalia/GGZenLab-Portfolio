@@ -114,7 +114,7 @@ async function fetchStatus() {
 applyBtn?.addEventListener("click", async () => {
   if (selectedMode() === "productive") {
     const ok = await showRunConfirm(
-      "Modo PRODUCTIVO: va a enviar postulaciones reales en LinkedIn. ¿Continuar?",
+      "Modo PRODUCTIVO: va a enviar postulaciones reales en LinkedIn. ¿Continuar?>",
       { testId: "run-confirm-productive", title: "Modo productivo" }
     );
     if (!ok) return;
@@ -143,7 +143,7 @@ applyBtn?.addEventListener("click", async () => {
 
 cancelBtn?.addEventListener("click", async () => {
   const ok = await showRunConfirm(
-    "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?",
+    "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?>",
     { testId: "run-confirm-cancel", title: "Detener corrida" }
   );
   if (!ok) return;

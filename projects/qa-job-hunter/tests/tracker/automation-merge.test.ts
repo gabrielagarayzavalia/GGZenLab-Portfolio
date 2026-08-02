@@ -23,10 +23,12 @@ test("planAutomationUpsert insert sin existing", () => {
   }
 });
 
-<<<<<<< HEAD
 test("planAutomationUpsert actualiza matchedSkills en estado protegido (#335)", () => {
   const plan = planAutomationUpsert(
-    { estado: "Enviada", analysis: { source: "pipeline", analyzedAt: "2026-01-01" } },
+    {
+      estado: "Enviada",
+      analysis: { source: "pipeline", analyzedAt: "2026-01-01" },
+    },
     {
       ...baseFields,
       analysis: {
@@ -44,8 +46,6 @@ test("planAutomationUpsert actualiza matchedSkills en estado protegido (#335)", 
   }
 });
 
-=======
->>>>>>> origin/main
 test("planAutomationUpsert skip estado protegido sin metadata scrape", () => {
   const plan = planAutomationUpsert({ estado: "Enviada" }, baseFields);
   assert.equal(plan.action, "skip");

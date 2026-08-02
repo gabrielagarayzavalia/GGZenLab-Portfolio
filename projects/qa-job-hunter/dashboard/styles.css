@@ -80,7 +80,7 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
   display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; width: 100%;
   padding: 0.35rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 0.35rem;
 }
-.filter-control { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); cursor: pointer; padding: 0.15rem 0.25rem; border-radius: 4px; }
+.filter-control { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); cursor: pointer; padding: 0.15rem 0.25rem; border-radius: 44px; }
 .filter-control:hover { color: var(--text); background: var(--surface-hover); }
 .filter-control input { cursor: pointer; flex-shrink: 0; }
 .filter-label.filter-count--zero { opacity: 0.55; }
@@ -186,10 +186,6 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 }
 .feedback-disclosure__toggle:hover { background: var(--surface-hover); color: var(--text); }
 .feedback-disclosure__toggle[aria-expanded="true"] { color: var(--text); border-bottom: 1px solid var(--border); }
-.feedback-disclosure__chevron {
-  display: inline-block; font-size: 0.65rem; transition: transform 0.15s ease; color: var(--text-muted);
-}
-.feedback-disclosure__toggle[aria-expanded="true"] .feedback-disclosure__chevron { transform: rotate(90deg); }
 .feedback-disclosure__panel { padding: 0.75rem; }
 .feedback-disclosure__panel.hidden { display: none; }
 .feedback-section h3 { margin: 0 0 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
@@ -267,7 +263,6 @@ body { margin: 0; min-height: 100vh; font-family: var(--font); background: var(-
 @media (prefers-reduced-motion: reduce) {
   .banner-assessment { animation: none; }
 }
-
 .empty-state .hint { font-size: 0.85rem; margin-top: 0.5rem; }
 .empty-state code { background: var(--surface); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
 .detail__header { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }

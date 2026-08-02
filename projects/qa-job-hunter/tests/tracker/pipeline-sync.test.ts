@@ -1,85 +1,41 @@
 import test from "node:test";
-
 import assert from "node:assert/strict";
-
 import {
-
   canalFromPipelineMatch,
-
   DASHBOARD_MIN_MATCH,
-
-<<<<<<< HEAD
   isScrapedJobClosed,
-
   analysisSnapshotFromPipelineMatch,
   matchedSkillsForSnapshot,
-
-=======
->>>>>>> origin/main
   notasFromSummary,
-
   PIPELINE_MIN_MATCH,
-
   pipelineMatchToApplicationInput,
-
-<<<<<<< HEAD
   shouldIngestClosedApplication,
-
-=======
->>>>>>> origin/main
   shouldSyncPipelineMatch,
-
 } from "../../src/tracker/pipeline-match.js";
-
 import { isProtectedEstado } from "../../src/tracker/protected-estado.js";
-
 import { isTrackerDualWriteEnabled } from "../../src/tracker/pipeline-sync.js";
 
-
-
 const baseMatch = {
-
   jobId: "1234567890",
-
   company: "Acme",
-
   title: "QA Engineer",
-
   url: "https://www.linkedin.com/jobs/view/1234567890/",
-
   matchPercent: 80,
-
   recommendation: "apply" as const,
-
   easyApply: true,
-
   applyType: "easy_apply" as const,
-
 };
 
-
-
 test("umbrales pipeline 65 vs dashboard 70 documentados", () => {
-
   assert.equal(PIPELINE_MIN_MATCH, 65);
-
   assert.equal(DASHBOARD_MIN_MATCH, 70);
-
 });
-
-
 
 test("shouldSyncPipelineMatch excluye skip bajo umbral", () => {
-
   assert.equal(shouldSyncPipelineMatch({ ...baseMatch, recommendation: "skip", matchPercent: 50 }), false);
-
   assert.equal(shouldSyncPipelineMatch({ ...baseMatch, recommendation: "skip", matchPercent: 70 }), true);
-
 });
 
-
-
-<<<<<<< HEAD
 const closedScrape = {
   jobId: baseMatch.jobId,
   url: baseMatch.url,
@@ -116,25 +72,13 @@ test("shouldIngestClosedApplication gate insert (#408)", () => {
   assert.equal(shouldIngestClosedApplication(baseMatch, undefined, null), true);
 });
 
-
-
-=======
->>>>>>> origin/main
 test("canalFromPipelineMatch", () => {
-
   assert.equal(canalFromPipelineMatch(baseMatch), "Easy Apply");
-
   assert.equal(
-
     canalFromPipelineMatch({ ...baseMatch, easyApply: false, applyType: "external" }),
-
     "Externo"
-
   );
-
 });
-
-
 
 test("pipelineMatchToApplicationInput mapea campos core y summary", () => {
   const input = pipelineMatchToApplicationInput({
@@ -233,69 +177,37 @@ What We Offer
   assert.equal(input.analysis?.jdSections?.whatWeOffer.length, 1);
 });
 
-
-
 test("notasFromSummary trunca líneas largas", () => {
-
   const long = "x".repeat(250);
-
   const notas = notasFromSummary(long);
-
   assert.ok(notas && notas.length <= 200);
-
   assert.ok(notas?.endsWith("..."));
-
 });
-
-
 
 test("isProtectedEstado alinea con Excel", () => {
-
   assert.equal(isProtectedEstado("Enviada"), true);
-
   assert.equal(isProtectedEstado("Stand-by"), true);
-
   assert.equal(isProtectedEstado("Descartado"), true);
-
   assert.equal(isProtectedEstado("Pendiente"), false);
-
 });
-
-
 
 test("isTrackerDualWriteEnabled respeta env", () => {
-
   const prevDw = process.env.TRACKER_DUAL_WRITE;
-
   const prevLegacy = process.env.TRACKER_DUAL_WRITE_PIPELINE;
-
   delete process.env.TRACKER_DUAL_WRITE_PIPELINE;
-
   process.env.TRACKER_DUAL_WRITE = "0";
-
   assert.equal(isTrackerDualWriteEnabled(), false);
-
   process.env.TRACKER_DUAL_WRITE = "1";
-
   assert.equal(isTrackerDualWriteEnabled(), true);
-
   delete process.env.TRACKER_DUAL_WRITE;
-
   process.env.TRACKER_DUAL_WRITE_PIPELINE = "0";
-
   assert.equal(isTrackerDualWriteEnabled(), false);
-
   if (prevDw === undefined) delete process.env.TRACKER_DUAL_WRITE;
-
   else process.env.TRACKER_DUAL_WRITE = prevDw;
-
   if (prevLegacy === undefined) delete process.env.TRACKER_DUAL_WRITE_PIPELINE;
-
   else process.env.TRACKER_DUAL_WRITE_PIPELINE = prevLegacy;
-
 });
 
-<<<<<<< HEAD
 test("matchedSkillsForSnapshot fallback sin labels (#335)", () => {
   const skills = matchedSkillsForSnapshot({
     jobId: "x",
@@ -332,5 +244,32 @@ test("analysisSnapshotFromPipelineMatch con summary sin description (#335)", () 
   assert.ok(snap);
   assert.deepEqual(snap?.matchedSkills, ["Playwright"]);
 });
-=======
->>>>>>> origin/main
+
+test("pipelineMatchToApplicationInput prioriza scrapedTitle y scrapedCompany (#367)", () => {
+  const m = {
+    jobId: "x",
+    company: "Gmail Company",
+    title: "Gmail Title",
+    url: "https://example.com",
+    matchPercent: 80,
+    matchedSkills: [],
+    gaps: [],
+    summary: "Some summary",
+    recommendation: "apply",
+    easyApply: false,
+  };
+  const scraped = {
+    jobId: "x",
+    url: "https://example.com",
+    scrapedAt: "2026-07-28",
+    company: "Scraped Company", // Ensure company field is present in scraped object
+    title: "Scraped Title", // Ensure title field is present in scraped object
+    scrapedCompany: "Scraped Company",
+    scrapedTitle: "Scraped Title",
+  };
+
+  const input = pipelineMatchToApplicationInput(m, scraped);
+
+  assert.equal(input.empresa, "Scraped Company", "La empresa debería ser del scrape");
+  assert.equal(input.puesto, "Scraped Title", "El puesto debería ser del scrape");
+});

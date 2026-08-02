@@ -1,7 +1,6 @@
 import ExcelJS from "exceljs";
 import type { TrackerApplication } from "../types/tracker-application.js";
 import { listApplications } from "../db/applications.js";
-<<<<<<< HEAD
 import { extractJobId } from "./linkedin-url.js";
 import { resolveEmpleosTrackerTemplatePath } from "./excel-template-path.js";
 import { finalizeCanonicalWorkbook } from "./excel-canonical-finalize.js";
@@ -21,28 +20,19 @@ import {
 
 /** Headers canónicos (11 cols) — mismo orden que COL en applied-list. */
 export const EMPLEOS_HEADERS = [
-=======
-
-const HEADERS = [
->>>>>>> origin/main
   "Match",
   "Puesto",
   "Empresa",
   "LinkedIn",
   "Canal",
   "Estado",
-<<<<<<< HEAD
   "Fecha Aplicación",
-=======
-  "Fecha aplicación",
->>>>>>> origin/main
   "Portal externo",
   "Próximo paso",
   "Notas",
   "Mis comentarios",
 ] as const;
 
-<<<<<<< HEAD
 function clearDataRows(ws: ExcelJS.Worksheet): void {
   const last = lastDataRow(ws);
   for (let r = 2; r <= last; r++) {
@@ -78,30 +68,10 @@ function writeApplicationRow(row: ExcelJS.Row, app: TrackerApplication): void {
 }
 
 /** Genera .xlsx canónico desde template Empleos_Tracker (backup / transición B-38-7 / #391). */
-=======
-function rowFromApplication(app: TrackerApplication): (string | number)[] {
-  return [
-    app.matchPercent,
-    app.puesto,
-    app.empresa,
-    app.linkedinUrl,
-    app.canal,
-    app.estado,
-    app.fechaAplicacion ?? "",
-    app.portalExterno ?? "",
-    app.proximoPaso ?? "",
-    app.notas ?? "",
-    app.misComentarios ?? "",
-  ];
-}
-
-/** Genera .xlsx compatible con hoja Empleos (backup / transición B-38-7). */
->>>>>>> origin/main
 export async function buildApplicationsXlsxBuffer(
   applications?: TrackerApplication[]
 ): Promise<Buffer> {
   const rows = applications ?? (await listApplications({ limit: 10000 }));
-<<<<<<< HEAD
   const templatePath = resolveEmpleosTrackerTemplatePath();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(templatePath);
@@ -135,14 +105,6 @@ export async function buildApplicationsXlsxBuffer(
   }
 
   finalizeCanonicalWorkbook(wb);
-=======
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Empleos");
-  ws.addRow([...HEADERS]);
-  for (const app of rows) {
-    ws.addRow(rowFromApplication(app));
-  }
->>>>>>> origin/main
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
 }

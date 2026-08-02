@@ -59,6 +59,46 @@ export type AutomationMergePlan =
   | { action: "update"; update: Partial<AutomationApplicationFields> & { updatedBy: string } }
   | { action: "skip" };
 
+/** Fusiona snapshot pipeline sin pisar skills/gaps existentes con arrays vacíos (#335). */
+export function mergePipelineAnalysisSnapshot(
+  existing: AnalysisSnapshot | undefined,
+  incoming: AnalysisSnapshot
+): { merged: AnalysisSnapshot; changed: boolean } {
+  const merged: AnalysisSnapshot = {
+    ...existing,
+    ...incoming,
+    matchedSkills: incoming.matchedSkills?.length
+      ? incoming.matchedSkills
+      : existing?.matchedSkills,
+    gaps: incoming.gaps?.length ? incoming.gaps : existing?.gaps,
+    cvSuggestions: incoming.cvSuggestions?.length
+      ? incoming.cvSuggestions
+      : existing?.cvSuggestions,
+    description: incoming.description?.trim() ? incoming.description : existing?.description,
+    summary: incoming.summary?.trim() ? incoming.summary : existing?.summary,
+    jdSections: incoming.jdSections ?? existing?.jdSections,
+    location: incoming.location ?? existing?.location,
+    modality: incoming.modality ?? existing?.modality,
+    datePosted: incoming.datePosted ?? existing?.datePosted,
+    searchTerm: incoming.searchTerm ?? existing?.searchTerm,
+    jobClosed: incoming.jobClosed ?? existing?.jobClosed,
+    acceptingApplications: incoming.acceptingApplications ?? existing?.acceptingApplications,
+    source: existing?.source ?? incoming.source ?? "pipeline",
+    analyzedAt: incoming.analyzedAt ?? existing?.analyzedAt,
+  };
+
+  const snapshotKey = (a: AnalysisSnapshot | undefined) =>
+    JSON.stringify({
+      matchedSkills: a?.matchedSkills,
+      gaps: a?.gaps,
+      summary: a?.summary,
+      description: a?.description?.slice(0, 120),
+      jobClosed: a?.jobClosed,
+    });
+
+  return { merged, changed: snapshotKey(existing) !== snapshotKey(merged) };
+}
+
 /** Solo metadata de scrape (#373): no toca estado/notas de filas protegidas. */
 function planScrapeMetadataOnlyUpdate(
   existing: AutomationExistingDoc,
@@ -82,19 +122,12 @@ function planScrapeMetadataOnlyUpdate(
 
   const incoming = merged.analysis;
   if (incoming) {
-    const nextJobClosed = incoming.jobClosed;
-    const nextAccepting = incoming.acceptingApplications;
-    const analysisChanged =
-      (nextJobClosed !== undefined && nextJobClosed !== existing.analysis?.jobClosed) ||
-      (nextAccepting !== undefined && nextAccepting !== existing.analysis?.acceptingApplications);
-
+    const { merged: analysisMerged, changed: analysisChanged } = mergePipelineAnalysisSnapshot(
+      existing.analysis,
+      incoming
+    );
     if (analysisChanged) {
-      update.analysis = {
-        ...existing.analysis,
-        ...(nextJobClosed !== undefined ? { jobClosed: nextJobClosed } : {}),
-        ...(nextAccepting !== undefined ? { acceptingApplications: nextAccepting } : {}),
-        ...(existing.analysis ? {} : { source: incoming.source ?? "pipeline", analyzedAt: incoming.analyzedAt }),
-      };
+      update.analysis = analysisMerged;
       changed = true;
     }
   }

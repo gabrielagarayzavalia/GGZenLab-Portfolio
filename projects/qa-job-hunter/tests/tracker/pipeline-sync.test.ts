@@ -10,6 +10,9 @@ import {
 
   isScrapedJobClosed,
 
+  analysisSnapshotFromPipelineMatch,
+  matchedSkillsForSnapshot,
+
   notasFromSummary,
 
   PIPELINE_MIN_MATCH,
@@ -283,3 +286,39 @@ test("isTrackerDualWriteEnabled respeta env", () => {
 
 });
 
+test("matchedSkillsForSnapshot fallback sin labels (#335)", () => {
+  const skills = matchedSkillsForSnapshot({
+    jobId: "x",
+    company: "Co",
+    title: "QA",
+    url: "https://example.com",
+    matchPercent: 100,
+    matchedSkills: [],
+    gaps: [],
+    summary: "Encaje sólido (100%) — CV automation.",
+    recommendation: "apply",
+    easyApply: true,
+  });
+  assert.ok(skills?.length);
+  assert.match(skills![0], /automation/i);
+});
+
+test("analysisSnapshotFromPipelineMatch con summary sin description (#335)", () => {
+  const snap = analysisSnapshotFromPipelineMatch(
+    {
+      jobId: "x",
+      company: "Co",
+      title: "QA",
+      url: "https://example.com",
+      matchPercent: 95,
+      matchedSkills: ["Playwright"],
+      gaps: [],
+      summary: "Encaje sólido (95%) — CV automation.",
+      recommendation: "apply",
+      easyApply: true,
+    },
+    null
+  );
+  assert.ok(snap);
+  assert.deepEqual(snap?.matchedSkills, ["Playwright"]);
+});

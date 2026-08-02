@@ -590,3 +590,21 @@ test("composeMatchJobsFromApplications oculta cerrados LinkedIn y filter=closed"
   assert.equal(closedOnly.matchedJobs[0].id, "closed-job");
   assert.equal(closedOnly.matchedJobs[0].jobClosed, true);
 });
+
+test("applicationToJobMatch fallback skills cuando analysis vacío y % alto (#335)", () => {
+  const job = applicationToJobMatch(
+    app({
+      matchPercent: 100,
+      inLatestAnalysis: true,
+      analysis: {
+        source: "pipeline",
+        analyzedAt: "2026-07-28",
+        summary: "Encaje sólido (100%) — CV automation.",
+        matchedSkills: [],
+        gaps: [],
+      },
+    })
+  );
+  assert.ok(job.matchedSkills.length > 0);
+  assert.match(job.matchedSkills[0], /automation|Requisitos/i);
+});

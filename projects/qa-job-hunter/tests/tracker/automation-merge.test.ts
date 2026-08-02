@@ -23,6 +23,29 @@ test("planAutomationUpsert insert sin existing", () => {
   }
 });
 
+test("planAutomationUpsert actualiza matchedSkills en estado protegido (#335)", () => {
+  const plan = planAutomationUpsert(
+    {
+      estado: "Enviada",
+      analysis: { source: "pipeline", analyzedAt: "2026-01-01" },
+    },
+    {
+      ...baseFields,
+      analysis: {
+        source: "pipeline",
+        analyzedAt: "2026-07-28",
+        matchedSkills: ["Playwright", "API testing"],
+        summary: "Encaje sólido (95%) — CV automation.",
+      },
+    }
+  );
+  assert.equal(plan.action, "update");
+  if (plan.action === "update") {
+    assert.deepEqual(plan.update.analysis?.matchedSkills, ["Playwright", "API testing"]);
+    assert.equal(plan.update.estado, undefined);
+    assert.equal(plan.update.puesto, undefined);
+  }
+});
 test("planAutomationUpsert skip estado protegido sin metadata scrape", () => {
   const plan = planAutomationUpsert({ estado: "Enviada" }, baseFields);
   assert.equal(plan.action, "skip");

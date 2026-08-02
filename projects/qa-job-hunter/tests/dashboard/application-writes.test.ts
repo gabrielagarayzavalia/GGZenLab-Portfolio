@@ -4,7 +4,16 @@ import {
   patchForApplicationStatus,
   patchForRejectMatch,
   patchForUndoReject,
+<<<<<<< HEAD
+  canMarkAssessmentPending,
 } from "../../src/dashboard/application-writes.js";
+import {
+  gmailAssessmentDoneProximoPaso,
+  gmailAssessmentPendingProximoPaso,
+} from "../../src/tracker/gmail-assessment-label.js";
+=======
+} from "../../src/dashboard/application-writes.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 import type { TrackerApplication } from "../../src/types/tracker-application.js";
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
@@ -53,6 +62,110 @@ test("patchForApplicationStatus desmarcar desde Stand-by → Pendiente", () => {
   assert.equal(patch.estado, "Pendiente");
 });
 
+<<<<<<< HEAD
+test("patchForApplicationStatus assessment_pending desde Enviada → A-pendiente", () => {
+  const { patch, error } = patchForApplicationStatus(
+    "assessment_pending",
+    app({
+      estado: "Enviada",
+      fechaAplicacion: "2026-01-15",
+      proximoPaso: gmailAssessmentPendingProximoPaso(),
+    })
+  );
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "A-pendiente");
+  assert.match(patch.notas ?? "", /Assessment pendiente \(dashboard\)/);
+  assert.equal(patch.proximoPaso, gmailAssessmentPendingProximoPaso());
+});
+
+test("patchForApplicationStatus assessment_pending desde Borrador abierto", () => {
+  const { patch, error } = patchForApplicationStatus(
+    "assessment_pending",
+    app({
+      estado: "Borrador abierto",
+      proximoPaso: "Gmail Entrevistas-Assessments/Pendientes",
+    })
+  );
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "A-pendiente");
+});
+
+test("patchForApplicationStatus assessment_pending rechaza sin señal Gmail", () => {
+  const { error } = patchForApplicationStatus(
+    "assessment_pending",
+    app({ estado: "Enviada", fechaAplicacion: "2026-01-15" })
+  );
+  assert.match(error ?? "", /Gmail Entrevistas-Assessments\/Pendientes/);
+});
+
+test("patchForApplicationStatus assessment_pending rechaza Pendiente puro", () => {
+  const { error } = patchForApplicationStatus("assessment_pending", app({ estado: "Pendiente" }));
+  assert.match(error ?? "", /solo después de aplicar/);
+});
+
+test("canMarkAssessmentPending permite legacy A-pendiente", () => {
+  assert.equal(canMarkAssessmentPending(app({ estado: "A-pendiente" })), true);
+});
+
+test("canMarkAssessmentPending bloquea Pendiente puro", () => {
+  assert.equal(canMarkAssessmentPending(app({ estado: "Pendiente" })), false);
+});
+
+test("patchForApplicationStatus desmarcar A-pendiente con fecha → Enviada", () => {
+  const { patch, error } = patchForApplicationStatus(
+    null,
+    app({ estado: "A-pendiente", fechaAplicacion: "2026-01-15" })
+  );
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "Enviada");
+});
+
+test("patchForApplicationStatus desmarcar A-pendiente sin fecha → Pendiente", () => {
+  const { patch, error } = patchForApplicationStatus(null, app({ estado: "A-pendiente" }));
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "Pendiente");
+});
+
+test("patchForApplicationStatus assessment_done desde A-pendiente → A-realizado", () => {
+  const { patch, error } = patchForApplicationStatus(
+    "assessment_done",
+    app({
+      estado: "A-pendiente",
+      proximoPaso: gmailAssessmentPendingProximoPaso(),
+    })
+  );
+  assert.equal(error, undefined);
+  assert.equal(patch.estado, "A-realizado");
+  assert.equal(patch.proximoPaso, gmailAssessmentDoneProximoPaso());
+  assert.match(patch.notas ?? "", /Assessment realizado \(dashboard\)/);
+});
+
+test("patchForApplicationStatus assessment_done rechaza si no es A-pendiente", () => {
+  const { error } = patchForApplicationStatus(
+    "assessment_done",
+    app({ estado: "Enviada", fechaAplicacion: "2026-01-15" })
+  );
+  assert.match(error ?? "", /solo desde A-pendiente/);
+});
+
+test("patchForApplicationStatus assessment_pending rechaza desde A-realizado", () => {
+  const { error } = patchForApplicationStatus(
+    "assessment_pending",
+    app({
+      estado: "A-realizado",
+      proximoPaso: gmailAssessmentDoneProximoPaso(),
+    })
+  );
+  assert.match(error ?? "", /No se puede volver a A-pendiente/);
+});
+
+test("patchForApplicationStatus desmarcar A-realizado bloqueado", () => {
+  const { error } = patchForApplicationStatus(null, app({ estado: "A-realizado" }));
+  assert.match(error ?? "", /No se puede desmarcar A-realizado/);
+});
+
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 test("patchForRejectMatch setea matchRejected y Stand-by", () => {
   const patch = patchForRejectMatch("No es QA", app());
   assert.equal(patch.matchRejected, true);

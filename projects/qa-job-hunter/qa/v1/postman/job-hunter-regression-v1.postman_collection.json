@@ -1,0 +1,540 @@
+{
+  "info": {
+    "_postman_id": "jh-regression-v1",
+    "name": "Job Hunter — Regression v1 (REG-V1)",
+    "description": "Regression API manual — casos REG-V1-* HTTP en qa/v1/regression-green-path-v1.md. UI/LinkedIn: ver doc markdown.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3847"
+    },
+    {
+      "key": "sampleJobId",
+      "value": ""
+    },
+    {
+      "key": "sampleApplicationId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup",
+      "item": [
+        {
+          "name": "SETUP GET match-jobs (set sampleJobId)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.jobs?.length > 0 && json.jobs[0].id) {",
+                  "    const jobId = String(json.jobs[0].id);",
+                  "    pm.collectionVariables.set('sampleJobId', jobId);",
+                  "    pm.environment.set('sampleJobId', jobId);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Match Jobs",
+      "item": [
+        {
+          "name": "REG-V1-04 GET match-jobs filter applied",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=applied"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('filter applied 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Match Jobs — filtros",
+      "item": [
+        {
+          "name": "REG-V1-04 GET match-jobs filter=unmarked",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=unmarked"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-04 filter unmarked 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-04 GET match-jobs filter=not_applied",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=not_applied"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-04 filter not_applied 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-04 GET match-jobs filter=not_selected",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=not_selected"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-04 filter not_selected 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-04 GET match-jobs filter=rejected",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=rejected"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-04 filter rejected 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-04 GET match-jobs filter=closed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard/match-jobs?filter=closed"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-04 filter closed 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "API legacy",
+      "item": [
+        {
+          "name": "REG-V1-07 GET /api/application-status (legacy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-07 status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "item": [
+        {
+          "name": "REG-V1-06 GET /api/feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/feedback"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-06 status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard Writes",
+      "item": [
+        {
+          "name": "REG-V1-20 POST application-status sin header (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"00000\",\n  \"status\": \"applied\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-20 status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard Writes — variantes",
+      "item": [
+        {
+          "name": "REG-V1-16 POST application-status applied",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"status\": \"applied\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-16 status 200 or 404', () => pm.expect([200,404,503]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test('Enviada', () => pm.expect(pm.response.json().application.estado).to.eql('Enviada'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-17 POST application-status not_applied",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"status\": \"not_applied\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-17 status 200 or 404', () => pm.expect([200,404,503]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test('Stand-by', () => pm.expect(pm.response.json().application.estado).to.eql('Stand-by'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-18 POST application-status not_selected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"status\": \"not_selected\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-18 status 200 or 404', () => pm.expect([200,404,503]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test('Cerrado', () => pm.expect(pm.response.json().application.estado).to.eql('Cerrado'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-19 POST application-status desmarcar (null)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"status\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-19 status 200 or 404', () => pm.expect([200,404,503]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test('Pendiente', () => pm.expect(pm.response.json().application.estado).to.eql('Pendiente'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-21 POST application-status jobId inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"99999999\",\n  \"status\": \"applied\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/application-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('REG-V1-21 status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Match reject / feedback",
+      "item": [
+        {
+          "name": "REG-V1-22 POST reject-match con razón",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"reason\": \"REG-V1-22 regression test\"\n}"
+            },
+            "url": "{{baseUrl}}/api/dashboard/reject-match"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-22 status 200 or 404', () => pm.expect([200,404,503]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-23 DELETE undo reject-match",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tracker-User",
+                "value": "1"
+              }
+            ],
+            "url": "{{baseUrl}}/api/dashboard/reject-match/{{sampleJobId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-23 status 200 or 404', () => pm.expect([200,404,503]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REG-V1-25 POST /api/feedback/reject (legacy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{sampleJobId}}\",\n  \"title\": \"REG-V1-25 regression title\",\n  \"company\": \"Test Co\",\n  \"searchTerm\": \"QA\",\n  \"matchPercent\": 75,\n  \"reason\": \"REG-V1-25 legacy feedback reject\"\n}"
+            },
+            "url": "{{baseUrl}}/api/feedback/reject"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sampleJobId')) pm.test.skip('Set sampleJobId');",
+                  "pm.test('REG-V1-25 status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('rejections array', () => pm.expect(pm.response.json().rejections).to.be.an('array'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

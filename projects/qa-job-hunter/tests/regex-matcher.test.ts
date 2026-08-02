@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { JobListing } from "../src/types.js";
+<<<<<<< HEAD
+import { analyzeJobRegex, cleanDescription } from "../src/regex-matcher.js";
+import { FULLSTACK_4439380038_JD } from "./jd/fixtures/fullstack-4439380038.ts";
+=======
 import { analyzeJobRegex } from "../src/regex-matcher.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 const FOTON_DESCRIPTION = `
 About the job
@@ -111,3 +116,16 @@ test("100% solo cuando no quedan gaps de requisitos", () => {
     assert.ok(result.matchPercent < 100, "con gaps no debería ser 100%");
   }
 });
+<<<<<<< HEAD
+
+test("cleanDescription — strips LinkedIn chrome from FullStack fixture (#369)", () => {
+  const cleaned = cleanDescription(FULLSTACK_4439380038_JD);
+
+  assert.doesNotMatch(cleaned, /people clicked apply/i);
+  assert.doesNotMatch(cleaned, /\d+\s+days?\s+ago/i);
+  assert.doesNotMatch(cleaned, /At FullStack we connect/i);
+  assert.match(cleaned, /Manual QA/i);
+  assert.match(cleaned, /Postman/i);
+});
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a

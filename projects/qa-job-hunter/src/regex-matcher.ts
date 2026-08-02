@@ -5,7 +5,11 @@
 // ============================================================
 
 import type { JobListing } from "./types.js";
+<<<<<<< HEAD
+import { hasParsedJdSections, parseJdSections } from "./jd/parse-sections.js";
+=======
 import { parseJdSections } from "./jd/parse-sections.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 export interface RegexAnalysis {
   matchPercent: number;
@@ -74,7 +78,7 @@ const SKILL_PATTERNS: { label: string; patterns: RegExp[]; weight: number }[] = 
   { label: "ai/ml testing", patterns: [/machine learning/i, /\bllm\b/i, /ai[- ]?(generated|powered|driven)/i, /\bai\s+(testing|test|models?|agents?)\b/i, /non-deterministic/i], weight: 1 },
 ];
 
-const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|indispensable|m[ií]nimo|minimum|essential/i;
+const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|m[ií]nimo|minimum|essential/i;
 const NICE_HINTS = /preferred|nice to have|plus|deseable|valorado|bonus/i;
 const AUTOMATION_JD = /automation|automatiz|selenium|playwright|cypress|sdet/i;
 const GIG_SIGNALS = /\b(freelance|freelancer|freelancers|gig|espor[aá]dic)\b/i;
@@ -94,8 +98,41 @@ const JD_END_MARKERS = [
   "Looking for talent?", "More jobs",
 ];
 
-function cleanDescription(desc: string): string {
-  let text = desc;
+const LINKEDIN_CHROME_LINE =
+  /^(?:\d+\s+(?:day|days|week|weeks|month|months)\s+ago(?:\s*[·•|]\s*\d+\s+people\s+clicked\s+apply)?|\d+\s+people\s+clicked\s+apply|Promoted|Responses?\s+managed\s+outside\s+LinkedIn)$/i;
+
+function stripLinkedInChrome(text: string): string {
+  const withoutInline = text
+    .replace(/\s*[·•|]\s*\d+\s+people\s+clicked\s+apply/gi, "")
+    .replace(/\d+\s+(?:days?|weeks?|months?)\s+ago/gi, "")
+    .replace(/\d+\s+people\s+clicked\s+apply/gi, "")
+    .trim();
+
+  return withoutInline
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !LINKEDIN_CHROME_LINE.test(line))
+    .join("\n");
+}
+
+function jdSectionsToMatchText(sections: ReturnType<typeof parseJdSections>): string {
+  const parts: string[] = [];
+  if (sections.requirements.length > 0) {
+    parts.push(
+      "Requirements:\n" + sections.requirements.map((item) => `• ${item}`).join("\n")
+    );
+  }
+  if (sections.niceToHave.length > 0) {
+    parts.push(
+      "Nice To Have:\n" + sections.niceToHave.map((item) => `• ${item}`).join("\n")
+    );
+  }
+  return parts.join("\n\n");
+}
+
+/** Limpia chrome LinkedIn y preamble antes de regex match (#369). */
+export function cleanDescription(desc: string): string {
+  let text = stripLinkedInChrome(desc);
   for (const m of JD_START_MARKERS) {
     const i = text.indexOf(m);
     if (i >= 0) {
@@ -108,7 +145,14 @@ function cleanDescription(desc: string): string {
     const i = text.indexOf(m);
     if (i >= 0 && i < cut) cut = i;
   }
-  return text.slice(0, cut).replace(/…\s*more\s*$/i, "").trim();
+  text = text.slice(0, cut).replace(/…\s*more\s*$/i, "").trim();
+
+  const parsed = parseJdSections(text);
+  if (hasParsedJdSections(parsed)) {
+    return jdSectionsToMatchText(parsed);
+  }
+
+  return text;
 }
 
 interface JobRequirement {

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
 
-import { planReconcileUpsert } from "../../src/tracker/automation-merge.js";
+import { planReconcileUpsert, canReconcilePromoteEstado } from "../../src/tracker/automation-merge.js";
 import { excelRowToReconcileFields, isReconcileSyncableRow } from "../../src/tracker/reconcile-row-map.js";
 import { syncReconcileToTracker } from "../../src/tracker/reconcile-sync.js";
 import { connect, disconnect } from "../../src/db/client.js";
@@ -24,8 +24,67 @@ const baseFields = {
   estado: "Pendiente" as const,
 };
 
-test("planReconcileUpsert skip sin existing", () => {
+test("planReconcileUpsert skip sin existing para Enviada", () => {
   const plan = planReconcileUpsert(null, { ...baseFields, estado: "Enviada" });
+  assert.equal(plan.action, "skip");
+});
+
+test("planReconcileUpsert insert A-pendiente sin existing con jobId", () => {
+  const plan = planReconcileUpsert(null, {
+    ...baseFields,
+    estado: "A-pendiente",
+    proximoPaso: "Gmail Entrevistas-Assessments/Pendientes",
+  });
+  assert.equal(plan.action, "insert");
+  if (plan.action === "insert") {
+    assert.equal(plan.fields.estado, "A-pendiente");
+    assert.equal(plan.fields.jobId, "123");
+  }
+});
+
+test("planReconcileUpsert sube Enviada a A-pendiente", () => {
+  const plan = planReconcileUpsert(
+    { estado: "Enviada" },
+    {
+      ...baseFields,
+      estado: "A-pendiente",
+      proximoPaso: "Gmail Entrevistas-Assessments/Pendientes",
+    }
+  );
+  assert.equal(plan.action, "update");
+  if (plan.action === "update") {
+    assert.equal(plan.update.estado, "A-pendiente");
+    assert.equal(plan.update.proximoPaso, "Gmail Entrevistas-Assessments/Pendientes");
+  }
+});
+
+test("planReconcileUpsert sube A-pendiente a A-realizado", () => {
+  const plan = planReconcileUpsert(
+    { estado: "A-pendiente" },
+    { ...baseFields, estado: "A-realizado", proximoPaso: "Gmail Entrevistas-Assessments/Realizados" }
+  );
+  assert.equal(plan.action, "update");
+  if (plan.action === "update") {
+    assert.equal(plan.update.estado, "A-realizado");
+  }
+});
+
+test("canReconcilePromoteEstado bloquea downgrade A-realizado a A-pendiente", () => {
+  assert.equal(canReconcilePromoteEstado("A-realizado", "A-pendiente"), false);
+});
+
+test("planReconcileUpsert skip estados terminales en Mongo", () => {
+  for (const estado of ["Descartado", "Duplicado", "Cerrado"]) {
+    const plan = planReconcileUpsert({ estado }, { ...baseFields, estado: "A-pendiente" });
+    assert.equal(plan.action, "skip", `debe skip mongo ${estado}`);
+  }
+});
+
+test("planReconcileUpsert skip Enviada a Pendiente", () => {
+  const plan = planReconcileUpsert(
+    { estado: "Enviada" },
+    { ...baseFields, estado: "Pendiente" }
+  );
   assert.equal(plan.action, "skip");
 });
 
@@ -54,7 +113,6 @@ test("planReconcileUpsert skip estados protegidos en Mongo", () => {
     assert.equal(plan.action, "skip", `debe skip mongo ${estado}`);
   }
 });
-
 test("planReconcileUpsert skip sin cambios", () => {
   const plan = planReconcileUpsert(
     { estado: "Pendiente", proximoPaso: "Gmail" },
@@ -160,6 +218,7 @@ test("upsertReconcileRows integración Mongo", async (t) => {
     }),
   ]);
 
+  assert.equal(result.inserted, 0);
   assert.equal(result.updated, 1);
   assert.equal(result.skipped, 0);
 

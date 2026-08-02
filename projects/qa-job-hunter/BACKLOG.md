@@ -64,6 +64,22 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | Sync match-feedback | B-38-16 | [#315](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/315) | post #314 |
 | Shim /api/results | B-38-17 | [#316](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/316) | post #313 · parte #300 |
 
+## Dashboard recovery (B-38) — Sprint 3 · Epic [#365](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/365)
+
+### Done reciente — assessment filters/counts (2026-08-01)
+
+| ID | GitHub | Notas |
+|----|--------|-------|
+| B-38-29 | [#420](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/420) | Checkbox + filtro A-pendiente |
+| B-38-32 | [#424](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/424) | Checkbox + filtro A-realizado · PR [#427](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/427) |
+| B-38-33 | [#425](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/425) | Contadores filtros · PR [#428](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/428) |
+| — | PR [#426](https://github.2com/gabrielagarayzavalia/GGZenLab-Portfolio/pull/426) | Filtro A-pendiente por `estado` (desacople Gmail) |
+
+### Planned / spike (puede esperar)
+
+| ID | GitHub | Priority | Notas |
+|----|--------|----------|-------|
+| B-38-34 | [#429](https://github.com/gabrielagarayzavalia/GGZenLab-Portfolio/issues/429) | Medium | SPIKE Gmail Realizados → A-realizado; ~15 mails vs count 0 dashboard |
 ## Botonera web workflow (B-40)
 
 | Fase | Backlog ID | Issue | Notas |
@@ -91,7 +107,7 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 | 7 | B-09 | Medium | Generic multi-vertical app (profiles beyond QA) |
 | 8 | B-10 | Medium | Monetization research |
 | 9 | B-12 | Medium | Multi-user + OAuth (LinkedIn, Google, Facebook) |
-| 10 | B-16 | Medium | Cloud deploy (Atlas, hosted app, LLM cloud, cron agent) |
+| 10 | B-16 | Medium | Cloud deploy (Atlas, Railway/Render, LLM cloud, cron agent) |
 | 11 | B-11 | Low | Tokenized / Web3 PoC (exploratory) |
 
 > **Product decision:** B-13 runs right after MongoDB (B-06). B-07 (agent) runs after B-13 so the scheduler scrapes all enabled sources.

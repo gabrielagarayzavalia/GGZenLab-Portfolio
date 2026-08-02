@@ -59,6 +59,45 @@ export type AutomationMergePlan =
   | { action: "update"; update: Partial<AutomationApplicationFields> & { updatedBy: string } }
   | { action: "skip" };
 
+/** Fusiona snapshot pipeline sin pisar skills/gaps existentes con arrays vacíos (#335). */
+export function mergePipelineAnalysisSnapshot(
+  existing: AnalysisSnapshot | undefined,
+  incoming: AnalysisSnapshot
+): { merged: AnalysisSnapshot; changed: boolean } {
+  const merged: AnalysisSnapshot = {
+    ...existing,
+    ...incoming,
+    matchedSkills: incoming.matchedSkills?.length
+      ? incoming.matchedSkills
+      : existing?.matchedSkills,
+    gaps: incoming.gaps?.length ? incoming.gaps : existing?.gaps,
+    cvSuggestions: incoming.cvSuggestions?.length
+      ? incoming.cvSuggestions
+      : existing?.cvSuggestions,
+    description: incoming.description?.trim() ? incoming.description : existing?.description,
+    summary: incoming.summary?.trim() ? incoming.summary : existing?.summary,
+    jdSections: incoming.jdSections ?? existing?.jdSections,
+    location: incoming.location ?? existing?.location,
+    modality: incoming.modality ?? existing?.modality,
+    datePosted: incoming.datePosted ?? existing?.datePosted,
+    searchTerm: incoming.searchTerm ?? existing?.searchTerm,
+    jobClosed: incoming.jobClosed ?? existing?.jobClosed,
+    acceptingApplications: incoming.acceptingApplications ?? existing?.acceptingApplications,
+    source: existing?.source ?? incoming.source ?? "pipeline",
+    analyzedAt: incoming.analyzedAt ?? existing?.analyzedAt,
+  };
+
+  const snapshotKey = (a: AnalysisSnapshot | undefined) =>
+    JSON.stringify({
+      matchedSkills: a?.matchedSkills,
+      gaps: a?.gaps,
+      summary: a?.summary,
+      description: a?.description?.slice(0, 120),
+      jobClosed: a?.jobClosed,
+    });
+
+  return { merged, changed: snapshotKey(existing) !== snapshotKey(merged) };
+}
 /** Solo metadata de scrape (#373): no toca estado/notas de filas protegidas. */
 function planScrapeMetadataOnlyUpdate(
   existing: AutomationExistingDoc,
@@ -82,19 +121,12 @@ function planScrapeMetadataOnlyUpdate(
 
   const incoming = merged.analysis;
   if (incoming) {
-    const nextJobClosed = incoming.jobClosed;
-    const nextAccepting = incoming.acceptingApplications;
-    const analysisChanged =
-      (nextJobClosed !== undefined && nextJobClosed !== existing.analysis?.jobClosed) ||
-      (nextAccepting !== undefined && nextAccepting !== existing.analysis?.acceptingApplications);
-
+    const { merged: analysisMerged, changed: analysisChanged } = mergePipelineAnalysisSnapshot(
+      existing.analysis,
+      incoming
+    );
     if (analysisChanged) {
-      update.analysis = {
-        ...existing.analysis,
-        ...(nextJobClosed !== undefined ? { jobClosed: nextJobClosed } : {}),
-        ...(nextAccepting !== undefined ? { acceptingApplications: nextAccepting } : {}),
-        ...(existing.analysis ? {} : { source: incoming.source ?? "pipeline", analyzedAt: incoming.analyzedAt }),
-      };
+      update.analysis = analysisMerged;
       changed = true;
     }
   }
@@ -235,9 +267,52 @@ export function planEasyApplyUpsert(
   return { action: "update", update };
 }
 
+const RECONCILE_TERMINAL_ESTADOS = new Set(["cerrado", "descartado", "duplicado"]);
+const RECONCILE_ASSESSMENT_ESTADOS = new Set(["a-pendiente", "a-realizado"]);
+
+function isReconcileTerminalEstado(estado: string | undefined): boolean {
+  return RECONCILE_TERMINAL_ESTADOS.has((estado ?? "").trim().toLowerCase());
+}
+
+function isReconcileAssessmentEstado(estado: string | undefined): boolean {
+  return RECONCILE_ASSESSMENT_ESTADOS.has((estado ?? "").trim().toLowerCase());
+}
+
+/**
+ * Promociones permitidas desde Gmail reconcile (#414).
+ * Enviada → A-pendiente/A-realizado; A-pendiente → A-realizado; Pendiente → Enviada/assessment.
+ */
+export function canReconcilePromoteEstado(
+  existingEstado: string | undefined,
+  incomingEstado: TrackerEstado
+): boolean {
+  const existing = (existingEstado ?? "").trim().toLowerCase();
+  const incoming = incomingEstado.trim().toLowerCase();
+  if (!existing || existing === incoming) return false;
+  if (isReconcileTerminalEstado(existing)) return false;
+
+  if (isReconcileAssessmentEstado(incoming)) {
+    if (
+      existing === "pendiente" ||
+      existing === "enviada" ||
+      existing === "stand-by" ||
+      existing === "standby" ||
+      existing === "borrador abierto"
+    ) {
+      return true;
+    }
+    return existing === "a-pendiente" && incoming === "a-realizado";
+  }
+
+  if (incoming === "enviada" && existing === "pendiente") return true;
+  if (incoming === "stand-by" && existing === "pendiente") return true;
+
+  return !isProtectedEstado(existing);
+}
+
 /**
  * Plan upsert reconcile → Mongo (B-23-02).
- * Solo actualiza applications existentes; skip estados protegidos en Mongo.
+ * Actualiza applications existentes; insert solo A-pendiente/A-realizado con jobId (#414).
  */
 export function planReconcileUpsert(
   existing: AutomationExistingDoc | null,
@@ -248,10 +323,19 @@ export function planReconcileUpsert(
   const merged: AutomationApplicationFields = { ...input, ...patch };
 
   if (!existing) {
+    if (
+      isReconcileAssessmentEstado(merged.estado) &&
+      (merged.jobId?.trim() || merged.linkedinUrlNorm)
+    ) {
+      return {
+        action: "insert",
+        fields: { ...merged, estado: merged.estado! },
+      };
+    }
     return { action: "skip" };
   }
 
-  if (isProtectedEstado(existing.estado)) {
+  if (isReconcileTerminalEstado(existing.estado)) {
     return { action: "skip" };
   }
 
@@ -260,6 +344,12 @@ export function planReconcileUpsert(
   };
 
   if (merged.estado) {
+    if (
+      merged.estado !== existing.estado &&
+      !canReconcilePromoteEstado(existing.estado, merged.estado)
+    ) {
+      return { action: "skip" };
+    }
     update.estado = merged.estado;
   }
   if (merged.proximoPaso?.trim()) {

@@ -11,10 +11,11 @@ import { applyTrackerPatch, type TrackerWriteSource } from "../tracker/estado-po
 import { extractJobId, normalizeLinkedInUrl } from "../tracker/linkedin-url.js";
 import {
   pipelineMatchToApplicationInput,
+  shouldIngestClosedApplication,
   type PipelineMatchResult,
   type PipelineScrapedJob,
 } from "../tracker/pipeline-match.js";
-import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
+import { queueRowToApplicationFields } from "../tracker/apply-queue.js";
 import type { QueueRow } from "../apply/apply-queue.js";
 import { planAutomationUpsert, planEasyApplyUpsert, planReconcileUpsert } from "../tracker/automation-merge.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
@@ -396,6 +397,8 @@ export interface PipelineUpsertResult {
   inserted: number;
   updated: number;
   skipped: number;
+  /** Avisos nuevos cerrados al primer scrape — skip insert (#408). */
+  skipped_closed_never_visible: number;
 }
 
 function applicationFilter(fields: ReturnType<typeof buildDocFields>) {
@@ -417,6 +420,7 @@ export async function upsertPipelineMatches(
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  let skipped_closed_never_visible = 0;
   const now = new Date();
   const analyzedAt = now.toISOString();
 
@@ -427,6 +431,12 @@ export async function upsertPipelineMatches(
     const filter = applicationFilter(fields);
 
     const existing = await col.findOne(filter);
+
+    if (!shouldIngestClosedApplication(match, scraped, existing)) {
+      skipped_closed_never_visible++;
+      continue;
+    }
+
     const plan = planAutomationUpsert(existing, fields, "pipeline");
 
     if (plan.action === "skip") {
@@ -454,7 +464,7 @@ export async function upsertPipelineMatches(
     else skipped++;
   }
 
-  return { inserted, updated, skipped };
+  return { inserted, updated, skipped, skipped_closed_never_visible };
 }
 
 export interface EasyApplyUpsertResult {
@@ -462,6 +472,7 @@ export interface EasyApplyUpsertResult {
 }
 
 export interface ReconcileUpsertResult {
+  inserted: number;
   updated: number;
   skipped: number;
 }
@@ -516,6 +527,10 @@ export async function upsertReconcileRows(
 ): Promise<ReconcileUpsertResult> {
   const db = getDb();
   const col = db.collection<ApplicationDoc>("applications");
+<<<<<<< HEAD
+  let inserted = 0;
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   let updated = 0;
   let skipped = 0;
   const now = new Date();
@@ -532,6 +547,18 @@ export async function upsertReconcileRows(
 
     if (plan.action === "skip") {
       skipped++;
+      continue;
+    }
+
+    if (plan.action === "insert") {
+      await col.insertOne({
+        _id: new ObjectId(),
+        ...buildDocFields({ ...plan.fields, updatedBy: "reconcile" }, now),
+        createdAt: now,
+        updatedAt: now,
+        updatedBy: "reconcile",
+      });
+      inserted++;
       continue;
     }
 

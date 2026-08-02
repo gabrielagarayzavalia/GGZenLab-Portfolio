@@ -11,7 +11,7 @@ import type { JobMatch } from "../types.js";
 
 export type { JdSections };
 
-function jdSectionsFromDescription(description?: string): JdSections | undefined {
+export function jdSectionsFromDescription(description?: string): JdSections | undefined {
   const text = description?.trim();
   if (!text) return undefined;
   const sections = parseJdSections(text);

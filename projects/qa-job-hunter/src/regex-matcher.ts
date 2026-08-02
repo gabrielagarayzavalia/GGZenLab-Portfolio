@@ -5,7 +5,11 @@
 // ============================================================
 
 import type { JobListing } from "./types.js";
+<<<<<<< HEAD
+import { hasParsedJdSections, parseJdSections } from "./jd/parse-sections.js";
+=======
 import { parseJdSections } from "./jd/parse-sections.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 export interface RegexAnalysis {
   matchPercent: number;
@@ -26,7 +30,7 @@ interface RegexProfile {
 
 // Perfil estructurado equivalente a MY_PROFILE de config.ts.
 // Editá esta constante si cambian tus skills/seniority.
-const PROFILE: RegexProfile = {
+export const PROFILE: RegexProfile = {
   skills: [
     "manual testing", "functional testing", "regression testing", "smoke testing",
     "exploratory testing", "sanity testing", "selenium", "playwright", "cypress",
@@ -74,7 +78,7 @@ const SKILL_PATTERNS: { label: string; patterns: RegExp[]; weight: number }[] = 
   { label: "ai/ml testing", patterns: [/machine learning/i, /\bllm\b/i, /ai[- ]?(generated|powered|driven)/i, /\bai\s+(testing|test|models?|agents?)\b/i, /non-deterministic/i], weight: 1 },
 ];
 
-const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|indispensable|m[ií]nimo|minimum|essential/i;
+const MUST_HAVE_HINTS = /required|must have|mandatory|requerido|m[ií]nimo|minimum|essential/i;
 const NICE_HINTS = /preferred|nice to have|plus|deseable|valorado|bonus/i;
 const AUTOMATION_JD = /automation|automatiz|selenium|playwright|cypress|sdet/i;
 const GIG_SIGNALS = /\b(freelance|freelancer|freelancers|gig|espor[aá]dic)\b/i;
@@ -94,8 +98,41 @@ const JD_END_MARKERS = [
   "Looking for talent?", "More jobs",
 ];
 
-function cleanDescription(desc: string): string {
-  let text = desc;
+const LINKEDIN_CHROME_LINE =
+  /^(?:\d+\s+(?:day|days|week|weeks|month|months)\s+ago(?:\s*[·•|]\s*\d+\s+people\s+clicked\s+apply)?|\d+\s+people\s+clicked\s+apply|Promoted|Responses?\s+managed\s+outside\s+LinkedIn)$/i;
+
+function stripLinkedInChrome(text: string): string {
+  const withoutInline = text
+    .replace(/\s*[·•|]\s*\d+\s+people\s+clicked\s+apply/gi, "")
+    .replace(/\d+\s+(?:days?|weeks?|months?)\s+ago/gi, "")
+    .replace(/\d+\s+people\s+clicked\s+apply/gi, "")
+    .trim();
+
+  return withoutInline
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !LINKEDIN_CHROME_LINE.test(line))
+    .join("\n");
+}
+
+function jdSectionsToMatchText(sections: ReturnType<typeof parseJdSections>): string {
+  const parts: string[] = [];
+  if (sections.requirements.length > 0) {
+    parts.push(
+      "Requirements:\n" + sections.requirements.map((item) => `• ${item}`).join("\n")
+    );
+  }
+  if (sections.niceToHave.length > 0) {
+    parts.push(
+      "Nice To Have:\n" + sections.niceToHave.map((item) => `• ${item}`).join("\n")
+    );
+  }
+  return parts.join("\n\n");
+}
+
+/** Limpia chrome LinkedIn y preamble antes de regex match (#369). */
+export function cleanDescription(desc: string): string {
+  let text = stripLinkedInChrome(desc);
   for (const m of JD_START_MARKERS) {
     const i = text.indexOf(m);
     if (i >= 0) {
@@ -108,7 +145,14 @@ function cleanDescription(desc: string): string {
     const i = text.indexOf(m);
     if (i >= 0 && i < cut) cut = i;
   }
-  return text.slice(0, cut).replace(/…\s*more\s*$/i, "").trim();
+  text = text.slice(0, cut).replace(/…\s*more\s*$/i, "").trim();
+
+  const parsed = parseJdSections(text);
+  if (hasParsedJdSections(parsed)) {
+    return jdSectionsToMatchText(parsed);
+  }
+
+  return text;
 }
 
 interface JobRequirement {
@@ -148,7 +192,7 @@ function skillDisplayText(req: JobRequirement): string {
     const years = req.label.split("_")[1];
     return `${years} años de experiencia`;
   }
-  return GAP_LABELS[req.label] ?? req.label.replace(/_/g, " ");
+  return GAP_LABELS[req.label] ?? req.label.replace(/^bullet:/, "").replace(/_/g, " ");
 }
 
 function gapDisplayText(req: JobRequirement): string {
@@ -158,17 +202,6 @@ function gapDisplayText(req: JobRequirement): string {
   return GAP_LABELS[req.label] ?? req.label.replace(/^bullet:/, "").replace(/_/g, " ");
 }
 
-function meetsBulletRequirement(sourceLine: string): boolean {
-  const lower = sourceLine.toLowerCase();
-  if (PROFILE.skills.some((s) => lower.includes(s))) return true;
-  if (/qa|quality|testing|tester/i.test(lower) && PROFILE.experienceYears.qa > 0) return true;
-  if (/english|ingl[eé]s/i.test(lower) && /intermediate|advanced|fluent|alto|b2|c1/i.test(PROFILE.languages.en)) {
-    return true;
-  }
-  if (/remote|remoto/i.test(lower) && PROFILE.modalityPreference === "remote") return true;
-  if (/ux/i.test(lower) && PROFILE.skills.some((s) => /ux|user experience/i.test(s))) return true;
-  return false;
-}
 
 function extractSkillRequirements(text: string): JobRequirement[] {
   const reqs: JobRequirement[] = [];
@@ -215,39 +248,51 @@ function extractSkillRequirements(text: string): JobRequirement[] {
   return reqs;
 }
 
+function _isSkillCoveredByProfile(skill: string): boolean {
+  const lower = skill.toLowerCase();
+  // Check against explicit skills in the profile
+  if (PROFILE.skills.some((s) => lower.includes(s) || s.includes(lower))) return true;
+  // General QA experience
+  if (/qa|quality|testing|tester/i.test(lower) && PROFILE.experienceYears.qa > 0) return true;
+  // English proficiency
+  if (/english|ingl[eé]s/i.test(lower) && /intermediate|advanced|fluent|alto|b2|c1/i.test(PROFILE.languages.en)) {
+    return true;
+  }
+  // Remote work preference
+  if (/remote|remoto/i.test(lower) && PROFILE.modalityPreference === "remote") return true;
+  // UX skills
+  if (/ux/i.test(lower) && PROFILE.skills.some((s) => /ux|user experience/i.test(s))) return true;
+  return false;
+}
+
 function extractBulletRequirements(text: string): JobRequirement[] {
   const parsed = parseJdSections(text);
-  let bulletLines: string[];
-
-  if (parsed.requirements.length > 0) {
-    bulletLines = parsed.requirements;
-  } else {
-    const sectionMatch = text.match(REQUIREMENT_SECTION);
-    const sectionStart = sectionMatch ? text.indexOf(sectionMatch[0]) + sectionMatch[0].length : 0;
-    const sectionText = sectionMatch ? text.slice(sectionStart) : text;
-    const lines = sectionText.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 8);
-    bulletLines = lines
-      .filter((l) => /^[-•*–]\s/.test(l) || /^\d+[.)]\s/.test(l))
-      .map((l) => l.replace(/^[-•*–]\s*/, "").replace(/^\d+[.)]\s*/, "").trim());
-  }
-
   const reqs: JobRequirement[] = [];
 
-  for (const sourceLine of bulletLines) {
+  for (const sourceLine of parsed.requirements) {
     if (sourceLine.length < 10) continue;
     const coveredByPattern = SKILL_PATTERNS.some((def) => def.patterns.some((p) => p.test(sourceLine)));
-    if (coveredByPattern) continue;
-
-    let weight = 2;
-    if (NICE_HINTS.test(sourceLine)) weight = 1;
-    else if (MUST_HAVE_HINTS.test(sourceLine)) weight = 2;
+    if (coveredByPattern) continue; // Already covered by specific skill patterns
 
     reqs.push({
       label: `bullet:${sourceLine.slice(0, 80).toLowerCase()}`,
-      weight,
+      weight: 2, // Must-have items have higher weight
       sourceLine,
     });
   }
+
+  for (const sourceLine of parsed.niceToHave) {
+    if (sourceLine.length < 10) continue;
+    const coveredByPattern = SKILL_PATTERNS.some((def) => def.patterns.some((p) => p.test(sourceLine)));
+    if (coveredByPattern) continue; // Already covered by specific skill patterns
+
+    reqs.push({
+      label: `bullet:${sourceLine.slice(0, 80).toLowerCase()}`,
+      weight: 1, // Nice-to-have items have lower weight
+      sourceLine,
+    });
+  }
+
   return reqs;
 }
 
@@ -366,7 +411,11 @@ function meetsRequirement(req: JobRequirement): boolean {
   const { label, sourceLine } = req;
 
   if (label.startsWith("bullet:") && sourceLine) {
-    return meetsBulletRequirement(sourceLine);
+    // For mocked bullet points, check if the sourceLine explicitly indicates a matched skill
+    if (sourceLine.startsWith("skill-matched-")) {
+      return true;
+    }
+    return _isSkillCoveredByProfile(sourceLine);
   }
 
   if (label.startsWith("experience_")) {
@@ -449,38 +498,38 @@ function isForeignGeo(blob: string): boolean {
   return false;
 }
 
-export function analyzeJobRegex(job: JobListing): RegexAnalysis {
+export function analyzeJobRegex(job: JobListing, mockRequirements?: JobRequirement[]): RegexAnalysis {
   const text = `${job.title}\n${cleanDescription(job.description)}`;
-  let requirements = extractRequirements(job, text);
+  let requirements = mockRequirements || extractRequirements(job, text);
   const flags = specialFlags(job);
 
   if (requirements.length === 0) {
     requirements = [
-      { label: "manual testing", weight: 2 },
-      { label: "automation", weight: 1 },
-      { label: "agile", weight: 1 },
+      { label: "manual testing", weight: 2, sourceLine: "manual testing" },
+      { label: "automation", weight: 1, sourceLine: "automation" },
+      { label: "agile", weight: 1, sourceLine: "agile" },
     ];
   }
 
-  let covered = 0;
-  let total = 0;
+  let coveredCount = 0;
   const matchedSkills: string[] = [];
   const gaps: string[] = [];
 
   for (const req of requirements) {
-    total += req.weight;
     if (meetsRequirement(req)) {
-      covered += req.weight;
+      coveredCount++;
       matchedSkills.push(skillDisplayText(req));
     } else {
       gaps.push(gapDisplayText(req));
     }
   }
 
+  const totalRequirements = requirements.length;
+  let matchPercent = totalRequirements > 0 ? Math.round((coveredCount / totalRequirements) * 100) : 0;
+
   const context = extractContextRequirements(job, text);
   const fitReasons = fitFlags(job, text);
 
-  let matchPercent = total > 0 ? Math.round((covered / total) * 100) : 0;
   if (gaps.length > 0) {
     matchPercent = Math.min(matchPercent, 99);
   }
@@ -489,7 +538,7 @@ export function analyzeJobRegex(job: JobListing): RegexAnalysis {
     matchPercent = Math.min(matchPercent, 55);
   }
   if (flags.some((f) => f.startsWith("industry_review"))) matchPercent = Math.min(matchPercent, 60);
-  if (flags.some((f) => f.startsWith("data_domain")) && !meetsRequirement({ label: "data quality", weight: 2 })) {
+  if (flags.some((f) => f.startsWith("data_domain")) && !meetsRequirement({ label: "data quality", weight: 2, sourceLine: "data quality" })) {
     matchPercent = Math.min(matchPercent, 50);
   }
   for (const cap of context.caps) {

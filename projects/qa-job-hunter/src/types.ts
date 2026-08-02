@@ -3,6 +3,10 @@
 // ============================================================
 
 import type { JdSections } from "./jd/parse-sections.js";
+<<<<<<< HEAD
+import type { TrackerCanal, TrackerEstado } from "./types/tracker-application.js";
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 export type { JdSections };
 
@@ -33,6 +37,15 @@ export interface JobMatch extends JobListing {
   applicationId?: string;
   /** LinkedIn: aviso cerrado (scrape `jobClosed`). Distinto de estado tracker Cerrado. */
   jobClosed?: boolean;
+<<<<<<< HEAD
+  /** Estado canónico tracker (columna Excel). Badge lista/detalle (#410). */
+  estado?: TrackerEstado;
+  /** Canal de postulación (Easy Apply / Externo). */
+  canal?: TrackerCanal;
+  /** Señal Gmail label Entrevistas-Assessments/Pendientes (#420). */
+  assessmentGmailPending?: boolean;
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 }
 
 export interface AnalysisResult {

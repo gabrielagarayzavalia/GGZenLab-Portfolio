@@ -23,12 +23,9 @@
       <div class="top-bar__stats" id="header-stats"></div>
     </div>
   </header>
+  <div id="banner-assessment" class="banner-assessment hidden" role="status" aria-live="polite" hidden data-testid="banner-assessment"></div>
   <div id="app-flash" class="app-flash hidden" role="status" aria-live="polite" hidden></div>
   <main class="layout">
-    <section class="panel panel--detail" aria-label="Detalle del empleo">
-      <div id="detail-empty" class="empty-state"><p>Selecciona un empleo de la lista para ver el detalle.</p></div>
-      <article id="detail-content" class="detail hidden" hidden></article>
-    </section>
     <aside class="panel panel--list" aria-label="Lista de empleos">
       <div class="list-header">
         <h2>Empleos con match</h2>
@@ -39,32 +36,60 @@
             <option value="asc">Menor match primero</option>
           </select>
         </label>
-        <div class="list-filters" aria-label="Filtrar lista">
-          <label class="filter-control">
-            <input type="checkbox" id="show-unmarked" checked />
-            <span>Sin Clasificar</span>
+        <div class="list-dropdown-filters" aria-label="Filtrar por empresa y puesto">
+          <label class="sort-control">
+            <span>Empresa</span>
+            <select id="filter-company" data-testid="dash-filter-company" aria-label="Filtrar por empresa">
+              <option value="">Todas</option>
+            </select>
           </label>
-          <label class="filter-control">
-            <input type="checkbox" id="show-applied" />
-            <span>Aplicados</span>
+          <label class="sort-control">
+            <span>Puesto</span>
+            <select id="filter-title" data-testid="dash-filter-title" aria-label="Filtrar por puesto">
+              <option value="">Todos</option>
+            </select>
           </label>
-          <label class="filter-control">
-            <input type="checkbox" id="show-not-applied" />
-            <span>No aplicados</span>
+          <label class="filter-control" data-filter-bucket="unmarked">
+            <input type="checkbox" id="show-unmarked" checked data-testid="dash-filter-unmarked" />
+            <span class="filter-label" data-filter-label="unmarked">Sin Clasificar</span>
           </label>
-          <label class="filter-control">
-            <input type="checkbox" id="show-not-selected" />
-            <span>No seleccionada/o</span>
+          <label class="filter-control" data-filter-bucket="applied">
+            <input type="checkbox" id="show-applied" data-testid="dash-filter-applied" />
+            <span class="filter-label" data-filter-label="applied">Aplicados</span>
           </label>
-          <label class="filter-control">
-            <input type="checkbox" id="show-rejected" />
-            <span>Match incorrecto</span>
+          <label class="filter-control" data-filter-bucket="not_applied">
+            <input type="checkbox" id="show-not-applied" data-testid="dash-filter-not-applied" />
+            <span class="filter-label" data-filter-label="not_applied">No aplicados</span>
+          </label>
+          <label class="filter-control" data-filter-bucket="not_selected">
+            <input type="checkbox" id="show-not-selected" data-testid="dash-filter-not-selected" />
+            <span class="filter-label" data-filter-label="not_selected">No seleccionada/o</span>
+          </label>
+          <label class="filter-control" data-filter-bucket="assessment">
+            <input type="checkbox" id="show-assessment" data-testid="dash-filter-assessment" />
+            <span class="filter-label" data-filter-label="assessment">Assessment pendiente</span>
+          </label>
+          <label class="filter-control" data-filter-bucket="assessment_done">
+            <input type="checkbox" id="show-assessment-done" data-testid="dash-filter-assessment-done" />
+            <span class="filter-label" data-filter-label="assessment_done">A-realizado</span>
+          </label>
+          <label class="filter-control" data-filter-bucket="rejected">
+            <input type="checkbox" id="show-rejected" data-testid="dash-filter-rejected" />
+            <span class="filter-label" data-filter-label="rejected">Match incorrecto</span>
+          </label>
+          <label class="filter-control" data-filter-bucket="closed">
+            <input type="checkbox" id="show-closed" data-testid="dash-filter-closed" />
+            <span class="filter-label" data-filter-label="closed">Cerrado</span>
+          </label>
+          <label class="filter-control" data-filter-bucket="duplicated">
+            <input type="checkbox" id="show-duplicated" data-testid="dash-filter-duplicated" />
+            <span class="filter-label" data-filter-label="duplicated">Duplicado</span>
           </label>
           <label class="filter-control">
             <input type="checkbox" id="show-closed" />
             <span>Cerrado</span>
           </label>
-        </div>
+       </div>
       </div>
       <ul id="job-list" class="job-list"></ul>
       <div id="list-empty" class="empty-state hidden" hidden>
@@ -73,6 +98,10 @@
       </div>
       <div id="list-error" class="empty-state error hidden" hidden></div>
     </aside>
+    <section class="panel panel--detail" aria-label="Detalle del empleo">
+      <div id="detail-empty" class="empty-state"><p>Selecciona un empleo de la lista para ver el detalle.</p></div>
+      <article id="detail-content" class="detail hidden" hidden></article>
+    </section>
   </main>
   <script src="/app.js" type="module"></script>
 </body>

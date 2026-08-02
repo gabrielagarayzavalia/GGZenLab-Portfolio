@@ -7,6 +7,21 @@ body:
     attributes:
       value: |
         **Sub-task** — child of a PO Task. Use when work depends on another task in the same story and should not be merged.
+        **Required:** label `mini-project:*` + Project field **Proyecto** (same as parent). See `BACKLOG.md`.
+  - type: dropdown
+    id: proyecto
+    attributes:
+      label: Proyecto (board field + mini-project label)
+      options:
+        - job-hunter → mini-project:job-hunter
+        - mapa-corrupcion → mini-project:mapa-corrupcion
+        - api-testing → mini-project:api
+        - performance → mini-project:perf
+        - sql-lab → mini-project:sql-lab
+        - labs → mini-project:labs
+        - portfolio-skills → mini-project:portfolio
+    validations:
+      required: true
   - type: input
     id: task_id
     attributes:

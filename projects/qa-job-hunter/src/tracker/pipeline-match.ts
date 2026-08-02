@@ -113,8 +113,6 @@ export function analysisSnapshotFromPipelineMatch(
   const hasSkills = Boolean(match.matchedSkills?.length);
   const hasGaps = Boolean(match.gaps?.length);
   const hasSummary = Boolean(match.summary?.trim());
-  const description = scraped?.description?.trim();
-  const hasDescription = Boolean(description);
   if (!hasSkills && !hasGaps && !hasSummary && !hasDescription) return undefined;
 
   const jdSections = description ? parseJdSections(description) : undefined;
@@ -129,7 +127,7 @@ export function analysisSnapshotFromPipelineMatch(
     ...(parsedJd ? { jdSections: parsedJd } : {}),
     searchTerm: scraped?.scrapedTitle ?? match.title,
     source: "pipeline",
-    matchedSkills: matchedSkillsForSnapshot(match),
+    matchedSkills: match.matchedSkills?.length ? [...match.matchedSkills] : undefined,
     gaps: match.gaps?.length ? [...match.gaps] : undefined,
     cvSuggestions: match.cvSuggestions?.length ? [...match.cvSuggestions] : undefined,
     summary: match.summary || undefined,

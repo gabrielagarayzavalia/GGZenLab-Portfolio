@@ -5,7 +5,11 @@
 // ============================================================
 
 import type { JobListing } from "./types.js";
+<<<<<<< HEAD
 import { hasParsedJdSections, parseJdSections } from "./jd/parse-sections.js";
+=======
+import { parseJdSections } from "./jd/parse-sections.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 export interface RegexAnalysis {
   matchPercent: number;

@@ -98,7 +98,6 @@ export function mergePipelineAnalysisSnapshot(
 
   return { merged, changed: snapshotKey(existing) !== snapshotKey(merged) };
 }
-
 /** Solo metadata de scrape (#373): no toca estado/notas de filas protegidas. */
 function planScrapeMetadataOnlyUpdate(
   existing: AutomationExistingDoc,

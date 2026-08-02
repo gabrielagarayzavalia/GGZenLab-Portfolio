@@ -26,6 +26,8 @@ Dos collections separadas para no mezclar smoke y regression.
 | `sampleJobId` | _(vacío)_ | Auto-set en SMK-V1-02 (también en **environment**) |
 | `sampleApplicationId` | _(vacío)_ | Auto-set en SMK-V1-18 |
 | `trackerUserHeader` | `1` | Valor para `X-Tracker-User` en writes |
+| `sampleJobId` | _(vacío)_ | Setear tras listar match-jobs |
+
 
 ## Prerrequisitos
 
@@ -69,6 +71,23 @@ Casos **no** en Postman (solo markdown): REG-V1-05 (503 sin Mongo), REG-V1-08–
 Doc: `qa/v1/regression-green-path-v1.md`
 
 ## Headers (writes)
+npm run tracker:seed    # o db:seed + tracker:seed
+npm run dashboard       # terminal aparte
+```
+
+## Carpetas de la collection
+
+| Carpeta | Endpoints | Casos SMK/REG |
+|---------|-----------|---------------|
+| **Health** | `GET /api/health` | SMK-V1-01 |
+| **Match Jobs** | match-jobs, results shim, filtros | SMK-V1-02–04 |
+| **Jobs** | `GET /api/jobs` | SMK-V1-05 |
+| **Tracker** | applications, export xlsx | SMK-V1-18–19 |
+| **Dashboard Writes** | application-status, reject-match | SMK-V1-10–12 |
+| **Run Apply** | status, start dry-run, cancel | SMK-V1-15–17 |
+| **Config** | questions GET/POST | SMK-V1-13 |
+
+## Headers importantes
 
 Writes a Mongo (`/api/dashboard/*`) **requieren**:
 
@@ -77,9 +96,7 @@ X-Tracker-User: 1
 Content-Type: application/json
 ```
 
-Sin header → `403`.
-
-**Si SMK-V1-10 da `400`:** el environment `sampleJobId` está vacío. Corré **SMK-V1-02** con environment **Job Hunter — Local** seleccionado, o pegá un jobId a mano en el environment.
+Sin ese header → `403 Requiere header X-Tracker-User: 1`.
 
 ## Orden sugerido (smoke manual ~5 min)
 
@@ -106,6 +123,9 @@ Si editás la collection combinada legacy o el script:
 
 ```bash
 node qa/v1/postman/split-collections.mjs
+```
+npx newman run qa/v1/postman/job-hunter-dashboard-v1.postman_collection.json \
+  -e qa/v1/postman/job-hunter-local.postman_environment.json
 ```
 
 ## Relación con tests TS

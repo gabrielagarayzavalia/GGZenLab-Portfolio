@@ -82,11 +82,16 @@ const DASHBOARD_MATCH_FILTERS = new Set<DashboardMatchFilter>([
   "applied",
   "not_applied",
   "not_selected",
+<<<<<<< HEAD
   "assessment",
   "assessment_done",
   "rejected",
   "closed",
   "duplicated",
+=======
+  "rejected",
+  "closed",
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 ]);
 
 function parseDashboardMatchFilter(value: string | null): DashboardMatchFilter | undefined {

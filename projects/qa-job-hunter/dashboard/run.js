@@ -142,9 +142,14 @@ applyBtn?.addEventListener("click", async () => {
 });
 
 cancelBtn?.addEventListener("click", async () => {
+<<<<<<< HEAD
   const ok = await showRunConfirm(
     "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?>",
     { testId: "run-confirm-cancel", title: "Detener corrida" }
+=======
+  const ok = confirm(
+    "Detener la corrida y cerrar el árbol de procesos (npm + Chrome del bot). ¿Continuar?"
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   );
   if (!ok) return;
   setStatus("Deteniendo…");

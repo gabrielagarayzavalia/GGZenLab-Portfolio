@@ -43,9 +43,9 @@ test("planAutomationUpsert actualiza matchedSkills en estado protegido (#335)", 
   if (plan.action === "update") {
     assert.deepEqual(plan.update.analysis?.matchedSkills, ["Playwright", "API testing"]);
     assert.equal(plan.update.estado, undefined);
+    assert.equal(plan.update.puesto, undefined);
   }
 });
-
 test("planAutomationUpsert skip estado protegido sin metadata scrape", () => {
   const plan = planAutomationUpsert({ estado: "Enviada" }, baseFields);
   assert.equal(plan.action, "skip");

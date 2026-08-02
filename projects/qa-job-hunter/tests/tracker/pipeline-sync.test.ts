@@ -244,32 +244,3 @@ test("analysisSnapshotFromPipelineMatch con summary sin description (#335)", () 
   assert.ok(snap);
   assert.deepEqual(snap?.matchedSkills, ["Playwright"]);
 });
-
-test("pipelineMatchToApplicationInput prioriza scrapedTitle y scrapedCompany (#367)", () => {
-  const m = {
-    jobId: "x",
-    company: "Gmail Company",
-    title: "Gmail Title",
-    url: "https://example.com",
-    matchPercent: 80,
-    matchedSkills: [],
-    gaps: [],
-    summary: "Some summary",
-    recommendation: "apply",
-    easyApply: false,
-  };
-  const scraped = {
-    jobId: "x",
-    url: "https://example.com",
-    scrapedAt: "2026-07-28",
-    company: "Gmail Company", 
-    title: "Gmail Title", 
-    scrapedCompany: "Scraped Company",
-    scrapedTitle: "Scraped Title",
-  };
-
-  const input = pipelineMatchToApplicationInput(m, scraped);
-
-  assert.equal(input.empresa, "Scraped Company", "La empresa debería ser del scrape");
-  assert.equal(input.puesto, "Scraped Title", "El puesto debería ser del scrape");
-});

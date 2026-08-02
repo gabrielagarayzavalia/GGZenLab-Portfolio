@@ -2,7 +2,13 @@
   "info": {
     "_postman_id": "jh-dashboard-v1-green-path",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "name": "Job Hunter Dashboard — Green Path v1 (DEPRECATED)",
+    "description": "DEPRECADO — usar job-hunter-smoke-v1 y job-hunter-regression-v1.\nRegenerar con: node qa/v1/postman/split-collections.mjs",
+=======
+    "name": "Job Hunter Dashboard — Green Path v1",
+    "description": "Smoke/regression API manual para qa-job-hunter dashboard (puerto 3847).\nAlineado a SMK-V1-* y REG-V1-* en qa/v1/.",
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

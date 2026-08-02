@@ -13,10 +13,14 @@ import {
   isVisibleMatchApplication,
   matchesDashboardFilter,
   resolveJobFallback,
+<<<<<<< HEAD
   type DashboardMatchFilter,
 } from "../../src/dashboard/match-jobs.js";
 import { gmailAssessmentDoneProximoPaso, gmailAssessmentPendingProximoPaso } from "../../src/tracker/gmail-assessment-label.js";
 import { FULLSTACK_4439380038_JD } from "../jd/fixtures/fullstack-4439380038.ts";
+=======
+} from "../../src/dashboard/match-jobs.js";
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
 function app(overrides: Partial<TrackerApplication> = {}): TrackerApplication {
   return {
@@ -62,7 +66,10 @@ test("deriveApplicationStatus mapea estados tracker", () => {
   assert.equal(deriveApplicationStatus(app({ estado: "Enviada" })), "applied");
   assert.equal(deriveApplicationStatus(app({ estado: "A-realizado" })), "applied");
   assert.equal(deriveApplicationStatus(app({ estado: "Borrador abierto" })), "applied");
+<<<<<<< HEAD
   assert.equal(deriveApplicationStatus(app({ estado: "A-pendiente" })), "assessment_pending");
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   assert.equal(deriveApplicationStatus(app({ estado: "Cerrado" })), "not_selected");
   assert.equal(deriveApplicationStatus(app({ estado: "Stand-by" })), "not_applied");
   assert.equal(
@@ -105,6 +112,7 @@ test("matchesDashboardFilter closed solo avisos LinkedIn cerrados", () => {
   assert.equal(matchesDashboardFilter(userClosed, "not_selected"), true);
 });
 
+<<<<<<< HEAD
 const UI_BUCKETS: DashboardMatchFilter[] = [
   "unmarked",
   "applied",
@@ -193,13 +201,19 @@ test("paridad: tracker Cerrado usuaria no coincide con filtro closed LinkedIn", 
   assert.equal(isLinkedInJobClosed(userNotSelected), false);
 });
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 test("isVisibleMatchApplication oculta avisos cerrados LinkedIn por defecto", () => {
   const closed = app({ jobClosed: true, matchPercent: 85, inLatestAnalysis: true });
   assert.equal(isVisibleMatchApplication(closed), false);
   assert.equal(isVisibleMatchApplication(closed, { showClosed: true }), true);
 });
 
+<<<<<<< HEAD
 test("isVisibleMatchApplication oculta Duplicado salvo showDuplicated y Descartado siempre", () => {
+=======
+test("isVisibleMatchApplication oculta Duplicado/Descartado y aplica umbral 70", () => {
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   assert.equal(isVisibleMatchApplication(app({ matchPercent: 85, inLatestAnalysis: true })), true);
   assert.equal(
     isVisibleMatchApplication(app({ matchPercent: 65, inLatestAnalysis: true })),
@@ -213,6 +227,7 @@ test("isVisibleMatchApplication oculta Duplicado salvo showDuplicated y Descarta
     isVisibleMatchApplication(app({ matchPercent: 50, matchRejected: true })),
     true
   );
+<<<<<<< HEAD
   assert.equal(isVisibleMatchApplication(app({ estado: "Duplicado", matchPercent: 90 })), false);
   assert.equal(
     isVisibleMatchApplication(app({ estado: "Duplicado", matchPercent: 90 }), {
@@ -362,6 +377,12 @@ test("composeMatchJobsFromApplications filter=duplicated", () => {
   assert.equal(dupOnly.matchedJobs[0].estado, "Duplicado");
 });
 
+=======
+  assert.equal(isVisibleMatchApplication(app({ estado: "Duplicado" })), false);
+  assert.equal(isVisibleMatchApplication(app({ estado: "Descartado" })), false);
+});
+
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 test("applicationToJobMatch propaga jdSections desde analysis (#370)", () => {
   const job = applicationToJobMatch(
     app({
@@ -382,6 +403,7 @@ test("applicationToJobMatch propaga jdSections desde analysis (#370)", () => {
   assert.equal(job.jdSections?.niceToHave[0], "Cursor");
 });
 
+<<<<<<< HEAD
 test("applicationToJobMatch deriva jdSections desde description raw (#369)", () => {
   const job = applicationToJobMatch(
     app({
@@ -402,6 +424,8 @@ test("applicationToJobMatch deriva jdSections desde description raw (#369)", () 
   );
 });
 
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 test("applicationToJobMatch usa analysis snapshot", () => {
   const job = applicationToJobMatch(
     app({
@@ -593,6 +617,7 @@ test("composeMatchJobsFromApplications oculta cerrados LinkedIn y filter=closed"
   assert.equal(closedOnly.matchedJobs[0].id, "closed-job");
   assert.equal(closedOnly.matchedJobs[0].jobClosed, true);
 });
+<<<<<<< HEAD
 
 test("applicationToJobMatch fallback skills cuando analysis vacío y % alto (#335)", () => {
   const job = applicationToJobMatch(
@@ -611,3 +636,5 @@ test("applicationToJobMatch fallback skills cuando analysis vacío y % alto (#33
   assert.ok(job.matchedSkills.length > 0);
   assert.match(job.matchedSkills[0], /automation|Requisitos/i);
 });
+=======
+>>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a

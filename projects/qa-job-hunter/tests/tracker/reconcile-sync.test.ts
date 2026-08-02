@@ -107,6 +107,12 @@ test("planReconcileUpsert sube Pendiente a Enviada", () => {
   }
 });
 
+test("planReconcileUpsert skip estados protegidos en Mongo", () => {
+  for (const estado of ["Enviada", "Descartado", "Duplicado", "Stand-by", "Cerrado"]) {
+    const plan = planReconcileUpsert({ estado }, { ...baseFields, estado: "A-pendiente" });
+    assert.equal(plan.action, "skip", `debe skip mongo ${estado}`);
+  }
+});
 test("planReconcileUpsert skip sin cambios", () => {
   const plan = planReconcileUpsert(
     { estado: "Pendiente", proximoPaso: "Gmail" },

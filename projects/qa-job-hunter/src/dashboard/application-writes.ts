@@ -5,7 +5,6 @@ import {
   hasGmailAssessmentPendingSignal,
 } from "../tracker/gmail-assessment-label.js";
 import type { TrackerApplication, TrackerApplicationPatch } from "../types/tracker-application.js";
-
 export type DashboardApplicationPatch = TrackerApplicationPatch & {
   matchRejected?: boolean;
   matchRejectedReason?: string;
@@ -61,12 +60,6 @@ export function patchForApplicationStatus(
         },
       };
     }
-    return {
-      patch: {
-        estado: "Pendiente",
-        notas: appendNota(existing.notas, NOTA_DESMARCAR),
-      },
-    };
   }
 
   switch (status) {

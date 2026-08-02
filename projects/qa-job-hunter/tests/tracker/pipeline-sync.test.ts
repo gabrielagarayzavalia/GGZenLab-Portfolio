@@ -262,8 +262,8 @@ test("pipelineMatchToApplicationInput prioriza scrapedTitle y scrapedCompany (#3
     jobId: "x",
     url: "https://example.com",
     scrapedAt: "2026-07-28",
-    company: "Scraped Company", // Ensure company field is present in scraped object
-    title: "Scraped Title", // Ensure title field is present in scraped object
+    company: "Gmail Company", 
+    title: "Gmail Title", 
     scrapedCompany: "Scraped Company",
     scrapedTitle: "Scraped Title",
   };

@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { JobListing } from "../src/types.js";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { analyzeJobRegex, cleanDescription } from "../src/regex-matcher.js";
+=======
+import { analyzeJobRegex, cleanDescription, PROFILE } from "../src/regex-matcher.js";
+>>>>>>> ed7b05a (feat(b38-37): Implementar cálculo de Match % en regex-matcher y tests asociados)
 import { FULLSTACK_4439380038_JD } from "./jd/fixtures/fullstack-4439380038.ts";
 =======
 import { analyzeJobRegex } from "../src/regex-matcher.js";
@@ -127,5 +131,61 @@ test("cleanDescription — strips LinkedIn chrome from FullStack fixture (#369)"
   assert.match(cleaned, /Manual QA/i);
   assert.match(cleaned, /Postman/i);
 });
+<<<<<<< HEAD
 =======
 >>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
+=======
+
+test("calculates match percent 75/100 -> 75% for FullStack JD", () => {
+  const job: JobListing = {
+    id: "4439380038",
+    title: "QA Automation Engineer",
+    company: "FullStack",
+    location: "Remote",
+    modality: "Remote",
+    datePosted: "1d",
+    url: "https://www.linkedin.com/jobs/view/4439380038/",
+    description: FULLSTACK_4439380038_JD,
+    searchTerm: "qa automation",
+  };
+
+  const mockRequirements = [];
+  for (let i = 0; i < 75; i++) {
+    mockRequirements.push({ label: `bullet:skill-matched-${i}`, weight: 1, sourceLine: `skill-matched-${i}` });
+  }
+  for (let i = 0; i < 25; i++) {
+    mockRequirements.push({ label: `bullet:skill-gap-${i}`, weight: 1, sourceLine: `skill-gap-${i}` });
+  }
+
+  const result = analyzeJobRegex(job, mockRequirements);
+
+  assert.strictEqual(result.matchPercent, 75, `Expected match percent 75%, got ${result.matchPercent}%`);
+  assert.strictEqual(result.matchedSkills.length, 75, "matchedSkills count should be 75");
+  assert.strictEqual(result.gaps.length, 25, "gaps count should be 25");
+});
+
+test("calculates match percent 100/100 -> 100% when all skills are matched", () => {
+  const job: JobListing = {
+    id: "4439380038",
+    title: "QA Automation Engineer",
+    company: "FullStack",
+    location: "Remote",
+    modality: "Remote",
+    datePosted: "1d",
+    url: "https://www.linkedin.com/jobs/view/4439380038/",
+    description: FULLSTACK_4439380038_JD,
+    searchTerm: "qa automation",
+  };
+
+  const mockRequirements = [];
+  for (let i = 0; i < 100; i++) {
+    mockRequirements.push({ label: `bullet:skill-matched-${i}`, weight: 1, sourceLine: `skill-matched-${i}` });
+  }
+
+  const result = analyzeJobRegex(job, mockRequirements);
+
+  assert.strictEqual(result.matchPercent, 100, `Expected match percent 100%, got ${result.matchPercent}%`);
+  assert.strictEqual(result.matchedSkills.length, 100, "matchedSkills count should be 100");
+  assert.strictEqual(result.gaps.length, 0, "gaps should be empty for 100% match");
+});
+>>>>>>> ed7b05a (feat(b38-37): Implementar cálculo de Match % en regex-matcher y tests asociados)

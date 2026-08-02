@@ -527,10 +527,7 @@ export async function upsertReconcileRows(
 ): Promise<ReconcileUpsertResult> {
   const db = getDb();
   const col = db.collection<ApplicationDoc>("applications");
-<<<<<<< HEAD
   let inserted = 0;
-=======
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   let updated = 0;
   let skipped = 0;
   const now = new Date();

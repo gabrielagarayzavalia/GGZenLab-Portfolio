@@ -162,7 +162,31 @@ GitHub Issues seed: [`SEED_ISSUES_JOB_HUNTER.md`](../agile/github-projects/SEED_
 
 ### B-10 — Monetization research
 
-- Doc: freemium, SaaS, ToS risks, competition — go/no-go only
+Spike = doc only (`docs/spike-monetization-research.md`). Entregable: **go/no-go** con 2 opciones priorizadas.
+
+#### Opción A — Freemium (tracker gratis, automatización paga) · **recomendada**
+
+- **Free:** dashboard + tracker web (1 fuente, sin Easy Apply, límite de filas/historial).
+- **Pro (~USD 12–19/mes o early-bird anual):** campañas automáticas, multi-fuente (B-13), CV/cover IA (B-15), agente programado (B-07).
+- **Demo (backlog / wireframe):** guion + animación en [`docs/demo-guion-animacion.md`](docs/demo-guion-animacion.md); video 60–90 s como hero del landing y CTA “probá gratis”.
+- **Métricas de validación:** % signup → activación tracker; % free → trial Pro; churn 30 días.
+- **Dependencias técnicas:** B-16 (cloud), B-12 (multi-user/OAuth) antes de cobrar en producción.
+
+#### Opción B — Build in public + lead magnet · **recomendada en paralelo con A**
+
+- **Contenido 2–3×/semana:** métricas reales de búsqueda (ofertas scrapeadas, respuestas, entrevistas) — sin prometer resultados.
+- **Canales:** LinkedIn (carrusel + screenshot), X (hilos técnicos), Shorts/Reels (screen recording del dashboard).
+- **Lead magnet:** lista de espera Pro + acceso anticipado a demo; early bird cuando salga cloud.
+- **Formatos reutilizables:** antes/después del tracker, “1 día en mi pipeline QA”, build log del producto.
+- **KPI:** seguidores → clicks demo → emails lista de espera → conversión a Pro post-launch.
+
+#### Research obligatorio (go/no-go)
+
+- **ToS / legal:** LinkedIn automation, scraping multi-fuente (B-13a), responsabilidad del usuario vs SaaS.
+- **Competencia:** Teal, Huntr, Simplify, Jobscan — diferencial QA + pipeline end-to-end (scrape → apply → tracker).
+- **Alternativas descartadas o fase 2:** kit digital (USD 15–29), licencias bootcamp, done-with-you consultoría.
+- **Riesgos:** ban de cuenta LinkedIn, soporte multi-user, expectativa de “te consigo trabajo”.
+- **Decisión:** documento con recomendación A+B, pricing tentativo, y fecha mínima de cobro (post B-16).
 
 ### B-12 — Multi-user OAuth
 

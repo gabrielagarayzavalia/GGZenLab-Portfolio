@@ -113,9 +113,10 @@ export function analysisSnapshotFromPipelineMatch(
   const hasSkills = Boolean(match.matchedSkills?.length);
   const hasGaps = Boolean(match.gaps?.length);
   const hasSummary = Boolean(match.summary?.trim());
+  const hasDescription = Boolean(scraped?.description?.trim());
   if (!hasSkills && !hasGaps && !hasSummary && !hasDescription) return undefined;
 
-  const jdSections = description ? parseJdSections(description) : undefined;
+  const jdSections = scraped?.description ? parseJdSections(scraped.description) : undefined;
   const parsedJd =
     jdSections && hasParsedJdSections(jdSections) ? jdSections : undefined;
 

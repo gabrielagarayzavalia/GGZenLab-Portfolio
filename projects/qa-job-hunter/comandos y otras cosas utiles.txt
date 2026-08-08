@@ -1,0 +1,54 @@
+# Terminal 1
+cd projects\qa-job-hunter
+docker compose up -d
+
+# Terminal 2
+npm run dashboard
+
+
+
+bash     
+cd projects/qa-job-hunter     
+npm install  
+# O yarn install, si usas yarn     
+npm outdated --long # O 
+yarn outdated     
+cd ../../     
+
+
+Tests API: `npm run test:api` (con dashboard corriendo)
+
+npm run test:api
+npm run test:match-jobs
+npm run test:run-apply
+
+
+Librerías OSS a evaluar en el spike
+Grilla tipada (recomendado probar primero) — imitan tabla Excel con dropdowns/checkboxes:
+
+AG Grid Community — MIT, vanilla OK, muy maduro
+Tabulator — MIT, liviano, vanilla
+RevoGrid — MIT, muchas filas
+Spreadsheet embebido — sensación Excel + copy/paste desde .xlsx:
+
+FortuneSheet — MIT, fork TS de Luckysheet; requiere React
+Luckysheet — MIT; menos mantenido
+Univer — Apache-2.0; potente pero pesado
+x-spreadsheet — MIT; minimal
+Backend (ya lo tenés, no es UI): ExcelJS en applied-list para persistir el .xlsx.
+
+Preliminar: AG Grid o Tabulator para MVP; FortuneSheet si copy/paste Excel es obligatorio desde día 1.
+
+El plan está en orden_excel-web_vs_mongo_5ab88aef.plan.md
+
+
+
+
+por qué estas haciendo scrape en Linkedin?
+en qué parte estás usando ollama?
+habiamos quedado que era en la api de gmail la búsqueda o bien que se podia elegir que metodo ibamos a usar (sitio de linkedin, emails de linkedin en mi cuenta de gmail, etc)
+despues si se hace el matching de mi cv contra la descripcion en linkedin del puesto
+y despues se hace el easy apply
+se aplica todo al excel 
+y despues me mostrás el excel
+para hacer el scrappe hay que generar un PR para mejorar la búsqueda porque no funciona, linkedin trae cualquier cosa y por casualidad trae los puesto a los que podria aplicar

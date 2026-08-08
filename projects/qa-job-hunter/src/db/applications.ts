@@ -15,7 +15,7 @@ import {
   type PipelineMatchResult,
   type PipelineScrapedJob,
 } from "../tracker/pipeline-match.js";
-import { queueRowToApplicationFields } from "../tracker/apply-queue.js";
+import { queueRowToApplicationFields } from "../tracker/apply-queue-map";
 import type { QueueRow } from "../apply/apply-queue.js";
 import { planAutomationUpsert, planEasyApplyUpsert, planReconcileUpsert } from "../tracker/automation-merge.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";

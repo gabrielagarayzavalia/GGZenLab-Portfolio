@@ -722,7 +722,6 @@ function syncFilterFlagsFromUI(changed) {
   showNotApplied = els.showNotApplied.checked;
   showNotSelected = els.showNotSelected.checked;
   showUnmarked = els.showUnmarked.checked;
-<<<<<<< HEAD
   showAssessment = els.showAssessment.checked;
   showAssessmentDone = els.showAssessmentDone.checked;
   showClosed = els.showClosed.checked;
@@ -825,18 +824,6 @@ function enableFilterForRejected() {
 
 async function loadMatchJobs(filter = null) {
   const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
-=======
-  showClosed = els.showClosed.checked;
-
-  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked && !showClosed) {
-    showUnmarked = true;
-    els.showUnmarked.checked = true;
-  }
-}
-
-async function loadMatchJobs(filter) {
-  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   const url = serverFilter
     ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
     : "/api/dashboard/match-jobs";
@@ -1045,7 +1032,6 @@ async function init() {
     renderList();
   });
 
-<<<<<<< HEAD
   function onDropdownFilterChange() {
     filterCompany = els.filterCompany.value;
     filterTitle = els.filterTitle.value;
@@ -1066,22 +1052,15 @@ async function init() {
   els.filterCompany.addEventListener("change", onDropdownFilterChange);
   els.filterTitle.addEventListener("change", onDropdownFilterChange);
 
-=======
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   els.showRejected.addEventListener("change", () => onFilterChange(els.showRejected));
   els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
-<<<<<<< HEAD
   els.showAssessment.addEventListener("change", () => onFilterChange(els.showAssessment));
   els.showAssessmentDone.addEventListener("change", () => onFilterChange(els.showAssessmentDone));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
   els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
   els.showDuplicated.addEventListener("change", () => onFilterChange(els.showDuplicated));
-=======
-  els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
-  els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
   async function onFilterChange(changed) {
     syncFilterFlagsFromUI(changed);

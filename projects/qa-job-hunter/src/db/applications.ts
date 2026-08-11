@@ -15,7 +15,7 @@ import {
   type PipelineMatchResult,
   type PipelineScrapedJob,
 } from "../tracker/pipeline-match.js";
-import { queueRowToApplicationFields } from "../tracker/apply-queue.js";
+import { queueRowToApplicationFields } from "../tracker/apply-queue-map.js";
 import type { QueueRow } from "../apply/apply-queue.js";
 import { planAutomationUpsert, planEasyApplyUpsert, planReconcileUpsert } from "../tracker/automation-merge.js";
 import { DASHBOARD_MIN_MATCH } from "../tracker/pipeline-match.js";
@@ -527,10 +527,7 @@ export async function upsertReconcileRows(
 ): Promise<ReconcileUpsertResult> {
   const db = getDb();
   const col = db.collection<ApplicationDoc>("applications");
-<<<<<<< HEAD
   let inserted = 0;
-=======
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   let updated = 0;
   let skipped = 0;
   const now = new Date();

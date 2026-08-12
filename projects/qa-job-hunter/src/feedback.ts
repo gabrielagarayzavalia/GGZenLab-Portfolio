@@ -19,9 +19,6 @@ export function resolveFeedbackPath(): string {
   return process.env.MATCH_FEEDBACK_PATH ?? DEFAULT_FEEDBACK_PATH;
 }
 
-/** @deprecated Usar resolveFeedbackPath() — se evalúa en import y no respeta env en runtime. */
-export const FEEDBACK_PATH = DEFAULT_FEEDBACK_PATH;
-
 export interface MatchRejection {
   jobId: string;
   title: string;

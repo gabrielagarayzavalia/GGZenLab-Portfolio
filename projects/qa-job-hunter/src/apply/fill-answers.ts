@@ -4116,12 +4116,6 @@ export async function handleSaveDiscardModal(
   return "saved";
 }
 
-/** @deprecated prefer handleSaveDiscardModal — mantiene Discard por compat. */
-export async function dismissSaveOrDiscard(page: Page): Promise<boolean> {
-  const r = await handleSaveDiscardModal(page, "dry_run");
-  return r !== "absent";
-}
-
 export async function isNextDisabled(page: Page): Promise<boolean> {
   const root = easyApplyModalRoot(page);
   const scope = (await root.isVisible({ timeout: 500 }).catch(() => false)) ? root : page;

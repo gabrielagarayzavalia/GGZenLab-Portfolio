@@ -440,9 +440,6 @@ export async function runNotificationsDiscovery(
   return report;
 }
 
-/** @deprecated alias spike */
-export const runNotificationsSpike = runNotificationsDiscovery;
-
 async function main() {
   const mergeAppliedList = hasFlag("--merge-applied-list");
   const mergeSpikeOutput = hasFlag("--merge");

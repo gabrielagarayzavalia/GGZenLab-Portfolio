@@ -43,8 +43,6 @@ const els = {
   sortSelect: document.getElementById("sort-select"),
   filterCompany: document.getElementById("filter-company"),
   filterTitle: document.getElementById("filter-title"),
-  filterCompany: document.getElementById("filter-company"),
-  filterTitle: document.getElementById("filter-title"),
   showRejected: document.getElementById("show-rejected"),
   showApplied: document.getElementById("show-applied"),
   showNotApplied: document.getElementById("show-not-applied"),
@@ -226,9 +224,9 @@ function applicationStatusFromTrackerEstado(estado) {
   if (estado === "A-pendiente") return "assessment_pending";
   return null;
 }
-function isLinkedInClosed(job) {
-  return job?.jobClosed === true;
-}
+//function isLinkedInClosed(job) {
+  //return job?.jobClosed === true;
+//}
 
 function isRejected(jobId) {
   return rejectedIds.has(jobId);
@@ -267,6 +265,56 @@ function isVisibleInList(jobId) {
   const job = jobs.find((j) => j.id === jobId);
   if (!job) return false;
   return isJobVisibleForStateFilters(job, getFilterFlags(), getFilterContext());
+}
+
+function distinctSorted(values) {
+  return [...new Set(values.filter((v) => v != null && String(v).trim()))].sort((a, b) =>
+    a.localeCompare(b, "es", { sensitivity: "base" })
+  );
+}
+
+function buildFilterSelectOptions(values, placeholder, selected, counts = {}) {
+  const options = values.map((v) => {
+    const count = counts[v] ?? 0;
+    const zeroClass = count === 0 ? ' class="filter-option--zero"' : "";
+    return `<option value="${escapeAttr(v)}"${zeroClass}>${escapeHtml(formatFilterCountLabel(v, count))}</option>`;
+  });
+  if (selected && !values.includes(selected)) {
+    const selectedCount = counts[selected] ?? 0;
+    options.push(
+      `<option value="${escapeAttr(selected)}">${escapeHtml(formatFilterCountLabel(selected, selectedCount))}</option>`
+    );
+  }
+  return `<option value="">${placeholder}</option>${options.join("")}`;
+}
+
+function renderFilterCounts() {
+  const counts = computeFilterCounts(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
+  for (const bucket of FILTER_BUCKET_ORDER) {
+    const labelEl = document.querySelector(`[data-filter-label="${bucket}"]`);
+    if (!labelEl) continue;
+    const n = counts.buckets[bucket] ?? 0;
+    labelEl.textContent = formatFilterCountLabel(FILTER_BUCKET_LABELS[bucket], n);
+    labelEl.classList.toggle("filter-count--zero", n === 0);
+  }
+  return counts;
+}
+
+function populateDropdownFilters() {
+  const counts = computeFilterCounts(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
+  const companies = distinctSorted(jobs.map((j) => j.company));
+  const titles = distinctSorted(jobs.map((j) => j.title));
+
+  els.filterCompany.innerHTML = buildFilterSelectOptions(
+    companies,
+    "Todas",
+    filterCompany,
+    counts.companies
+  );
+  els.filterTitle.innerHTML = buildFilterSelectOptions(titles, "Todos", filterTitle, counts.titles);
+  els.filterCompany.value = filterCompany;
+  els.filterTitle.value = filterTitle;
+  renderFilterCounts();
 }
 
 function visibleJobs() {
@@ -1001,7 +1049,6 @@ async function undoReject(job) {
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
     renderDetail(refreshed);
   }
-  }
 }
 
 function applyFeedback(store) {
@@ -1026,7 +1073,37 @@ function escapeAttr(text) {
   return (text ?? "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+function setupPanelResizer() {
+  const resizer = document.getElementById("panel-resizer");
+  const list = document.querySelector(".panel--list");
+  if (!resizer || !list) return;
+
+  let dragging = false;
+
+  resizer.addEventListener("mousedown", () => {
+    dragging = true;
+    resizer.classList.add("is-dragging");
+    document.body.style.userSelect = "none";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const layoutRect = document.querySelector(".layout").getBoundingClientRect();
+    let newWidth = e.clientX - layoutRect.left;
+    newWidth = Math.max(240, Math.min(newWidth, layoutRect.width - 300));
+    list.style.setProperty("--list-width", `${newWidth}px`);
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("is-dragging");
+    document.body.style.userSelect = "";
+  });
+}
+
 async function init() {
+  setupPanelResizer();
   els.sortSelect.addEventListener("change", () => {
     sortOrder = els.sortSelect.value;
     renderList();

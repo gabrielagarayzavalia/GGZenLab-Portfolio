@@ -60,6 +60,12 @@ export function patchForApplicationStatus(
         },
       };
     }
+    return {
+      patch: {
+        estado: "Pendiente",
+        notas: appendNota(existing.notas, NOTA_DESMARCAR),
+      },
+    };
   }
 
   switch (status) {

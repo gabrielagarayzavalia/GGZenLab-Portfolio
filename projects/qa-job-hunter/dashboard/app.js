@@ -8,6 +8,7 @@ import {
   isJobVisibleForStateFilters,
   isLinkedInClosed,
 } from "./filter-counts.js";
+
 const TRACKER_USER_HEADERS = {
   "Content-Type": "application/json",
   "X-Tracker-User": "1",
@@ -34,15 +35,13 @@ const MATCH_INCORRECT_HINT =
 let rejectedIds = new Set();
 /** @type {Map<string, { reason?: string; rejectedAt: string }>} */
 let rejectionMeta = new Map();
-/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected' | 'assessment_pending' | 'assessment_done' | 'duplicated'>} */
+/** @type {Map<string, 'applied' | 'not_applied' | 'not_selected' | 'assessment_pending' | 'assessment_done'>} */
 let applicationStatus = new Map();
 
 const els = {
   headerStats: document.getElementById("header-stats"),
   jobList: document.getElementById("job-list"),
   sortSelect: document.getElementById("sort-select"),
-  filterCompany: document.getElementById("filter-company"),
-  filterTitle: document.getElementById("filter-title"),
   filterCompany: document.getElementById("filter-company"),
   filterTitle: document.getElementById("filter-title"),
   showRejected: document.getElementById("show-rejected"),
@@ -144,6 +143,7 @@ async function activateAssessmentPendingFilter() {
     showListError(String(e.message ?? e));
   }
 }
+
 function showApiWarnings(warnings) {
   if (warnings?.length) showAppFlash(warnings.join(" · "), "warning");
 }
@@ -161,6 +161,7 @@ function applicationStatusSavedMessage(status, estadoFromApi) {
   const label = byStatus[status];
   return label ? `Estado guardado: ${label}` : "Estado guardado";
 }
+
 function matchClass(pct) {
   if (pct >= 85) return "match-badge__pct--high";
   if (pct >= 75) return "match-badge__pct--mid";
@@ -200,11 +201,8 @@ function renderEstadoTrackerBadge(estado, extraClass = "") {
 }
 
 function formatListMeta(job) {
-  const parts = [];
-  if (isMeaningfulMeta(job.canal)) parts.push(escapeHtml(job.canal));
-  if (isMeaningfulMeta(job.modality)) parts.push(escapeHtml(job.modality));
-  if (isMeaningfulMeta(job.datePosted)) parts.push(escapeHtml(job.datePosted));
-  return parts.join(" · ");
+  if (!isMeaningfulMeta(job.canal)) return "";
+  return escapeHtml(job.canal);
 }
 
 function renderDetailMeta(job) {
@@ -225,9 +223,6 @@ function applicationStatusFromTrackerEstado(estado) {
   if (estado === "Cerrado") return "not_selected";
   if (estado === "A-pendiente") return "assessment_pending";
   return null;
-}
-function isLinkedInClosed(job) {
-  return job?.jobClosed === true;
 }
 
 function isRejected(jobId) {
@@ -267,6 +262,56 @@ function isVisibleInList(jobId) {
   const job = jobs.find((j) => j.id === jobId);
   if (!job) return false;
   return isJobVisibleForStateFilters(job, getFilterFlags(), getFilterContext());
+}
+
+function distinctSorted(values) {
+  return [...new Set(values.filter((v) => v != null && String(v).trim()))].sort((a, b) =>
+    a.localeCompare(b, "es", { sensitivity: "base" })
+  );
+}
+
+function buildFilterSelectOptions(values, placeholder, selected, counts = {}) {
+  const options = values.map((v) => {
+    const count = counts[v] ?? 0;
+    const zeroClass = count === 0 ? ' class="filter-option--zero"' : "";
+    return `<option value="${escapeAttr(v)}"${zeroClass}>${escapeHtml(formatFilterCountLabel(v, count))}</option>`;
+  });
+  if (selected && !values.includes(selected)) {
+    const selectedCount = counts[selected] ?? 0;
+    options.push(
+      `<option value="${escapeAttr(selected)}">${escapeHtml(formatFilterCountLabel(selected, selectedCount))}</option>`
+    );
+  }
+  return `<option value="">${placeholder}</option>${options.join("")}`;
+}
+
+function renderFilterCounts() {
+  const counts = computeFilterCounts(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
+  for (const bucket of FILTER_BUCKET_ORDER) {
+    const labelEl = document.querySelector(`[data-filter-label="${bucket}"]`);
+    if (!labelEl) continue;
+    const n = counts.buckets[bucket] ?? 0;
+    labelEl.textContent = formatFilterCountLabel(FILTER_BUCKET_LABELS[bucket], n);
+    labelEl.classList.toggle("filter-count--zero", n === 0);
+  }
+  return counts;
+}
+
+function populateDropdownFilters() {
+  const counts = computeFilterCounts(jobs, getFilterFlags(), getFilterContext(), getDropdownFilters());
+  const companies = distinctSorted(jobs.map((j) => j.company));
+  const titles = distinctSorted(jobs.map((j) => j.title));
+
+  els.filterCompany.innerHTML = buildFilterSelectOptions(
+    companies,
+    "Todas",
+    filterCompany,
+    counts.companies
+  );
+  els.filterTitle.innerHTML = buildFilterSelectOptions(titles, "Todos", filterTitle, counts.titles);
+  els.filterCompany.value = filterCompany;
+  els.filterTitle.value = filterTitle;
+  renderFilterCounts();
 }
 
 function visibleJobs() {
@@ -619,7 +664,7 @@ function wireApplicationChecks(job) {
 async function saveApplicationStatus(job, status) {
   const applicationId = job.applicationId;
   if (!applicationId) {
-    showAppFlash("Sin applicationId en tracker — no se puede guardar el estado.", "error");
+    showAppFlash("Sin applicationId en tracker — no se puede guardar el estado.");
     return;
   }
   try {
@@ -636,14 +681,6 @@ async function saveApplicationStatus(job, status) {
     if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el estado");
     if (data.warnings?.length) {
       showApiWarnings(data.warnings);
-    }
-    await loadMatchJobs();
-    if (status && !isVisibleInList(job.id)) {
-      focusNextVisibleJob(job.id);
-    }
-    await loadMatchJobs();
-    if (status && !isVisibleInList(job.id)) {
-      focusNextVisibleJob(job.id);
     } else {
       showAppFlash(
         applicationStatusSavedMessage(status, data.application?.estado),
@@ -723,7 +760,6 @@ function syncFilterFlagsFromUI(changed) {
   showNotApplied = els.showNotApplied.checked;
   showNotSelected = els.showNotSelected.checked;
   showUnmarked = els.showUnmarked.checked;
-<<<<<<< HEAD
   showAssessment = els.showAssessment.checked;
   showAssessmentDone = els.showAssessmentDone.checked;
   showClosed = els.showClosed.checked;
@@ -825,19 +861,7 @@ function enableFilterForRejected() {
 }
 
 async function loadMatchJobs(filter = null) {
-  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
-=======
-  showClosed = els.showClosed.checked;
-
-  if (!showRejected && !showApplied && !showNotApplied && !showNotSelected && !showUnmarked && !showClosed) {
-    showUnmarked = true;
-    els.showUnmarked.checked = true;
-  }
-}
-
-async function loadMatchJobs(filter) {
-  const serverFilter = filter !== undefined ? filter : serverFilterFromUI();
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
+  const serverFilter = filter;
   const url = serverFilter
     ? `/api/dashboard/match-jobs?filter=${encodeURIComponent(serverFilter)}`
     : "/api/dashboard/match-jobs";
@@ -1015,7 +1039,6 @@ async function undoReject(job) {
     const refreshed = jobs.find((j) => j.id === job.id) ?? job;
     renderDetail(refreshed);
   }
-  }
 }
 
 function applyFeedback(store) {
@@ -1046,7 +1069,6 @@ async function init() {
     renderList();
   });
 
-<<<<<<< HEAD
   function onDropdownFilterChange() {
     filterCompany = els.filterCompany.value;
     filterTitle = els.filterTitle.value;
@@ -1067,22 +1089,15 @@ async function init() {
   els.filterCompany.addEventListener("change", onDropdownFilterChange);
   els.filterTitle.addEventListener("change", onDropdownFilterChange);
 
-=======
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
   els.showRejected.addEventListener("change", () => onFilterChange(els.showRejected));
   els.showApplied.addEventListener("change", () => onFilterChange(els.showApplied));
   els.showNotApplied.addEventListener("change", () => onFilterChange(els.showNotApplied));
   els.showNotSelected.addEventListener("change", () => onFilterChange(els.showNotSelected));
-<<<<<<< HEAD
   els.showAssessment.addEventListener("change", () => onFilterChange(els.showAssessment));
   els.showAssessmentDone.addEventListener("change", () => onFilterChange(els.showAssessmentDone));
   els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
   els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
   els.showDuplicated.addEventListener("change", () => onFilterChange(els.showDuplicated));
-=======
-  els.showUnmarked.addEventListener("change", () => onFilterChange(els.showUnmarked));
-  els.showClosed.addEventListener("change", () => onFilterChange(els.showClosed));
->>>>>>> 485a67351a1c543d74c58d9ab3095bdfaa209e4a
 
   async function onFilterChange(changed) {
     syncFilterFlagsFromUI(changed);
